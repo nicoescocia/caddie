@@ -96,7 +96,6 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     </>
   );
 
-  const sentCount   = rounds.filter(r => r.sent_to_coach).length;
   const avgScore    = rounds.length ? Math.round(rounds.reduce((s,r) => s + (r.total_score||0), 0) / rounds.length) : null;
   const bestScore   = rounds.length ? Math.min(...rounds.map(r => r.total_score||99)) : null;
 

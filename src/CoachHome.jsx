@@ -231,11 +231,8 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
           <>
             <div className="section-label">Round history</div>
             {sentRounds.map(r => {
-              const diff   = parDiff(r.total_score);
-              const girPct = r.gir_count != null ? `${r.gir_count}/9` : "—";
-              const fwPct  = r.fw_hit != null ? `${r.fw_hit}/5` : "—";
-              const tp     = r.three_putt_count != null ? r.three_putt_count : "—";
-              const tpNum  = typeof tp === "number" ? tp : null;
+              const diff = parDiff(r.total_score);
+              const tp   = r.three_putt_count != null ? r.three_putt_count : "—";
               return (
                 <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
                   <div className="round-card-top">
@@ -354,7 +351,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
       }
     }
     load();
-  }, [user.id]);
+  }, [user.id, initialScreen, initialStudent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSelectStudent(student) {
     setSelectedStudent(student);

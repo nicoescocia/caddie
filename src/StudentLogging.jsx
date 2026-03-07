@@ -195,6 +195,7 @@ const APPROACH_BANDS = [
 ];
 const PUTT_DIST  = [{v:"3",u:"ft"},{v:"6",u:"ft"},{v:"12",u:"ft"},{v:"20",u:"ft"},{v:"30+",u:"ft"}];
 const PUTT2_DIST = [{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"5",u:"ft"},{v:"6",u:"ft"},{v:"7+",u:"ft"}];
+// eslint-disable-next-line no-unused-vars
 const PEN_OPTS   = [
   {icon:"checkmark",label:"None",type:"none"},
   {icon:"OOB",label:"OOB",type:"pen"},
@@ -570,7 +571,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const show3putt = d.putts >= 3;
   const showFW    = h.par >= 4;
   const showMiss  = d.fairway === "left" || d.fairway === "right";
-  const backLabel = isEditMode ? "Back to overview" : cur === 0 ? "Back" : "Back";
+  const backLabel = isEditMode ? "Back to overview" : cur === 0 ? "Back" : "Back"; // eslint-disable-line no-unused-vars
   const nextLabel = isEditMode
     ? "Save hole"
     : cur === HOLES.length - 1 ? "Complete round" : "Next hole";
