@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Caddie — Manual Mode v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green-dark: #0F3D2E;
+  --green: #1A6B4A;
+  --green-mid: #2A8A60;
+  --green-light: #3DAA78;
+  --grass: #52C97A;
+  --bg: #F4F1EB;
+  --gold: #C9A84C;
+  --red: #C94040;
+  --orange: #D4763A;
+  --sky: #4A90D9;
+  --text: #1C1C1C;
+  --text-mid: #555;
+  --text-dim: #999;
+  --border: #E2DDD4;
+  --shadow: 0 2px 16px rgba(0,0,0,0.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+/* ── MODE BAR ── */
+.mode-bar {
+  background:var(--green-dark); padding:0 20px;
+  display:flex; align-items:center; justify-content:space-between;
+  height:54px; position:sticky; top:0; z-index:100;
+}
+.mode-logo { font-family:'Playfair Display',serif; font-size:20px; color:var(--gold); }
+.mode-tabs { display:flex; gap:4px; background:rgba(255,255,255,0.08); border-radius:10px; padding:4px; }
+.mode-tab {
+  padding:6px 16px; border-radius:7px; font-size:13px; font-weight:600;
+  cursor:pointer; color:rgba(255,255,255,0.5); transition:all .2s; border:none;
+  font-family:'Outfit',sans-serif; background:transparent; display:flex; align-items:center; gap:6px;
+}
+.mode-tab.active { background:var(--gold); color:var(--green-dark); }
+.mode-tab:hover:not(.active) { color:white; }
+.new-dot { width:8px; height:8px; background:var(--red); border-radius:50%; display:none; animation:pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.view { display:none; }
+.view.active { display:block; }
+
+/* ═══════════════════════════════
+   STUDENT VIEW
+═══════════════════════════════ */
+.student-wrap { max-width:420px; margin:0 auto; padding:16px 16px 48px; }
+
+/* Progress dots */
+.hole-dots { display:flex; gap:5px; flex-wrap:wrap; justify-content:center; margin-bottom:16px; }
+.hd {
+  width:30px; height:30px; border-radius:50%; border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:var(--text-dim); background:white; transition:all .2s;
+}
+.hd.done    { background:var(--green-light); border-color:var(--green-light); color:white; }
+.hd.current { background:var(--green-dark); border-color:var(--green-dark); color:var(--gold); }
+.hd.tp      { background:var(--red); border-color:var(--red); color:white; }
+
+/* Hole card */
+.hole-card {
+  background:var(--green-dark); border-radius:18px; padding:18px 20px 16px;
+  margin-bottom:14px; position:relative; overflow:hidden;
+}
+.hole-card::after {
+  content:''; position:absolute; right:-30px; top:-30px;
+  width:140px; height:140px; border-radius:50%;
+  background:rgba(255,255,255,0.03); pointer-events:none;
+}
+.hc-row { display:flex; align-items:flex-start; justify-content:space-between; }
+.hc-num { font-family:'Playfair Display',serif; font-size:64px; color:white; line-height:1; letter-spacing:-2px; }
+.hc-num span { font-family:'Outfit',sans-serif; font-size:16px; color:rgba(255,255,255,0.35); font-weight:300; }
+.hc-info { text-align:right; padding-top:6px; }
+.hc-par-label { font-size:11px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:.08em; }
+.hc-par-val { font-family:'Playfair Display',serif; font-size:32px; color:var(--gold); line-height:1.1; }
+.hc-yds { font-size:12px; color:rgba(255,255,255,0.3); margin-top:2px; }
+.hc-idx { font-size:11px; color:rgba(255,255,255,0.25); }
+
+/* GIR badge on card */
+.hc-gir-row { display:flex; align-items:center; justify-content:space-between; margin-top:12px; }
+.gir-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 11px; border-radius:20px; font-size:12px; font-weight:600;
+  transition:all .3s;
+}
+.gir-badge.yes { background:rgba(82,201,122,0.2); color:var(--grass); border:1px solid rgba(82,201,122,0.3); }
+.gir-badge.no  { background:rgba(212,118,58,0.2); color:#F0A060; border:1px solid rgba(212,118,58,0.3); }
+.gir-badge.unknown { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.3); border:1px solid rgba(255,255,255,0.1); }
+.gir-auto { font-size:10px; color:rgba(255,255,255,0.25); }
+
+/* Score + putts */
+.score-putts-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+.step-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:7px; }
+.stepper {
+  background:white; border:1.5px solid var(--border); border-radius:13px;
+  display:flex; align-items:center; justify-content:space-between; overflow:hidden;
+}
+.step-btn {
+  width:44px; height:52px; border:none; background:transparent;
+  font-size:24px; font-weight:300; color:var(--green); cursor:pointer;
+  transition:background .15s; display:flex; align-items:center; justify-content:center;
+  font-family:'Outfit',sans-serif;
+}
+.step-btn:hover { background:var(--bg); }
+.step-btn:active { background:var(--border); }
+.step-val { font-size:28px; font-weight:700; color:var(--text); min-width:40px; text-align:center; }
+.step-val.over  { color:var(--orange); }
+.step-val.par   { color:var(--green-mid); }
+.step-val.under { color:var(--gold); }
+
+/* Putts tap */
+.putts-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.putt-btn {
+  background:white; border:1.5px solid var(--border); border-radius:11px;
+  padding:10px 4px; text-align:center; cursor:pointer; transition:all .15s;
+  font-family:'Outfit',sans-serif;
+}
+.putt-btn .pv { font-size:20px; font-weight:700; color:var(--text); display:block; }
+.putt-btn .pu { font-size:10px; color:var(--text-dim); display:block; margin-top:1px; }
+.putt-btn:hover { border-color:var(--green-light); }
+.putt-btn.sel    { background:var(--green-dark); border-color:var(--green-dark); }
+.putt-btn.sel .pv, .putt-btn.sel .pu { color:white; }
+.putt-btn.sel-tp { background:var(--red); border-color:var(--red); }
+.putt-btn.sel-tp .pv, .putt-btn.sel-tp .pu { color:white; }
+
+/* 3-putt alert */
+.tp-banner {
+  background:#FEF0F0; border:1px solid #F5C6C6; border-radius:10px;
+  padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--red);
+  display:none; line-height:1.5;
+}
+.tp-banner.show { display:block; }
+.tp-banner strong { display:block; font-size:13px; margin-bottom:2px; }
+
+.divider { height:1px; background:var(--border); margin:12px 0; }
+
+/* Sections */
+.sec { margin-bottom:12px; }
+.sec-label {
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em;
+  color:var(--text-dim); margin-bottom:7px; display:flex; align-items:center; gap:7px;
+}
+.badge { font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; text-transform:uppercase; letter-spacing:.04em; }
+.badge.auto { background:var(--green-light); color:white; }
+.badge.conditional { background:var(--orange); color:white; }
+
+/* Tap grids */
+.tap-grid { display:grid; gap:6px; }
+.tap-grid.c5 { grid-template-columns:repeat(5,1fr); }
+.tap-grid.c4 { grid-template-columns:repeat(4,1fr); }
+.tap-grid.c3 { grid-template-columns:repeat(3,1fr); }
+.tap-grid.c2 { grid-template-columns:repeat(2,1fr); }
+.tap-btn {
+  background:white; border:1.5px solid var(--border); border-radius:11px;
+  padding:10px 3px; text-align:center; cursor:pointer; transition:all .15s;
+  font-family:'Outfit',sans-serif;
+}
+.tap-btn .tv { font-size:15px; font-weight:700; color:var(--text); display:block; line-height:1.1; }
+.tap-btn .tu { font-size:10px; color:var(--text-dim); display:block; margin-top:1px; }
+.tap-btn:hover { border-color:var(--green-light); transform:scale(1.03); }
+.tap-btn.sel  { background:var(--green-dark); border-color:var(--green-dark); transform:scale(1.03); }
+.tap-btn.sel .tv, .tap-btn.sel .tu { color:white; }
+.tap-btn.sel-short { background:#7B4FBF; border-color:#7B4FBF; transform:scale(1.03); }
+.tap-btn.sel-short .tv, .tap-btn.sel-short .tu { color:white; }
+
+/* Fairway Y/N */
+.fw-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.fw-btn {
+  background:white; border:1.5px solid var(--border); border-radius:11px;
+  padding:11px; text-align:center; cursor:pointer; transition:all .15s;
+  font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-mid);
+}
+.fw-btn:hover { border-color:var(--green-light); }
+.fw-btn.sel-yes  { background:#E8F4EE; border-color:var(--green-light); color:var(--green); }
+.fw-btn.sel-left { background:#EEF0FE; border-color:var(--sky); color:var(--sky); }
+.fw-btn.sel-right{ background:#FEF3E8; border-color:var(--orange); color:var(--orange); }
+
+/* Miss direction sub-panel */
+.sub-panel { margin-top:8px; padding:11px; background:#F9F7F3; border-radius:10px; display:none; }
+.sub-panel.open { display:block; animation:fadeUp .2s ease; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:translateY(0)} }
+.sub-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin-bottom:7px; margin-top:10px; }
+.sub-label:first-child { margin-top:0; }
+
+/* Approach — unified with short game */
+.approach-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.approach-grid.full { grid-template-columns:repeat(3,1fr); }
+
+/* Approach band button — larger for the key choice */
+.appr-btn {
+  background:white; border:1.5px solid var(--border); border-radius:12px;
+  padding:10px 4px; text-align:center; cursor:pointer; transition:all .15s;
+  font-family:'Outfit',sans-serif; position:relative;
+}
+.appr-btn .av { font-size:13px; font-weight:700; color:var(--text); display:block; line-height:1.2; }
+.appr-btn .au { font-size:10px; color:var(--text-dim); display:block; margin-top:1px; }
+.appr-btn .atag {
+  position:absolute; top:-6px; right:-4px;
+  font-size:8px; font-weight:800; padding:2px 5px; border-radius:4px;
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.appr-btn .atag.sg { background:#7B4FBF; color:white; }
+.appr-btn:hover { border-color:var(--green-light); transform:scale(1.03); }
+.appr-btn.sel { background:var(--green-dark); border-color:var(--green-dark); transform:scale(1.03); }
+.appr-btn.sel .av, .appr-btn.sel .au { color:white; }
+.appr-btn.sel .atag { opacity:.8; }
+.appr-btn.sel-sg { background:#7B4FBF; border-color:#7B4FBF; transform:scale(1.03); }
+.appr-btn.sel-sg .av, .appr-btn.sel-sg .au { color:white; }
+
+/* Short game sub-panel (inline below approach) */
+.sg-inline {
+  margin-top:9px; padding:12px; background:#F3EFF9;
+  border:1px solid #C4B0E8; border-radius:11px; display:none;
+}
+.sg-inline.open { display:block; animation:fadeUp .2s ease; }
+.sg-inline .sub-label { color:#7B4FBF; }
+
+/* Penalty */
+.pen-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.pen-btn {
+  background:white; border:1.5px solid var(--border); border-radius:11px;
+  padding:9px 3px; text-align:center; cursor:pointer; transition:all .15s;
+  font-family:'Outfit',sans-serif;
+}
+.pen-btn .pi { font-size:16px; display:block; }
+.pen-btn .pl { font-size:11px; color:var(--text-mid); font-weight:600; display:block; margin-top:2px; }
+.pen-btn .ps { font-size:9px; color:var(--text-dim); display:block; }
+.pen-btn.sel-none { background:#E8F4EE; border-color:var(--green-light); }
+.pen-btn.sel-pen  { background:#FEF0E8; border-color:var(--orange); }
+
+/* Putt distance */
+.putt-dist-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+.putt2-grid     { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+
+/* Next button */
+.next-btn {
+  width:100%; background:var(--green); border:none; border-radius:14px;
+  padding:16px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:700;
+  color:white; cursor:pointer; transition:all .2s; margin-top:6px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.next-btn:hover:not(:disabled) { background:var(--green-mid); transform:translateY(-1px); box-shadow:0 6px 20px rgba(26,107,74,0.3); }
+.next-btn:disabled { background:#C8C4BB; cursor:not-allowed; }
+.next-btn .arr { transition:transform .2s; }
+.next-btn:hover:not(:disabled) .arr { transform:translateX(4px); }
+
+/* Complete */
+.complete-card { background:var(--green-dark); border-radius:20px; padding:28px 22px; text-align:center; display:none; animation:fadeUp .4s ease; }
+.complete-card.show { display:block; }
+.cc-icon { font-size:52px; margin-bottom:10px; }
+.cc-title { font-family:'Playfair Display',serif; font-size:26px; color:var(--gold); margin-bottom:6px; }
+.cc-score { font-family:'Playfair Display',serif; font-size:72px; color:white; line-height:1; }
+.cc-par { font-size:16px; color:rgba(255,255,255,0.5); margin-bottom:6px; }
+.cc-detail { font-size:13px; color:rgba(255,255,255,0.4); margin-bottom:22px; line-height:1.6; }
+.send-btn {
+  width:100%; background:var(--gold); border:none; border-radius:14px;
+  padding:16px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:700;
+  color:var(--green-dark); cursor:pointer; transition:all .2s;
+}
+.send-btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(201,168,76,0.4); }
+
+/* ═══════════════════════════════
+   COACH VIEW
+═══════════════════════════════ */
+.coach-wrap { max-width:980px; margin:0 auto; padding:22px 20px 48px; }
+.empty-state { text-align:center; padding:80px 24px; background:white; border-radius:20px; border:2px dashed var(--border); }
+.es-icon { font-size:52px; margin-bottom:14px; }
+.es-title { font-family:'Playfair Display',serif; font-size:22px; margin-bottom:8px; }
+.es-sub { font-size:14px; color:var(--text-mid); line-height:1.7; }
+.dashboard { display:none; }
+.dashboard.show { display:block; animation:fadeUp .4s ease; }
+
+.alert-bar {
+  background:linear-gradient(135deg, var(--green-dark), var(--green));
+  border-radius:16px; padding:18px 22px; margin-bottom:20px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.ab-left { display:flex; align-items:center; gap:14px; }
+.ab-icon { font-size:26px; }
+.ab-name { font-size:16px; font-weight:700; color:white; margin-bottom:3px; }
+.ab-detail { font-size:13px; color:rgba(255,255,255,0.6); }
+.ab-right { text-align:right; }
+.ab-score { font-family:'Playfair Display',serif; font-size:48px; color:var(--gold); line-height:1; }
+.ab-par { font-size:13px; color:rgba(255,255,255,0.5); }
+
+.g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:14px; }
+.g3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+.g2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+
+.ccard { background:white; border-radius:14px; border:1px solid var(--border); padding:18px; box-shadow:var(--shadow); }
+.cc-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:13px; }
+
+.bstat { font-family:'Playfair Display',serif; font-size:44px; line-height:1; }
+.bstat.bad  { color:var(--red); }
+.bstat.warn { color:var(--orange); }
+.bstat.ok   { color:var(--green-mid); }
+.bstat.neu  { color:var(--text); }
+.bstat-sub  { font-size:12px; color:var(--text-dim); margin-top:4px; }
+
+/* Scorecard */
+.sc-row { display:grid; grid-template-columns:36px 1fr 44px 44px 44px 54px 70px; gap:4px; align-items:center; padding:6px 2px; border-bottom:1px solid var(--border); font-size:12px; }
+.sc-row.hdr { font-size:10px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; padding-bottom:8px; }
+.sc-row:last-child { border-bottom:none; }
+.sc-chip { display:inline-block; font-size:11px; font-weight:700; padding:2px 6px; border-radius:5px; }
+.sc-chip.eagle  { background:#FFF8E6; color:var(--gold); }
+.sc-chip.birdie { background:#E8F4EE; color:var(--green-mid); }
+.sc-chip.par    { background:#F0F0F0; color:var(--text-mid); }
+.sc-chip.bogey  { background:#FEF3E8; color:var(--orange); }
+.sc-chip.double { background:#FDECEA; color:var(--red); }
+.sc-chip.worse  { background:#F5D8D8; color:#8B1A1A; }
+.sc-gir  { font-size:12px; text-align:center; }
+.sc-gir.auto-yes { color:var(--green-mid); font-weight:700; }
+.sc-gir.auto-no  { color:var(--text-dim); }
+
+/* Miss direction in scorecard */
+.miss-tag { display:inline-block; font-size:10px; font-weight:700; padding:1px 5px; border-radius:4px; }
+.miss-tag.left  { background:#EEF0FE; color:var(--sky); }
+.miss-tag.right { background:#FEF3E8; color:var(--orange); }
+
+/* Putt/approach table */
+.pt { width:100%; border-collapse:collapse; font-size:13px; }
+.pt th { font-size:10px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; padding:4px 8px; text-align:left; }
+.pt td { padding:7px 8px; border-top:1px solid var(--border); }
+.chip { display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; }
+.chip.bad  { background:#FDECEA; color:var(--red); }
+.chip.ok   { background:#E8F4EE; color:var(--green-mid); }
+.chip.warn { background:#FEF3E8; color:var(--orange); }
+.chip.tp   { background:#FDECEA; color:var(--red); }
+.chip.two  { background:#E8F4EE; color:var(--green-mid); }
+.chip.sg   { background:#EFE8FA; color:#7B4FBF; }
+.abar { height:5px; background:#EEE; border-radius:3px; margin-top:3px; }
+.abar-fill { height:100%; border-radius:3px; }
+.abar-fill.s { background:var(--green-light); }
+.abar-fill.l { background:var(--orange); }
+.abar-fill.sg { background:#7B4FBF; }
+
+/* Focus */
+.focus-list { display:flex; flex-direction:column; gap:9px; }
+.focus-item { display:flex; gap:11px; padding:11px; background:var(--bg); border-radius:10px; align-items:flex-start; }
+.fp { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:white; flex-shrink:0; }
+.fp.p1 { background:var(--red); } .fp.p2 { background:var(--orange); } .fp.p3 { background:var(--gold); color:var(--green-dark); }
+.ft { font-size:13px; font-weight:700; margin-bottom:3px; }
+.fd { font-size:12px; color:var(--text-mid); line-height:1.5; }
+.fs { font-size:11px; font-weight:600; color:var(--green); margin-top:4px; }
+
+/* Short game table */
+.sg-table { width:100%; border-collapse:collapse; font-size:13px; }
+.sg-table th { font-size:10px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; padding:4px 8px; text-align:left; }
+.sg-table td { padding:7px 8px; border-top:1px solid var(--border); }
+.lie-tag { display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:5px; }
+.lie-tag.r { background:#FEF3E8; color:var(--orange); }
+.lie-tag.f { background:#E8F4EE; color:var(--green-mid); }
+.lie-tag.b { background:#FFF8E6; color:#8A6A00; }
+
+/* Golf score notation */
+.score-notation {
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:800; width:32px; height:32px;
+  position:relative;
+}
+.score-notation.eagle {
+  color:var(--gold);
+  border:2.5px solid var(--gold);
+  border-radius:50%;
+  box-shadow:0 0 0 2.5px var(--gold);
+  /* double circle */
+  outline:2.5px solid var(--gold);
+  outline-offset:3px;
+}
+.score-notation.birdie {
+  color:var(--green-mid);
+  border:2.5px solid var(--green-mid);
+  border-radius:50%;
+}
+.score-notation.par    { color:var(--text-mid); }
+.score-notation.bogey  {
+  color:var(--orange);
+  border:2.5px solid var(--orange);
+  border-radius:3px;
+}
+.score-notation.double {
+  color:var(--red);
+  border:2.5px solid var(--red);
+  border-radius:3px;
+  box-shadow:0 0 0 2.5px var(--red);
+  outline:2.5px solid var(--red);
+  outline-offset:3px;
+}
+.score-notation.worse  {
+  color:#8B1A1A;
+  border:2.5px solid #8B1A1A;
+  border-radius:3px;
+  outline:2.5px solid #8B1A1A;
+  outline-offset:3px;
+}
+.miss-bar { display:flex; align-items:center; gap:8px; margin-top:4px; }
+.miss-label { font-size:12px; color:var(--text-dim); width:36px; }
+.miss-track { flex:1; height:8px; background:#EEE; border-radius:4px; overflow:hidden; }
+.miss-fill { height:100%; border-radius:4px; }
+.miss-fill.left  { background:var(--sky); margin-left:auto; }
+.miss-fill.right { background:var(--orange); }
+.miss-count { font-size:12px; font-weight:700; width:20px; }
+
+/* AI box */
+.ai-box { background:linear-gradient(135deg,#F9F6EE,#EFF6EF); border:1px solid #D4E8D4; border-radius:11px; padding:13px 15px; margin-top:12px; }
+.ai-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--green); margin-bottom:7px; display:flex; align-items:center; gap:6px; }
+.ai-text { font-size:13px; color:var(--text-mid); line-height:1.7; }
+.ai-loading { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-dim); }
+.spinner { width:14px; height:14px; border:2px solid #DDD; border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+.note-box { border:1.5px dashed var(--border); border-radius:10px; padding:11px 13px; margin-top:12px; }
+.note-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin-bottom:6px; }
+.note-area { width:100%; background:transparent; border:none; outline:none; font-family:'Outfit',sans-serif; font-size:13px; color:var(--text); resize:none; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div class="mode-bar">
+  <div class="mode-logo">caddie</div>
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="switchView('student')">⛳ Student</button>
+    <button class="mode-tab" onclick="switchView('coach')" id="coach-tab">
+      📊 Coach <div class="new-dot" id="new-dot"></div>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════ STUDENT VIEW ═══════════ -->
+<div class="view active" id="view-student">
+<div class="student-wrap">
+  <div id="logging-ui">
+    <div class="hole-dots" id="hole-dots"></div>
+
+    <!-- Hole card with auto GIR -->
+    <div class="hole-card">
+      <div class="hc-row">
+        <div class="hc-num" id="hc-num">1</div>
+        <div class="hc-info">
+          <div class="hc-par-label">Par</div>
+          <div class="hc-par-val" id="hc-par">4</div>
+          <div class="hc-yds" id="hc-yds">387 yds</div>
+          <div class="hc-idx" id="hc-idx">Index 11</div>
+        </div>
+      </div>
+      <div class="hc-gir-row">
+        <div class="gir-badge unknown" id="gir-badge">⬤ GIR: enter score &amp; putts</div>
+        <div class="gir-auto">auto-calculated</div>
+      </div>
+    </div>
+
+    <div class="tp-banner" id="tp-banner">
+      <strong>⚠️ 3-putt detected</strong>
+      One extra question helps your coach understand what happened
+    </div>
+
+    <!-- Score + Putts -->
+    <div class="score-putts-row">
+      <div>
+        <div class="step-label">Score</div>
+        <div class="stepper">
+          <button class="step-btn" onclick="changeScore(-1)">−</button>
+          <div class="step-val" id="score-val">—</div>
+          <button class="step-btn" onclick="changeScore(1)">+</button>
+        </div>
+      </div>
+      <div>
+        <div class="step-label">Putts</div>
+        <div class="putts-grid" id="putts-grid">
+          <button class="putt-btn" onclick="selPutts(this,0)"><span class="pv">0</span><span class="pu">chip-in</span></button>
+          <button class="putt-btn" onclick="selPutts(this,1)"><span class="pv">1</span><span class="pu">putt</span></button>
+          <button class="putt-btn" onclick="selPutts(this,2)"><span class="pv">2</span><span class="pu">putts</span></button>
+          <button class="putt-btn" onclick="selPutts(this,3)"><span class="pv">3+</span><span class="pu">putts</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div id="extra-fields"></div>
+
+    <button class="next-btn" id="next-btn" disabled onclick="nextHole()">
+      <span id="next-label">Next hole</span> <span class="arr">→</span>
+    </button>
+  </div>
+
+  <div class="complete-card" id="complete-card">
+    <div class="cc-icon">🏌️</div>
+    <div class="cc-title">Round complete</div>
+    <div class="cc-score" id="cc-score">—</div>
+    <div class="cc-par" id="cc-par">—</div>
+    <div class="cc-detail" id="cc-detail"></div>
+    <button class="send-btn" onclick="sendToCoach()">📤 Send to coach</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ COACH VIEW ═══════════ -->
+<div class="view" id="view-coach">
+<div class="coach-wrap">
+  <div class="empty-state" id="empty-state">
+    <div class="es-icon">📭</div>
+    <div class="es-title">No round data yet</div>
+    <div class="es-sub">Log a round in the Student tab,<br>then send it to coach — it appears here instantly.</div>
+  </div>
+  <div class="dashboard" id="dashboard">
+    <div class="alert-bar">
+      <div class="ab-left">
+        <div class="ab-icon">⛳</div>
+        <div>
+          <div class="ab-name" id="d-name">Round received</div>
+          <div class="ab-detail" id="d-detail">—</div>
+        </div>
+      </div>
+      <div class="ab-right">
+        <div class="ab-score" id="d-score">—</div>
+        <div class="ab-par" id="d-par">—</div>
+      </div>
+    </div>
+
+    <div class="g4">
+      <div class="ccard"><div class="cc-title">Avg first putt</div><div class="bstat" id="s-avgputt">—</div><div class="bstat-sub" id="s-avgputt-sub">—</div></div>
+      <div class="ccard"><div class="cc-title">3-putt rate</div><div class="bstat" id="s-tprate">—</div><div class="bstat-sub" id="s-tprate-sub">—</div></div>
+      <div class="ccard"><div class="cc-title">GIR</div><div class="bstat" id="s-gir">—</div><div class="bstat-sub" id="s-gir-sub">—</div></div>
+      <div class="ccard"><div class="cc-title">Fairways hit</div><div class="bstat" id="s-fw">—</div><div class="bstat-sub" id="s-fw-sub">—</div></div>
+    </div>
+
+    <div class="g2">
+      <div class="ccard">
+        <div class="cc-title">Scorecard</div>
+        <div class="sc-row hdr">
+          <div>Hole</div><div>Score</div><div>Putts</div><div>GIR</div><div>FW</div><div>Miss</div><div>Penalty</div>
+        </div>
+        <div id="scorecard-rows"></div>
+      </div>
+      <div class="ccard">
+        <div class="cc-title">Session focus areas</div>
+        <div class="focus-list" id="focus-list"></div>
+        <div class="note-box">
+          <div class="note-lbl">📝 Coach notes</div>
+          <textarea class="note-area" rows="3" placeholder="Add your focus points for the next session…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="ccard">
+        <div class="cc-title">Approach &amp; putting breakdown</div>
+        <table class="pt">
+          <thead><tr><th>Hole</th><th>Approach</th><th>1st putt</th><th>2nd putt</th><th>Result</th></tr></thead>
+          <tbody id="putt-tbody"></tbody>
+        </table>
+        <div class="ai-box" id="ai-putting">
+          <div class="ai-label">✦ AI Coach Analysis</div>
+          <div class="ai-loading"><div class="spinner"></div>Analysing patterns…</div>
+        </div>
+      </div>
+      <div class="ccard">
+        <div class="cc-title">Short game &amp; fairway misses</div>
+        <div id="miss-section"></div>
+        <div id="sg-area" style="margin-top:14px"></div>
+        <div class="ai-box" id="ai-sg">
+          <div class="ai-label">✦ AI Coach Analysis</div>
+          <div class="ai-loading"><div class="spinner"></div>Analysing short game…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// COURSE DATA
+// ══════════════════════════════════════
+const HOLES = [
+  {n:1, par:4, yds:387, idx:11},
+  {n:2, par:3, yds:178, idx:15},
+  {n:3, par:5, yds:521, idx:5},
+  {n:4, par:4, yds:412, idx:3},
+  {n:5, par:4, yds:355, idx:13},
+  {n:6, par:4, yds:432, idx:1},
+];
+
+const APPROACH_BANDS = [
+  {v:'Under 50',  u:'yds'},
+  {v:'50–75',     u:'yds'},
+  {v:'75–100',    u:'yds'},
+  {v:'100–125',   u:'yds'},
+  {v:'125–150',   u:'yds'},
+  {v:'150+',      u:'yds'},
+];
+
+const PUTT_DIST = [{v:'3',u:'ft'},{v:'6',u:'ft'},{v:'12',u:'ft'},{v:'20',u:'ft'},{v:'30+',u:'ft'}];
+const PUTT2    = [{v:'3',u:'ft'},{v:'4',u:'ft'},{v:'5',u:'ft'},{v:'6',u:'ft'},{v:'7+',u:'ft'}];
+const PROX     = [{v:'3',u:'ft'},{v:'6',u:'ft'},{v:'10',u:'ft'},{v:'15',u:'ft'},{v:'20+',u:'ft'}];
+const LIE_OPTS = [{icon:'🌿',label:'Fairway',key:'f'},{icon:'🌾',label:'Rough',key:'r'},{icon:'🏖️',label:'Bunker',key:'b'}];
+const PEN_OPTS = [
+  {icon:'✅',label:'None',       sub:'',           type:'none'},
+  {icon:'🚧',label:'OOB',        sub:'+2 strokes', type:'pen'},
+  {icon:'💧',label:'Hazard',     sub:'+1 stroke',  type:'pen'},
+  {icon:'🌲',label:'Unplayable', sub:'+1 stroke',  type:'pen'},
+];
+
+// ── State ──
+let cur = 0;
+let data = [];
+
+function hd()  { return data[cur]; }
+function par() { return HOLES[cur].par; }
+
+// ── GIR auto-calculation ──
+// GIR = true if strokes to reach green <= par - 2
+// strokes_to_green = score - putts
+// GIR = (score - putts) <= (par - 2)
+function calcGIR(score, putts, par) {
+  if (score === null || putts === null) return null;
+  if (putts === 0) return true; // chip-in = GIR (reached in regulation)
+  return (score - putts) <= (par - 2);
+}
+
+function updateGIRBadge() {
+  const d = hd();
+  const gir = calcGIR(d.score, d.putts, par());
+  d.gir = gir;
+  const badge = document.getElementById('gir-badge');
+  if (gir === null) {
+    badge.className = 'gir-badge unknown';
+    badge.textContent = '⬤ GIR: enter score & putts';
+  } else if (gir) {
+    badge.className = 'gir-badge yes';
+    badge.textContent = '✅ Green in Regulation';
+  } else {
+    badge.className = 'gir-badge no';
+    badge.textContent = '❌ Missed GIR';
+  }
+}
+
+// ── Init hole ──
+function initHole() {
+  data[cur] = data[cur] || { score:null, putts:null, penalty:'None', gir:null };
+  const h = HOLES[cur];
+
+  document.getElementById('hc-num').textContent = h.n;
+  document.getElementById('hc-par').textContent = h.par;
+  document.getElementById('hc-yds').textContent = h.yds + ' yds';
+  document.getElementById('hc-idx').textContent = 'Index ' + h.idx;
+
+  // Default score to par
+  data[cur].score = data[cur].score !== null ? data[cur].score : par();
+  const sv = document.getElementById('score-val');
+  sv.textContent = data[cur].score;
+  sv.className = 'step-val par';
+
+  // Reset putts
+  document.getElementById('putts-grid').querySelectorAll('.putt-btn')
+    .forEach(b => b.classList.remove('sel','sel-tp'));
+
+  document.getElementById('tp-banner').classList.remove('show');
+  updateGIRBadge();
+  buildExtraFields();
+  buildDots();
+  updateNext();
+  document.getElementById('next-label').textContent = cur === HOLES.length-1 ? 'Complete round' : 'Next hole';
+}
+
+// ── Score ──
+function changeScore(delta) {
+  const d = hd();
+  if (d.score === null) d.score = par(); // already defaulted but safe fallback
+  d.score = Math.max(1, Math.min(12, d.score + delta));
+  const sv = document.getElementById('score-val');
+  sv.textContent = d.score;
+  const diff = d.score - par();
+  sv.className = 'step-val ' + (diff<0?'under':diff===0?'par':'over');
+  updateGIRBadge();
+  buildExtraFields();
+  updateNext();
+}
+
+// ── Putts ──
+function selPutts(btn, n) {
+  document.getElementById('putts-grid').querySelectorAll('.putt-btn')
+    .forEach(b => b.classList.remove('sel','sel-tp'));
+  btn.classList.add(n >= 3 ? 'sel-tp' : 'sel');
+  hd().putts = n;
+  document.getElementById('tp-banner').classList.toggle('show', n >= 3);
+  updateGIRBadge();
+  buildExtraFields();
+  updateNext();
+}
+
+// ── Extra fields ──
+function buildExtraFields() {
+  const area = document.getElementById('extra-fields');
+  area.innerHTML = '';
+  const d = hd();
+  const h = HOLES[cur];
+
+  // 1. Fairway hit (par 4/5 only)
+  if (h.par >= 4) {
+    area.appendChild(makeFairwaySection(d));
+  }
+
+  // 2. Approach distance
+  // Par 3: tee shot IS the approach — skip if GIR made (distance = hole yardage)
+  // All other holes: show unless chip-in
+  const girNow = calcGIR(d.score, d.putts, h.par);
+  const par3GIR = h.par === 3 && girNow === true;
+  if (d.putts !== 0 && !par3GIR) {
+    area.appendChild(makeApproachSection(d));
+  }
+
+  // 3. Shots inside 50 yds — simply: did they approach from Under 50?
+  if (d.approach === 'Under 50') {
+    if (!d.shotsInside50) d.shotsInside50 = 1;
+    area.appendChild(makeShotsInside50Section(d));
+  } else {
+    d.shotsInside50 = null;
+  }
+
+  // 4. First putt distance (not for chip-ins)
+  if (d.putts > 0) {
+    area.appendChild(makeGridSection('First putt distance', null,
+      makeTapGrid('putt1', PUTT_DIST, 'c5', d.putt1)));
+  }
+
+  // 5. Second putt (3-putts only)
+  if (d.putts >= 3) {
+    area.appendChild(makeGridSection('Second putt distance', 'conditional',
+      makeTapGrid('putt2', PUTT2, 'c5', d.putt2)));
+  }
+
+  // 6. Penalty
+  area.appendChild(makePenaltySection(d));
+}
+
+// Fairway section with miss direction sub-panel
+function makeFairwaySection(d) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sec';
+  const missOpen = d.fairway === 'left' || d.fairway === 'right';
+  wrap.innerHTML = `
+    <div class="sec-label">Fairway hit?</div>
+    <div class="fw-grid">
+      <button class="fw-btn${d.fairway==='yes'?' sel-yes':''}" onclick="selFW(this,'yes')">✅ Hit fairway</button>
+      <button class="fw-btn${missOpen?' sel-left':''}" onclick="selFW(this,'miss')">❌ Missed</button>
+    </div>
+    <div class="sub-panel${missOpen?' open':''}" id="fw-miss-panel">
+      <div class="sub-label">Miss direction</div>
+      <div class="tap-grid c2">
+        <button class="tap-btn${d.fairway==='left'?' sel':''}" onclick="selFWDir(this,'left')">
+          <span class="tv">← Left</span><span class="tu">miss left</span>
+        </button>
+        <button class="tap-btn${d.fairway==='right'?' sel':''}" onclick="selFWDir(this,'right')">
+          <span class="tv">Right →</span><span class="tu">miss right</span>
+        </button>
+      </div>
+    </div>
+  `;
+  return wrap;
+}
+
+function selFW(btn, val) {
+  btn.parentElement.querySelectorAll('.fw-btn').forEach(b => b.classList.remove('sel-yes','sel-left','sel-right'));
+  const panel = document.getElementById('fw-miss-panel');
+  if (val === 'yes') {
+    btn.classList.add('sel-yes');
+    hd().fairway = 'yes';
+    panel.classList.remove('open');
+  } else {
+    btn.classList.add('sel-left'); // highlight "Missed" btn
+    panel.classList.add('open');
+    // Don't set fairway yet — wait for direction
+  }
+  updateNext();
+}
+
+function selFWDir(btn, dir) {
+  btn.parentElement.querySelectorAll('.tap-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  // Also update the "Missed" button colour
+  const fwBtns = document.querySelectorAll('.fw-btn');
+  fwBtns.forEach(b => b.classList.remove('sel-yes','sel-left','sel-right'));
+  fwBtns[1].classList.add(dir === 'left' ? 'sel-left' : 'sel-right');
+  hd().fairway = dir;
+  updateNext();
+}
+
+// Clean approach section — just distance bands
+function makeApproachSection(d) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sec';
+  const btns = APPROACH_BANDS.map(b => {
+    const isSel = d.approach === b.v;
+    return `<button class="appr-btn${isSel?' sel':''}" data-val="${b.v}">
+      <span class="av">${b.v}</span>
+      <span class="au">${b.u}</span>
+    </button>`;
+  }).join('');
+  wrap.innerHTML = `
+    <div class="sec-label">Approach distance</div>
+    <div class="tap-grid c3" style="grid-template-columns:repeat(3,1fr)">${btns}</div>
+  `;
+  wrap.querySelectorAll('.appr-btn').forEach(btn => {
+    btn.onclick = () => {
+      wrap.querySelectorAll('.appr-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+      hd().approach = btn.dataset.val;
+      buildExtraFields(); // rebuild to show/hide shots inside 50
+    };
+  });
+  return wrap;
+}
+
+// Shots inside 50 yds — stepper, shown only when GIR missed
+// Auto-starts at 1 if approach was Under 50 yds
+function makeShotsInside50Section(d) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sec';
+  const autoStart = d.approach === 'Under 50';
+  // Initialise to 1 if not yet set, or if approach just became Under 50
+  if (d.shotsInside50 === undefined || d.shotsInside50 === null) {
+    d.shotsInside50 = 1;
+  }
+  wrap.innerHTML = `
+    <div class="sec-label">Shots inside 50 yds
+      ${autoStart ? '<span class="badge auto">includes approach</span>' : ''}
+    </div>
+    <div class="stepper" style="max-width:180px">
+      <button class="step-btn" id="si50-minus" onclick="changeSI50(-1)">−</button>
+      <div class="step-val" id="si50-val" style="font-size:32px">${d.shotsInside50}</div>
+      <button class="step-btn" onclick="changeSI50(1)">+</button>
+    </div>
+  `;
+  // Disable minus if already at minimum
+  setTimeout(() => {
+    const minusBtn = document.getElementById('si50-minus');
+    if (minusBtn) minusBtn.disabled = d.shotsInside50 <= 1;
+  }, 0);
+  return wrap;
+}
+
+function changeSI50(delta) {
+  const d = hd();
+  d.shotsInside50 = Math.max(1, (d.shotsInside50 || 1) + delta);
+  const el = document.getElementById('si50-val');
+  const minusBtn = document.getElementById('si50-minus');
+  if (el) el.textContent = d.shotsInside50;
+  if (minusBtn) minusBtn.disabled = d.shotsInside50 <= 1;
+}
+
+// Penalty section — no sub-labels on buttons
+function makePenaltySection(d) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sec';
+  wrap.innerHTML = `<div class="sec-label">Penalty strokes</div>`;
+  wrap.appendChild(makePenGrid(d));
+  return wrap;
+}
+
+function makeGridSection(label, badgeType, content) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sec';
+  const badge = badgeType === 'conditional' ? '<span class="badge conditional">3-putt</span>' : '';
+  wrap.innerHTML = `<div class="sec-label">${label}${badge}</div>`;
+  wrap.appendChild(content);
+  return wrap;
+}
+
+function makeTapGrid(key, opts, cols, selected) {
+  const grid = document.createElement('div');
+  grid.className = `tap-grid ${cols}`;
+  opts.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'tap-btn' + (selected===o.v?' sel':'');
+    btn.innerHTML = `<span class="tv">${o.v}</span><span class="tu">${o.u}</span>`;
+    btn.onclick = () => {
+      grid.querySelectorAll('.tap-btn').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel');
+      hd()[key] = o.v;
+      updateNext();
+    };
+    grid.appendChild(btn);
+  });
+  return grid;
+}
+
+function makePenGrid(d) {
+  const grid = document.createElement('div');
+  grid.className = 'pen-grid';
+  PEN_OPTS.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'pen-btn';
+    const isSel = (d.penalty||'None') === o.label;
+    if (isSel) btn.classList.add(o.type==='none'?'sel-none':'sel-pen');
+    btn.innerHTML = `<span class="pi">${o.icon}</span><span class="pl">${o.label}</span>`;
+    btn.onclick = () => {
+      grid.querySelectorAll('.pen-btn').forEach(b=>b.classList.remove('sel-none','sel-pen'));
+      btn.classList.add(o.type==='none'?'sel-none':'sel-pen');
+      hd().penalty = o.label;
+    };
+    grid.appendChild(btn);
+  });
+  return grid;
+}
+
+// ── Validation ──
+function updateNext() {
+  const d = hd();
+  const h = HOLES[cur];
+  let ok = d.score !== null && d.putts !== null;
+
+  // Fairway required on par 4/5
+  if (ok && h.par >= 4) {
+    ok = d.fairway === 'yes' || d.fairway === 'left' || d.fairway === 'right';
+  }
+
+  // Approach required unless: chip-in, or par 3 with GIR made
+  const girVal = calcGIR(d.score, d.putts, h.par);
+  const par3GIRVal = h.par === 3 && girVal === true;
+  if (ok && d.putts !== 0 && !par3GIRVal) ok = !!d.approach;
+
+  // shotsInside50 has a default of 1 so never blocks — no validation needed
+
+  // Putt distance required (not chip-in)
+  if (ok && d.putts > 0) ok = !!d.putt1;
+
+  // Second putt on 3-putt
+  if (ok && d.putts >= 3) ok = !!d.putt2;
+
+  document.getElementById('next-btn').disabled = !ok;
+}
+
+// ── Navigation ──
+function nextHole() {
+  const d = hd();
+  d.holeNum = HOLES[cur].n;
+  d.par = HOLES[cur].par;
+  d.gir = calcGIR(d.score, d.putts, d.par);
+
+  if (cur < HOLES.length - 1) {
+    cur++;
+    if (!data[cur]) data[cur] = { score:null, putts:null, penalty:'None', gir:null };
+    buildDots();
+    initHole();
+    window.scrollTo(0,0);
+  } else {
+    showComplete();
+  }
+}
+
+function buildDots() {
+  const c = document.getElementById('hole-dots');
+  c.innerHTML = '';
+  HOLES.forEach((h,i) => {
+    const d = document.createElement('div');
+    d.className = 'hd';
+    d.textContent = h.n;
+    if (i < cur) {
+      d.className = 'hd ' + ((data[i]&&data[i].putts>=3)?'tp':'done');
+    } else if (i === cur) {
+      d.className = 'hd current';
+    }
+    c.appendChild(d);
+  });
+}
+
+function showComplete() {
+  const total = data.reduce((s,h)=>s+(h.score||0),0);
+  const totalPar = HOLES.reduce((s,h)=>s+h.par,0);
+  const diff = total - totalPar;
+  document.getElementById('logging-ui').style.display = 'none';
+  document.getElementById('complete-card').classList.add('show');
+  document.getElementById('cc-score').textContent = total;
+  document.getElementById('cc-par').textContent = (diff>=0?'+':'') + diff + ' vs par';
+  const tp = data.filter(h=>h.putts>=3).length;
+  const gir = data.filter(h=>h.gir).length;
+  document.getElementById('cc-detail').textContent =
+    `Wentworth East · ${HOLES.length} holes · ${gir} GIR · ${tp} three-putt${tp!==1?'s':''}`;
+}
+
+function sendToCoach() {
+  document.getElementById('new-dot').style.display = 'block';
+  buildDashboard();
+  switchView('coach');
+}
+
+// ══════════════════════════════════════
+// COACH DASHBOARD
+// ══════════════════════════════════════
+function parseFt(v) {
+  if (!v) return 0;
+  if (v==='30+'||v==='20+') return parseInt(v)+2;
+  if (v==='7+') return 8;
+  return parseInt(v)||0;
+}
+
+function approachPct(v) {
+  const m = {'Under 50':20,'50–75':38,'75–100':52,'100–125':68,'125–150':84,'150+':100};
+  return m[v]||50;
+}
+
+function buildDashboard() {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('dashboard').classList.add('show');
+
+  const total = data.reduce((s,h)=>s+(h.score||0),0);
+  const totalPar = HOLES.reduce((s,h)=>s+h.par,0);
+  const diff = total - totalPar;
+
+  document.getElementById('d-name').textContent = 'Round received · Alex Thompson';
+  document.getElementById('d-detail').textContent =
+    `Wentworth East · ${HOLES.length} holes · ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}`;
+  document.getElementById('d-score').textContent = total;
+  document.getElementById('d-par').textContent = (diff>=0?'+':'') + diff + ' vs par';
+
+  // Avg first putt
+  const p1s = data.filter(h=>h.putt1).map(h=>parseFt(h.putt1));
+  const avgP = p1s.length ? Math.round(p1s.reduce((a,b)=>a+b)/p1s.length) : 0;
+  const apEl = document.getElementById('s-avgputt');
+  apEl.textContent = avgP ? avgP+'ft' : '—';
+  apEl.className = 'bstat ' + (avgP>20?'bad':avgP>14?'warn':'ok');
+  document.getElementById('s-avgputt-sub').textContent = `${p1s.length} greens · tour avg ~18ft`;
+
+  // 3-putt rate
+  const tp = data.filter(h=>h.putts>=3).length;
+  const tpPct = Math.round(tp/data.length*100);
+  const tpEl = document.getElementById('s-tprate');
+  tpEl.textContent = tpPct+'%';
+  tpEl.className = 'bstat '+(tpPct>20?'bad':tpPct>10?'warn':'ok');
+  document.getElementById('s-tprate-sub').textContent = `${tp} of ${data.length} holes`;
+
+  // GIR (auto-calculated)
+  const girCount = data.filter(h=>h.gir).length;
+  const girEl = document.getElementById('s-gir');
+  girEl.textContent = `${girCount}/${data.length}`;
+  girEl.className = 'bstat '+(girCount/data.length>0.55?'ok':girCount/data.length>0.33?'warn':'bad');
+  document.getElementById('s-gir-sub').textContent = 'Auto-calculated from score & putts';
+
+  // Fairways
+  const fwHoles = data.filter((h,i)=>HOLES[i].par>=4);
+  const fwHit = fwHoles.filter(h=>h.fairway==='yes').length;
+  const fwEl = document.getElementById('s-fw');
+  fwEl.textContent = `${fwHit}/${fwHoles.length}`;
+  fwEl.className = 'bstat '+(fwHit/fwHoles.length>0.6?'ok':fwHit/fwHoles.length>0.4?'warn':'bad');
+  const missL = fwHoles.filter(h=>h.fairway==='left').length;
+  const missR = fwHoles.filter(h=>h.fairway==='right').length;
+  document.getElementById('s-fw-sub').textContent =
+    fwHit===fwHoles.length ? 'All fairways hit' :
+    `Miss: ${missL} left, ${missR} right`;
+
+  buildScorecard();
+  buildPuttTable(tp, tpPct, avgP);
+  buildMissSection(fwHoles, missL, missR);
+  buildShortgame();
+  buildFocus(avgP, tpPct, tp, missL, missR, fwHoles.length);
+  runAI(avgP, tpPct, tp, missL, missR);
+}
+
+function buildScorecard() {
+  const rows = document.getElementById('scorecard-rows');
+  rows.innerHTML = '';
+  data.forEach((h,i) => {
+    const diff = h.score - h.par;
+    const cls = diff<=-2?'eagle':diff===-1?'birdie':diff===0?'par':diff===1?'bogey':diff===2?'double':'worse';
+    const row = document.createElement('div');
+    row.className = 'sc-row';
+    const girTxt = h.gir===true?'✅':'❌';
+    const girCls = h.gir===true?'auto-yes':'auto-no';
+    const fwHtml = HOLES[i].par>=4
+      ? h.fairway==='yes'
+        ? '<span style="color:var(--green-mid)">✅</span>'
+        : h.fairway==='left'
+          ? '<span class="miss-tag left">←L</span>'
+          : h.fairway==='right'
+            ? '<span class="miss-tag right">R→</span>'
+            : '—'
+      : '<span style="color:#CCC">—</span>';
+    row.innerHTML = `
+      <div style="font-weight:700">H${h.holeNum}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="score-notation ${cls}">${h.score}</span>
+      </div>
+      <div style="text-align:center;font-weight:${h.putts>=3?'700':'400'};color:${h.putts>=3?'var(--red)':'inherit'}">${h.putts}${h.putts>=3?' ⚠️':''}</div>
+      <div class="sc-gir ${girCls}">${girTxt}</div>
+      <div style="text-align:center">${fwHtml}</div>
+      <div style="text-align:center">${h.fairway&&h.fairway!=='yes'?'<span class="miss-tag '+(h.fairway==='left'?'left':'right')+'">'+(h.fairway==='left'?'←':'→')+'</span>':'<span style="color:#CCC">—</span>'}</div>
+      <div style="font-size:12px;color:${h.penalty&&h.penalty!=='None'?'var(--orange)':'var(--text-dim)'}">${h.penalty||'None'}</div>
+    `;
+    rows.appendChild(row);
+  });
+}
+
+function buildPuttTable(tp, tpPct, avgP) {
+  const tbody = document.getElementById('putt-tbody');
+  tbody.innerHTML = '';
+  data.forEach(h => {
+    const p1 = parseFt(h.putt1);
+    const is3 = h.putts >= 3;
+    const ap = approachPct(h.approach);
+    const holeInfo = HOLES.find(ho => ho.n === h.holeNum);
+    const approachDisplay = h.approach
+      ? h.approach
+      : (h.par === 3 && h.gir ? holeInfo.yds + ' yds ✱' : '—');
+    const showBar = !!h.approach;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>H${h.holeNum}</strong></td>
+      <td>
+        <div style="font-size:12px">${approachDisplay}</div>
+        ${showBar?`<div class="abar"><div class="abar-fill ${ap>75?'l':'s'}" style="width:${ap}%"></div></div>`:''}
+      </td>
+      <td>${h.putts===0?'<span class="chip ok">Chip-in!</span>':h.putt1?`<span class="chip ${p1>20?'bad':p1>12?'warn':'ok'}">${h.putt1}</span>`:'<span style="color:#CCC">—</span>'}</td>
+      <td>${is3&&h.putt2?`<span class="chip ${parseFt(h.putt2)>5?'bad':'warn'}">${h.putt2}</span>`:'<span style="color:#CCC">—</span>'}</td>
+      <td><span class="chip ${is3?'tp':'two'}">${is3?'3-putt':'2-putt'}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function buildMissSection(fwHoles, missL, missR) {
+  const sec = document.getElementById('miss-section');
+  const totalMisses = missL + missR;
+  if (totalMisses === 0) {
+    sec.innerHTML = '<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px">✅ All fairways hit — no miss direction data</div>';
+    return;
+  }
+  const maxBar = Math.max(missL, missR, 1);
+  sec.innerHTML = `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px">Fairway miss pattern</div>
+    <div class="miss-bar">
+      <div class="miss-label" style="color:var(--sky)">Left</div>
+      <div class="miss-track"><div class="miss-fill left" style="width:${Math.round(missL/maxBar*100)}%"></div></div>
+      <div class="miss-count" style="color:var(--sky)">${missL}</div>
+    </div>
+    <div class="miss-bar" style="margin-top:6px">
+      <div class="miss-label" style="color:var(--orange)">Right</div>
+      <div class="miss-track"><div class="miss-fill right" style="width:${Math.round(missR/maxBar*100)}%"></div></div>
+      <div class="miss-count" style="color:var(--orange)">${missR}</div>
+    </div>
+    ${missL>missR+1?'<div style="font-size:12px;color:var(--sky);margin-top:8px;font-weight:600">↙ Consistent left miss — check alignment or swing path</div>':''}
+    ${missR>missL+1?'<div style="font-size:12px;color:var(--orange);margin-top:8px;font-weight:600">↘ Consistent right miss — check grip or face at impact</div>':''}
+  `;
+}
+
+function buildShortgame() {
+  const missedGIR = data.filter(h => !h.gir);
+  const area = document.getElementById('sg-area');
+  if (missedGIR.length === 0) {
+    area.innerHTML = '<div style="font-size:13px;color:var(--text-dim)">All greens hit in regulation — no short game data</div>';
+    document.getElementById('ai-sg').style.display = 'none';
+    return;
+  }
+  let html = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px">Shots inside 50 yds (missed GIR holes)</div>
+    <table class="sg-table"><thead><tr><th>Hole</th><th>Approach</th><th>Shots ≤50 yds</th><th>1st putt</th></tr></thead><tbody>`;
+  missedGIR.forEach(h => {
+    const si = h.shotsInside50 || 1;
+    const chipColor = si >= 2 ? 'var(--red)' : si === 1 ? 'var(--green-mid)' : 'var(--text-dim)';
+    html += `<tr>
+      <td>H${h.holeNum}</td>
+      <td>${h.approach || '—'}</td>
+      <td><span style="font-weight:700;color:${chipColor};font-size:15px">${si}</span></td>
+      <td>${h.putt1 ? h.putt1+'ft' : '—'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  const avgSI = missedGIR.length
+    ? (missedGIR.reduce((s,h) => s+(h.shotsInside50||1), 0) / missedGIR.length).toFixed(1)
+    : '—';
+  html += `<div style="margin-top:10px;font-size:12px;color:var(--text-mid);padding:8px 10px;background:var(--bg);border-radius:8px">
+    Avg <strong>${avgSI} shots</strong> inside 50 yds on missed GIR holes · target is 1
+  </div>`;
+  area.innerHTML = html;
+}
+
+function buildFocus(avgP, tpPct, tp, missL, missR, fwTotal) {
+  const list = document.getElementById('focus-list');
+  list.innerHTML = '';
+  const areas = [];
+
+  const longTPs = data.filter(h=>h.putts>=3&&approachPct(h.approach)>75).length;
+  if (longTPs>=2) areas.push({
+    p:'p1', t:'Proximity from 125–150 yds',
+    d:`${longTPs} of ${tp} three-putts followed approaches from 125yds+. Distance control, not putting.`,
+    s:'Drill: flag targeting from 130–140 yds'
+  });
+
+  if (avgP>18) areas.push({
+    p:areas.length?'p2':'p1', t:'Lag putting pace control',
+    d:`Averaging ${avgP}ft for first putt. Needs to be under 18ft to avoid three-putt territory.`,
+    s:'Clock drill from 20ft — target ≤3ft leave'
+  });
+
+  const dominantMiss = missL>missR+1?'left':missR>missL+1?'right':null;
+  if (dominantMiss) areas.push({
+    p:areas.length<1?'p1':areas.length<2?'p2':'p3',
+    t:`Consistent ${dominantMiss} miss off tee`,
+    d:`${dominantMiss==='left'?missL:missR} of ${fwTotal} fairways missed ${dominantMiss}. Pattern suggests ${dominantMiss==='left'?'closed face or out-to-in path':'open face or in-to-out path'}.`,
+    s:`Check ${dominantMiss==='left'?'grip and alignment':'takeaway and face angle'} at setup`
+  });
+
+  const missedGIR = data.filter(h => !h.gir);
+  const multiChipHoles = missedGIR.filter(h => (h.shotsInside50||1) >= 2).length;
+  if (multiChipHoles >= 2) areas.push({
+    p:areas.length<1?'p1':areas.length<2?'p2':'p3',
+    t:'Short game — taking multiple shots inside 50 yds',
+    d:`${multiChipHoles} holes required 2+ shots inside 50 yds after missing the green. Up-and-down rate will be very low.`,
+    s:'Drill: getting up and down from rough/fringe in one chip'
+  });
+
+  if (areas.length===0) areas.push({
+    p:'p1', t:'Solid round overall',
+    d:'No major patterns detected. Continue building consistency.',
+    s:'Maintain current practice routine'
+  });
+
+  areas.slice(0,3).forEach(a => {
+    const el = document.createElement('div');
+    el.className = 'focus-item';
+    el.innerHTML = `<div class="fp ${a.p}">${a.p.replace('p','')}</div>
+      <div><div class="ft">${a.t}</div><div class="fd">${a.d}</div><div class="fs">${a.s}</div></div>`;
+    list.appendChild(el);
+  });
+}
+
+async function runAI(avgP, tpPct, tp, missL, missR) {
+  const summary = data.map(h =>
+    `H${h.holeNum} Par${h.par}: score ${h.score}, ${h.putts} putts, GIR ${h.gir?'yes':'no'}` +
+    (h.approach?`, approach ${h.approach}`:'') +
+    (!h.gir && h.shotsInside50 ? `, shots inside 50yds: ${h.shotsInside50}` : '') +
+    (h.putt1?`, 1st putt ${h.putt1}`:'') +
+    (h.putt2?`, 2nd putt ${h.putt2}`:'') +
+    (h.fairway?`, fairway ${h.fairway}`:'') +
+    (h.penalty&&h.penalty!=='None'?`, penalty ${h.penalty}`:'')).join('\n');
+
+  const p1 = `You are an expert golf coach. Analyse this student's round and give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance (leaving ball too far) or actual putting failure. Use exact numbers.
+
+${summary}
+Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.
+
+Two sentences only, no preamble.`;
+
+  const p2 = `You are an expert golf coach. Analyse this student's short game and fairway miss data. Shots inside 50yds: 1 = good up-and-down, 2+ = struggling. Fairway miss direction: ${missL} left, ${missR} right. Give a 2-sentence insight.
+
+${summary}
+
+Two sentences only, no preamble.`;
+
+  try {
+    const [r1,r2] = await Promise.all([call(p1), call(p2)]);
+    document.getElementById('ai-putting').innerHTML = `<div class="ai-label">&#10022; AI Coach Analysis</div><div class="ai-text">${r1}</div>`;
+    document.getElementById('ai-sg').innerHTML = `<div class="ai-label">&#10022; AI Coach Analysis</div><div class="ai-text">${r2}</div>`;
+  } catch(e) {
+    document.getElementById('ai-putting').innerHTML = `<div class="ai-label">&#10022; AI Coach Analysis</div><div class="ai-text" style="color:var(--text-dim)">Analysis unavailable.</div>`;
+    document.getElementById('ai-sg').innerHTML = `<div class="ai-label">&#10022; AI Coach Analysis</div><div class="ai-text" style="color:var(--text-dim)">Analysis unavailable.</div>`;
+  }
+}
+
+async function call(prompt) {
+  const r = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+  });
+  const d = await r.json();
+  return d.content.map(c=>c.text||'').join('');
+}
+
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelectorAll('.mode-tab').forEach((t,i)=>t.classList.toggle('active',i===(v==='student'?0:1)));
+  if (v==='coach') document.getElementById('new-dot').style.display='none';
+}
+
+// Boot
+data[0] = { score:null, putts:null, penalty:'None', gir:null };
+buildDots();
+initHole();
+</script>
+</body>
+</html>
