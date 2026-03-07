@@ -232,7 +232,6 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
             <div className="section-label">Round history</div>
             {sentRounds.map(r => {
               const diff = parDiff(r.total_score);
-              const tp   = r.three_putt_count != null ? r.three_putt_count : "—";
               return (
                 <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
                   <div className="round-card-top">
