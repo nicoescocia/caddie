@@ -425,8 +425,19 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     loadExisting();
   }, [existingRound]);
 
+  // Guard against holes not yet loaded
+  if (!holes.length || !holeData.length) {
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} />
+        <div className="ov-loading"><div className="big-spinner" /></div>
+      </>
+    );
+  }
+
   const h   = holes[cur] || { n: cur+1, par: 4, yds: 0, idx: 0 };
-  const d   = holeData[cur];
+  const d   = holeData[cur] || {};
   const gir = calcGIR(d.score, d.putts, h.par);
 
   function update(fields) {
@@ -632,17 +643,6 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             <button className="back-to-dash-btn" onClick={onBackToDashboard}>Back to my rounds</button>
           </div>
         </div>
-      </>
-    );
-  }
-
-  // ── Logging screen ──
-  if (!holes.length) {
-    return (
-      <>
-        <style>{css}</style>
-        <TopBar onSignOut={onSignOut} />
-        <div className="ov-loading"><div className="big-spinner" /></div>
       </>
     );
   }
