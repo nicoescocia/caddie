@@ -49,13 +49,13 @@ const css = `
 
   /* ── INPUTS ── */
   /* ── PICKED UP / DNA ── */
-  .puck-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .puck-row { display:flex; gap:8px; margin-bottom:14px; justify-content:flex-end; }
   .puck-btn {
-    background:white; border:1.5px solid var(--border); border-radius:11px;
-    padding:10px 8px; text-align:center; cursor:pointer; font-family:'Outfit',sans-serif;
-    font-size:13px; font-weight:600; color:var(--text-mid); transition:all .15s;
+    background:none; border:1px solid var(--border); border-radius:8px;
+    padding:5px 11px; cursor:pointer; font-family:'Outfit',sans-serif;
+    font-size:11px; font-weight:600; color:var(--text-dim); transition:all .15s;
   }
-  .puck-btn:hover { border-color:var(--text-dim); }
+  .puck-btn:hover { border-color:var(--text-mid); color:var(--text-mid); }
   .puck-btn.sel-pu  { background:#FEF3E8; border-color:var(--orange); color:var(--orange); }
   .puck-btn.sel-dna { background:#F0F0F0; border-color:#999; color:#555; }
 
@@ -578,21 +578,16 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     await upsertHole(rid, cur);
     setSaving(false);
 
-    if (isEditMode) {
-      // In edit mode: always go back to overview after saving
-      setView("overview");
+    // After saving: advance to next hole in both new and edit mode
+    if (cur < holes.length - 1) {
+      setCur(c => c + 1);
+      window.scrollTo(0, 0);
     } else {
-      // In new round mode: advance to next hole, or go to overview on last hole
-      if (cur < holes.length - 1) {
-        setCur(c => c + 1);
-        window.scrollTo(0, 0);
-      } else {
-        // Last hole done — update totals and go to overview
-        const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
-        const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
-        await supabase.from("rounds").update({ total_score: totalScore, total_putts: totalPutts }).eq("id", rid);
-        setView("overview");
-      }
+      // Last hole — update totals and go to overview
+      const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
+      const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
+      await supabase.from("rounds").update({ total_score: totalScore, total_putts: totalPutts }).eq("id", rid);
+      setView("overview");
     }
   }
 
@@ -603,12 +598,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   }
 
   function goBackInLogging() {
-    if (isEditMode) {
-      // In edit mode, back always returns to overview
-      setView("overview");
-    } else if (cur > 0) {
+    if (cur > 0) {
       setCur(c => c - 1);
       window.scrollTo(0, 0);
+    } else {
+      setView("overview");
     }
   }
 
@@ -705,9 +699,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const showFW    = h.par >= 4;
   const showMiss  = d.fairway === "left" || d.fairway === "right";
   const backLabel = isEditMode ? "Back to overview" : cur === 0 ? "Back" : "Back"; // eslint-disable-line no-unused-vars
-  const nextLabel = isEditMode
-    ? "Save hole"
-    : cur === holes.length - 1 ? "Complete round" : "Next hole";
+  const nextLabel = cur === holes.length - 1 ? (isEditMode ? "Save & finish" : "Complete round") : (isEditMode ? "Save & next" : "Next hole");
 
   return (
     <>

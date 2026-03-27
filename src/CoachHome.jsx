@@ -247,7 +247,7 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
                   <div className="round-card-top">
                     <div>
                       <div className="round-card-date">{fmtDate(r.created_at)}</div>
-                      <div className="round-card-course">{r.courses?.name || "Golf Course"} · {r.holes_played} holes</div>
+                      <div className="round-card-course">{r.courses?.name || "Golf Course"} · {r.attempted_holes != null && r.attempted_holes !== r.holes_played ? `${r.attempted_holes}/${r.holes_played} holes` : `${r.holes_played} holes`}</div>
                     </div>
                     <div className="round-score-block">
                       <div className="round-score-num">{r.total_score ?? "—"}</div>
@@ -355,7 +355,6 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
             attempted_holes:  attempted.length,
             gir_count:        attempted.filter(h => h.gir).length,
             fw_hit:           attempted.filter(h => h.par >= 4 && h.fairway === "yes").length,
-        fw_holes:         fwHoles.length,
             fw_holes:         fwHoles.length,
             three_putt_count: attempted.filter(h => h.putts >= 3).length,
           };
@@ -386,12 +385,13 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
         .from("round_holes").select("gir, fairway, putts, par, dna, picked_up")
         .eq("round_id", r.id);
       if (!holes || holes.length === 0) return r;
-      const attempted = holes.filter(h => !h.dna && !h.picked_up);
+      const attempted = holes.filter(h => !h.dna);
+      const fwHoles   = attempted.filter(h => h.par >= 4);
       return {
         ...r,
         attempted_holes:  attempted.length,
         gir_count:        attempted.filter(h => h.gir).length,
-        fw_hit:           attempted.filter(h => h.par >= 4 && h.fairway === "yes").length,
+        fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
         fw_holes:         fwHoles.length,
         three_putt_count: attempted.filter(h => h.putts >= 3).length,
       };
