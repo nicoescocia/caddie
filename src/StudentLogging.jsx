@@ -162,7 +162,7 @@ const css = `
   .ov-section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:10px; }
   .ov-hole-card { background:white; border:1.5px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:all .18s; display:grid; grid-template-columns:36px 1fr auto; align-items:center; gap:12px; }
   .ov-hole-card:hover { border-color:var(--green-light); transform:translateY(-1px); box-shadow:0 2px 12px rgba(0,0,0,0.07); }
-  .ov-hole-card.not-logged { opacity:0.45; cursor:default; }
+  .ov-hole-card.not-logged { opacity:0.6; }
   .ov-hole-num { width:36px; height:36px; border-radius:50%; background:var(--green-dark); color:var(--gold); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .ov-hole-num.tp { background:var(--red); color:white; }
   .ov-hole-num.unlogged { background:var(--border); color:var(--text-dim); }
@@ -297,7 +297,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
           </div>
         </div>
 
-        <div className="ov-section-label">Tap any hole to edit</div>
+        <div className="ov-section-label">Tap any hole to log or edit</div>
 
         {holes.map((hole, i) => {
           const hd = holeData[i];
@@ -311,7 +311,8 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
             <div
               key={hole.n}
               className={"ov-hole-card" + (!logged ? " not-logged" : "")}
-              onClick={() => logged && onEditHole(i)}
+              style={{cursor:"pointer"}}
+              onClick={() => onEditHole(i)}
             >
               <div className={"ov-hole-num" + (is3putt && logged ? " tp" : !logged ? " unlogged" : "")}>
                 {hole.n}
@@ -366,9 +367,14 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
           );
         })}
 
-        {!allLogged && (
-          <button className="ov-finish-btn" onClick={() => onEditHole(savedHoles.size)}>
-            Continue logging — Hole {savedHoles.size + 1}
+        {!allLogged && savedHoles.size > 0 && (
+          <button className="ov-finish-btn" style={{background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}} onClick={() => onEditHole(savedHoles.size)}>
+            Continue from Hole {savedHoles.size + 1}
+          </button>
+        )}
+        {savedHoles.size === 0 && (
+          <button className="ov-finish-btn" onClick={() => onEditHole(0)}>
+            Start logging
           </button>
         )}
 
