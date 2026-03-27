@@ -177,16 +177,10 @@ const css = `
   .big-spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
 `;
 
-const HOLES = [
-  { n:1, par:4, yds:288, idx:6 },
-  { n:2, par:4, yds:307, idx:4 },
-  { n:3, par:3, yds:180, idx:7 },
-  { n:4, par:4, yds:348, idx:1 },
-  { n:5, par:3, yds:125, idx:9 },
-  { n:6, par:4, yds:290, idx:5 },
-  { n:7, par:4, yds:313, idx:3 },
-  { n:8, par:3, yds:91,  idx:8 },
-  { n:9, par:3, yds:218, idx:2 },
+// ── Known courses (loaded from DB at runtime) ──
+const KNOWN_COURSES = [
+  { id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", name: "Greenock — Wee Course", holes: 9 },
+  { id: "b1a2c3d4-e5f6-7890-abcd-ef1234567890", name: "Greenock — Big Course", holes: 18 },
 ];
 
 const APPROACH_BANDS = [
@@ -248,13 +242,13 @@ function TopBar({ onSignOut, rightBtn }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, isEditMode, onEditHole, onFinish, onSignOut, sent, saving, onBackToDashboard }) {
-  const loggedHoles = HOLES.filter(h => savedHoles.has(h.n));
-  const totalScore  = loggedHoles.reduce((s, h, i) => s + (holeData[HOLES.indexOf(h)].score || 0), 0);
-  const totalPar    = HOLES.reduce((s, h) => s + h.par, 0);
-  const allLogged   = savedHoles.size === HOLES.length;
-  const girCount    = HOLES.filter((h, i) => savedHoles.has(h.n) && calcGIR(holeData[i].score, holeData[i].putts, h.par)).length;
-  const tpCount     = HOLES.filter((h, i) => savedHoles.has(h.n) && holeData[i].putts >= 3).length;
+function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, onEditHole, onFinish, onSignOut, sent, saving, onBackToDashboard }) {
+  const loggedHoles = holes.filter(h => savedHoles.has(h.n));
+  const totalScore  = loggedHoles.reduce((s, h, i) => s + (holeData[holes.indexOf(h)].score || 0), 0);
+  const totalPar    = holes.reduce((s, h) => s + h.par, 0);
+  const allLogged   = savedHoles.size === holes.length;
+  const girCount    = holes.filter((h, i) => savedHoles.has(h.n) && calcGIR(holeData[i].score, holeData[i].putts, h.par)).length;
+  const tpCount     = holes.filter((h, i) => savedHoles.has(h.n) && holeData[i].putts >= 3).length;
 
   return (
     <>
@@ -263,7 +257,7 @@ function OverviewScreen({ holeData, savedHoles, isEditMode, onEditHole, onFinish
       <div className="ov-wrap">
 
         <div className="ov-summary-card">
-          <div className="ov-summary-title">Greenock Wee Course</div>
+          <div className="ov-summary-title">{courseName}</div>
           <div className="ov-summary-stats">
             <div className="ov-stat">
               <div className="ov-stat-val">{allLogged ? totalScore : (totalScore || "-")}</div>
@@ -282,7 +276,7 @@ function OverviewScreen({ holeData, savedHoles, isEditMode, onEditHole, onFinish
 
         <div className="ov-section-label">Tap any hole to edit</div>
 
-        {HOLES.map((hole, i) => {
+        {holes.map((hole, i) => {
           const hd = holeData[i];
           const logged = savedHoles.has(hole.n);
           const gir = calcGIR(hd.score, hd.putts, hole.par);
@@ -345,7 +339,7 @@ function OverviewScreen({ holeData, savedHoles, isEditMode, onEditHole, onFinish
 
         {!allLogged && (
           <button className="ov-finish-btn" onClick={() => onEditHole(savedHoles.size)}>
-            Continue logging - Hole {savedHoles.size + 1}
+            Continue logging — Hole {savedHoles.size + 1}
           </button>
         )}
 
@@ -362,29 +356,67 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const isEditMode = !!existingRound;
 
   const [cur, setCur]               = useState(0);
-  const [holeData, setHoleData]     = useState(() => HOLES.map(h => emptyHole(h.par)));
+  const [holes, setHoles]           = useState([]);
+  const [holeData, setHoleData]     = useState([]);
+  const [courseId, setCourseId]     = useState(null);
+  const [courseName, setCourseName] = useState("");
   const [roundId, setRoundId]       = useState(null);
-  // view: "overview" | "logging" | "complete"
-  const [view, setView]             = useState(isEditMode ? "overview" : "logging");
+  // view: "course_picker" | "overview" | "logging" | "complete"
+  const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [saving, setSaving]         = useState(false);
   const [sent, setSent]             = useState(false);
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
 
+  // Load holes for a chosen course
+  async function loadCourse(courseIdArg) {
+    const { data } = await supabase
+      .from("course_holes")
+      .select("*")
+      .eq("course_id", courseIdArg)
+      .order("hole_number", { ascending: true });
+    if (data) {
+      const mapped = data.map(h => ({ n: h.hole_number, par: h.par, yds: h.yardage, idx: h.stroke_index }));
+      setHoles(mapped);
+      setHoleData(mapped.map(h => emptyHole(h.par)));
+    }
+  }
+
+  function handleCourseSelect(course) {
+    setCourseId(course.id);
+    setCourseName(course.name);
+    loadCourse(course.id);
+    setView("logging");
+  }
+
   useEffect(() => {
     if (!existingRound) return;
     async function loadExisting() {
+      // Load holes for this round's course
+      const cId = existingRound.course_id || "89e2ad4e-8d5a-4244-8568-b2c8a448a77f";
+      const cName = KNOWN_COURSES.find(c => c.id === cId)?.name || "Golf Course";
+      setCourseId(cId);
+      setCourseName(cName);
+      const { data: holeRows } = await supabase
+        .from("course_holes").select("*")
+        .eq("course_id", cId)
+        .order("hole_number", { ascending: true });
+      const mapped = (holeRows || []).map(h => ({ n: h.hole_number, par: h.par, yds: h.yards, idx: h.stroke_index }));
+      setHoles(mapped);
+
       const { data } = await supabase
         .from("round_holes").select("*")
         .eq("round_id", existingRound.id)
         .order("hole_number", { ascending: true });
       if (data && data.length > 0) {
-        const filled = HOLES.map(h => {
+        const filled = mapped.map(h => {
           const row = data.find(r => r.hole_number === h.n);
           return row ? holeFromRow(row) : emptyHole(h.par);
         });
         setHoleData(filled);
         setSavedHoles(new Set(data.map(r => r.hole_number)));
+      } else {
+        setHoleData(mapped.map(h => emptyHole(h.par)));
       }
       setRoundId(existingRound.id);
       setSent(existingRound.sent_to_coach || false);
@@ -393,7 +425,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     loadExisting();
   }, [existingRound]);
 
-  const h   = HOLES[cur];
+  const h   = holes[cur] || { n: cur+1, par: 4, yds: 0, idx: 0 };
   const d   = holeData[cur];
   const gir = calcGIR(d.score, d.putts, h.par);
 
@@ -413,7 +445,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   async function upsertHole(rid, idx) {
     const hole = holeData[idx];
-    const hi   = HOLES[idx];
+    const hi   = holes[idx];
     const payload = {
       round_id: rid, hole_number: hi.n, par: hi.par,
       score: hole.score, putts: hole.putts,
@@ -437,7 +469,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     let rid = roundId;
     if (!rid) {
       const { data: row, error } = await supabase
-        .from("rounds").insert([{ student_id: user.id, holes_played: HOLES.length }])
+        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length }])
         .select().single();
       if (error) { console.error(error.message); setSaving(false); return; }
       rid = row.id;
@@ -451,7 +483,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       setView("overview");
     } else {
       // In new round mode: advance to next hole, or go to overview on last hole
-      if (cur < HOLES.length - 1) {
+      if (cur < holes.length - 1) {
         setCur(c => c + 1);
         window.scrollTo(0, 0);
       } else {
@@ -501,6 +533,44 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     return "step-val " + (diff < 0 ? "under" : diff === 0 ? "par" : "over");
   }
 
+  // ── Course picker screen ──
+  if (view === "course_picker") {
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} rightBtn={null} />
+        <div className="log-wrap" style={{paddingTop:32}}>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,marginBottom:6}}>
+            Where are you playing?
+          </div>
+          <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:24}}>
+            Select a course to start logging your round.
+          </div>
+          {KNOWN_COURSES.map(course => (
+            <button
+              key={course.id}
+              onClick={() => handleCourseSelect(course)}
+              style={{
+                width:"100%", background:"white", border:"1.5px solid var(--border)",
+                borderRadius:14, padding:"16px 18px", marginBottom:10,
+                textAlign:"left", cursor:"pointer", fontFamily:"'Outfit',sans-serif",
+                transition:"all .15s",
+              }}
+              onMouseOver={e => { e.currentTarget.style.borderColor="var(--green-light)"; e.currentTarget.style.transform="translateY(-1px)"; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.transform="none"; }}
+            >
+              <div style={{fontWeight:700,fontSize:15,color:"var(--text)",marginBottom:3}}>{course.name}</div>
+              <div style={{fontSize:12,color:"var(--text-dim)"}}>{course.holes} holes</div>
+            </button>
+          ))}
+          <button className="back-to-dash-btn" style={{marginTop:8}} onClick={onBackToDashboard}>
+            Back to my rounds
+          </button>
+        </div>
+      </>
+    );
+  }
+
   // ── Loading state ──
   if (loading) {
     return (
@@ -518,6 +588,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       <OverviewScreen
         holeData={holeData}
         savedHoles={savedHoles}
+        holes={holes}
+        courseName={courseName}
         isEditMode={isEditMode}
         onEditHole={editHole}
         onFinish={sendToCoach}
@@ -532,9 +604,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   // ── Complete screen ──
   if (view === "complete") {
     const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
-    const totalPar   = HOLES.reduce((s, h) => s + h.par, 0);
+    const totalPar   = holes.reduce((s, h) => s + h.par, 0);
     const diff       = totalScore - totalPar;
-    const girCount   = holeData.filter((hd, i) => calcGIR(hd.score, hd.putts, HOLES[i].par)).length;
+    const girCount   = holeData.filter((hd, i) => calcGIR(hd.score, hd.putts, holes[i]?.par)).length;
     const tp         = holeData.filter(hd => hd.putts >= 3).length;
     return (
       <>
@@ -549,7 +621,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             <div className="cc-score-big">{totalScore}</div>
             <div className="cc-par-line">{diff >= 0 ? "+" : ""}{diff} vs par</div>
             <div className="cc-detail">
-              Greenock Wee Course  {HOLES.length} holes  {girCount} GIR  {tp} three-putt{tp !== 1 ? "s" : ""}
+              {courseName}  ·  {holes.length} holes  ·  {girCount} GIR  ·  {tp} three-putt{tp !== 1 ? "s" : ""}
             </div>
             {sent
               ? <div className="sent-msg">Round sent to your coach.</div>
@@ -565,6 +637,16 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   }
 
   // ── Logging screen ──
+  if (!holes.length) {
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} />
+        <div className="ov-loading"><div className="big-spinner" /></div>
+      </>
+    );
+  }
+
   const par3GIR   = h.par === 3 && gir === true;
   const showAppr  = h.par >= 4 || (d.putts !== null && !par3GIR);
   const showSI50  = d.approach === "Under 50";
@@ -574,7 +656,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const backLabel = isEditMode ? "Back to overview" : cur === 0 ? "Back" : "Back"; // eslint-disable-line no-unused-vars
   const nextLabel = isEditMode
     ? "Save hole"
-    : cur === HOLES.length - 1 ? "Complete round" : "Next hole";
+    : cur === holes.length - 1 ? "Complete round" : "Next hole";
 
   return (
     <>
@@ -585,7 +667,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
       <div className="log-wrap">
         <div className="hole-dots">
-          {HOLES.map((hole, i) => {
+          {holes.map((hole, i) => {
             const isLogged = savedHoles.has(hole.n) && i !== cur;
             let cls = "hd";
             if (isLogged) cls += holeData[i].putts >= 3 ? " tp" : " done";
