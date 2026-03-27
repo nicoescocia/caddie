@@ -249,12 +249,12 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const totalPar   = holes.reduce((s, h) => s + (h.par || 0), 0);
   const diff       = totalScore - totalPar;
 
+  // DNA holes excluded from all stats; picked_up holes count for GIR (started but abandoned)
+  const attempted  = holes.filter(h => !h.dna);
   const p1s    = holes.filter(h => h.putt1).map(h => parseFt(h.putt1));
   const avgP   = p1s.length ? Math.round(p1s.reduce((a, b) => a + b) / p1s.length) : 0;
   const tp     = holes.filter(h => h.putts >= 3).length;
   const tpPct  = attempted.length ? Math.round(tp / attempted.length * 100) : 0;
-  // DNA holes excluded from all stats; picked_up holes count for GIR (started but abandoned)
-  const attempted  = holes.filter(h => !h.dna);
   const girCount   = attempted.filter(h => h.gir).length;
   const fwHoles    = attempted.filter(h => h.par >= 4);
   const fwHit      = fwHoles.filter(h => h.fairway === "yes").length;
