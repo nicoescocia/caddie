@@ -91,8 +91,13 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   async function deleteRound(e, roundId) {
     e.stopPropagation(); // don't trigger the edit tap
     if (!window.confirm("Delete this round? This can't be undone.")) return;
-    await supabase.from("round_holes").delete().eq("round_id", roundId);
-    await supabase.from("rounds").delete().eq("id", roundId);
+    const { error: e1 } = await supabase.from("round_holes").delete().eq("round_id", roundId);
+    const { error: e2 } = await supabase.from("rounds").delete().eq("id", roundId);
+    if (e1 || e2) {
+      console.error("Delete failed:", e1?.message, e2?.message);
+      alert("Delete failed — " + (e2?.message || e1?.message));
+      return;
+    }
     setRounds(prev => prev.filter(r => r.id !== roundId));
   }
 
