@@ -383,9 +383,9 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
             className="ov-finish-btn"
             style={allLogged ? {} : {background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}}
             onClick={onFinish}
-            disabled={sent}
+            disabled={saving}
           >
-            {sent ? "✓ Sent to coach" : saving ? "Sending..." : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
+            {saving ? "Sending..." : sent && !isEditMode ? "✓ Sent to coach" : isEditMode && sent ? "Resend to coach" : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
           </button>
         )}
 
