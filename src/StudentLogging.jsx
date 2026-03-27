@@ -430,8 +430,46 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     loadExisting();
   }, [existingRound]);
 
-  // Guard against holes not yet loaded (only block logging/overview, not course picker)
-  if (view !== "course_picker" && (!holes.length || !holeData.length)) {
+  // ── Course picker screen — must be before all other guards ──
+  if (view === "course_picker") {
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} rightBtn={null} />
+        <div className="log-wrap" style={{paddingTop:32}}>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,marginBottom:6}}>
+            Where are you playing?
+          </div>
+          <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:24}}>
+            Select a course to start logging your round.
+          </div>
+          {KNOWN_COURSES.map(course => (
+            <button
+              key={course.id}
+              onClick={() => handleCourseSelect(course)}
+              style={{
+                width:"100%", background:"white", border:"1.5px solid var(--border)",
+                borderRadius:14, padding:"16px 18px", marginBottom:10,
+                textAlign:"left", cursor:"pointer", fontFamily:"'Outfit',sans-serif",
+                transition:"all .15s",
+              }}
+              onMouseOver={e => { e.currentTarget.style.borderColor="var(--green-light)"; e.currentTarget.style.transform="translateY(-1px)"; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.transform="none"; }}
+            >
+              <div style={{fontWeight:700,fontSize:15,color:"var(--text)",marginBottom:3}}>{course.name}</div>
+              <div style={{fontSize:12,color:"var(--text-dim)"}}>{course.holes} holes</div>
+            </button>
+          ))}
+          <button className="back-to-dash-btn" style={{marginTop:8}} onClick={onBackToDashboard}>
+            Back to my rounds
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  // Guard against holes not yet loaded
+  if (!holes.length || !holeData.length) {
     return (
       <>
         <style>{css}</style>
@@ -547,44 +585,6 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   function scoreClass() {
     const diff = d.score - h.par;
     return "step-val " + (diff < 0 ? "under" : diff === 0 ? "par" : "over");
-  }
-
-  // ── Course picker screen ──
-  if (view === "course_picker") {
-    return (
-      <>
-        <style>{css}</style>
-        <TopBar onSignOut={onSignOut} rightBtn={null} />
-        <div className="log-wrap" style={{paddingTop:32}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,marginBottom:6}}>
-            Where are you playing?
-          </div>
-          <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:24}}>
-            Select a course to start logging your round.
-          </div>
-          {KNOWN_COURSES.map(course => (
-            <button
-              key={course.id}
-              onClick={() => handleCourseSelect(course)}
-              style={{
-                width:"100%", background:"white", border:"1.5px solid var(--border)",
-                borderRadius:14, padding:"16px 18px", marginBottom:10,
-                textAlign:"left", cursor:"pointer", fontFamily:"'Outfit',sans-serif",
-                transition:"all .15s",
-              }}
-              onMouseOver={e => { e.currentTarget.style.borderColor="var(--green-light)"; e.currentTarget.style.transform="translateY(-1px)"; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.transform="none"; }}
-            >
-              <div style={{fontWeight:700,fontSize:15,color:"var(--text)",marginBottom:3}}>{course.name}</div>
-              <div style={{fontSize:12,color:"var(--text-dim)"}}>{course.holes} holes</div>
-            </button>
-          ))}
-          <button className="back-to-dash-btn" style={{marginTop:8}} onClick={onBackToDashboard}>
-            Back to my rounds
-          </button>
-        </div>
-      </>
-    );
   }
 
   // ── Loading state ──
