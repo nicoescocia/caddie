@@ -382,10 +382,10 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }
   }
 
-  function handleCourseSelect(course) {
+  async function handleCourseSelect(course) {
     setCourseId(course.id);
     setCourseName(course.name);
-    loadCourse(course.id);
+    await loadCourse(course.id);
     setView("logging");
   }
 
