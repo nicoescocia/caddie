@@ -320,7 +320,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             <div className="ab-icon">⛳</div>
             <div>
               <div className="ab-name">Round received · {studentName}</div>
-              <div className="ab-detail">Greenock Wee Course · {holes.length} holes · {roundDate}</div>
+              <div className="ab-detail">{round.courses?.name || "Golf Course"} · {holes.length} holes · {roundDate}</div>
             </div>
           </div>
           <div className="ab-right">

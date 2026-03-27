@@ -93,7 +93,14 @@ const css = `
   }
 `;
 
-const TOTAL_PAR = 32; // Greenock Wee Course
+const COURSE_PAR = {
+  "89e2ad4e-8d5a-4244-8568-b2c8a448a77f": 32,
+  "b1a2c3d4-e5f6-7890-abcd-ef1234567890": 68,
+};
+function getCoursePar(round) {
+  if (round?.course_id && COURSE_PAR[round.course_id]) return COURSE_PAR[round.course_id];
+  return round?.holes_played === 18 ? 68 : 32;
+}
 
 function initials(first, last) {
   return ((first || "?")[0] + (last || "")[0]).toUpperCase();
@@ -107,9 +114,10 @@ function fmtDateShort(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function parDiff(score) {
-  const d = score - TOTAL_PAR;
-  if (d === 0) return { text: "Level par", cls: "level" };
+function parDiff(score, round) {
+  const par = getCoursePar(round);
+  const d = score - par;
+  if (d === 0) return { text: "E", cls: "level" };
   if (d < 0) return { text: d.toString(), cls: "under" };
   return { text: "+" + d, cls: "over" };
 }
@@ -185,9 +193,11 @@ function StudentList({ coachProfile, students, studentStats, onSelectStudent, on
 // ── ROUND HISTORY ──
 function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
   const sentRounds = rounds.filter(r => r.sent_to_coach);
-  const scores     = sentRounds.filter(r => r.total_score).map(r => r.total_score);
-  const avgScore   = scores.length ? Math.round(scores.reduce((a, b) => a + b) / scores.length) : null;
-  const bestScore  = scores.length ? Math.min(...scores) : null;
+  const scored     = sentRounds.filter(r => r.total_score);
+  const diffs      = scored.map(r => r.total_score - getCoursePar(r));
+  const avgDiff    = diffs.length ? Math.round(diffs.reduce((a, b) => a + b) / diffs.length) : null;
+  const bestDiff   = diffs.length ? Math.min(...diffs) : null;
+  function fmtDiff(d) { return d == null ? "—" : d === 0 ? "E" : d > 0 ? "+" + d : String(d); }
 
   return (
     <>
@@ -204,15 +214,15 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
           <div className="sh-avatar">{initials(student.first_name, student.last_name)}</div>
           <div className="sh-info">
             <div className="sh-name">{student.first_name} {student.last_name}</div>
-            <div className="sh-sub">{sentRounds.length} round{sentRounds.length !== 1 ? "s" : ""} sent · Greenock Wee Course</div>
+            <div className="sh-sub">{sentRounds.length} round{sentRounds.length !== 1 ? "s" : ""} sent to coach</div>
           </div>
           <div className="sh-stats">
             <div className="sh-stat">
-              <div className="sh-stat-val">{avgScore ?? "—"}</div>
+              <div className="sh-stat-val">{fmtDiff(avgDiff)}</div>
               <div className="sh-stat-lbl">Avg</div>
             </div>
             <div className="sh-stat">
-              <div className="sh-stat-val">{bestScore ?? "—"}</div>
+              <div className="sh-stat-val">{fmtDiff(bestDiff)}</div>
               <div className="sh-stat-lbl">Best</div>
             </div>
           </div>
@@ -231,13 +241,13 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
           <>
             <div className="section-label">Round history</div>
             {sentRounds.map(r => {
-              const diff = parDiff(r.total_score);
+              const diff = parDiff(r.total_score, r);
               return (
                 <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
                   <div className="round-card-top">
                     <div>
                       <div className="round-card-date">{fmtDate(r.created_at)}</div>
-                      <div className="round-card-course">Greenock Wee Course · 9 holes</div>
+                      <div className="round-card-course">{r.courses?.name || "Golf Course"} · {r.holes_played} holes</div>
                     </div>
                     <div className="round-score-block">
                       <div className="round-score-num">{r.total_score ?? "—"}</div>
@@ -246,11 +256,11 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
                   </div>
                   <div className="round-stats-row">
                     <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.gir_count >= 5 ? "ok" : r.gir_count >= 3 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/9` : "—"}</div>
+                      <div className={"rsc-val " + (r.gir_count/r.holes_played >= 0.55 ? "ok" : r.gir_count/r.holes_played >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.holes_played}` : "—"}</div>
                       <div className="rsc-lbl">GIR</div>
                     </div>
                     <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.fw_hit >= 3 ? "ok" : r.fw_hit >= 2 ? "warn" : "bad")}>{r.fw_hit != null ? `${r.fw_hit}/5` : "—"}</div>
+                      <div className={"rsc-val " + (r.fw_hit/(r.holes_played * 0.55) >= 0.6 ? "ok" : r.fw_hit/(r.holes_played * 0.55) >= 0.4 ? "warn" : "bad")}>{r.fw_hit != null ? r.fw_hit : "—"}</div>
                       <div className="rsc-lbl">Fairways</div>
                     </div>
                     <div className="round-stat-chip">
@@ -330,7 +340,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
       // If returning from round detail, reload the history for the selected student
       if (initialScreen === "history" && initialStudent) {
         const { data: rounds } = await supabase
-          .from("rounds").select("*")
+          .from("rounds").select("*, courses(name)")
           .eq("student_id", initialStudent.id)
           .eq("sent_to_coach", true)
           .order("created_at", { ascending: false });
@@ -358,7 +368,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
     setScreen("history");
     const { data } = await supabase
       .from("rounds")
-      .select("*")
+      .select("*, courses(name)")
       .eq("student_id", student.id)
       .eq("sent_to_coach", true)
       .order("created_at", { ascending: false });
