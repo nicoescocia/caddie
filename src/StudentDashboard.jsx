@@ -59,8 +59,16 @@ const css = `
   .delete-btn:hover { background:#FEF0F0; color:var(--red); }
 `;
 
-const HOLES_PAR = [4,4,3,4,3,4,4,3,3];
-const TOTAL_PAR = HOLES_PAR.reduce((a,b) => a+b, 0);
+// Course pars — used to calculate vs-par stats per round
+const COURSE_PAR = {
+  "89e2ad4e-8d5a-4244-8568-b2c8a448a77f": 32, // Wee Course (9 holes)
+  "b1a2c3d4-e5f6-7890-abcd-ef1234567890": 68, // Big Course (18 holes)
+};
+function getCoursePar(round) {
+  if (round.course_id && COURSE_PAR[round.course_id]) return COURSE_PAR[round.course_id];
+  // Fallback: guess from holes_played
+  return round.holes_played === 18 ? 68 : 32;
+}
 
 export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut }) {
   const [rounds, setRounds]   = useState([]);
@@ -71,7 +79,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     async function load() {
       const [{ data: prof }, { data: rds }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name").eq("id", user.id).single(),
-        supabase.from("rounds").select("*").eq("student_id", user.id).order("created_at", { ascending: false })
+        supabase.from("rounds").select("*, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false })
       ]);
       setProfile(prof);
       setRounds(rds || []);
@@ -96,8 +104,13 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     </>
   );
 
-  const avgScore    = rounds.length ? Math.round(rounds.reduce((s,r) => s + (r.total_score||0), 0) / rounds.length) : null;
-  const bestScore   = rounds.length ? Math.min(...rounds.map(r => r.total_score||99)) : null;
+  const completedRounds = rounds.filter(r => r.total_score);
+  const avgDiff  = completedRounds.length
+    ? Math.round(completedRounds.reduce((s,r) => s + ((r.total_score||0) - getCoursePar(r)), 0) / completedRounds.length)
+    : null;
+  const bestDiff = completedRounds.length
+    ? Math.min(...completedRounds.map(r => (r.total_score||0) - getCoursePar(r)))
+    : null;
 
   return (
     <>
@@ -117,12 +130,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               <div className="dash-stat-lbl">Rounds logged</div>
             </div>
             <div className="dash-stat">
-              <div className="dash-stat-val">{avgScore ?? "—"}</div>
-              <div className="dash-stat-lbl">Avg score</div>
+              <div className="dash-stat-val">{avgDiff != null ? (avgDiff > 0 ? "+" + avgDiff : avgDiff === 0 ? "E" : avgDiff) : "—"}</div>
+              <div className="dash-stat-lbl">Avg vs par</div>
             </div>
             <div className="dash-stat">
-              <div className="dash-stat-val">{bestScore ?? "—"}</div>
-              <div className="dash-stat-lbl">Best score</div>
+              <div className="dash-stat-val">{bestDiff != null ? (bestDiff > 0 ? "+" + bestDiff : bestDiff === 0 ? "E" : bestDiff) : "—"}</div>
+              <div className="dash-stat-lbl">Best vs par</div>
             </div>
           </div>
         </div>
@@ -135,12 +148,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           <>
             <div className="section-title">Past rounds</div>
             {rounds.map(r => {
-              const diff = (r.total_score || 0) - TOTAL_PAR;
+              const diff = (r.total_score || 0) - getCoursePar(r);
               const date = new Date(r.created_at).toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" });
               return (
                 <div className="round-card" key={r.id} onClick={() => onEditRound(r)}>
                   <div className="round-card-left">
-                    <div className="round-card-course">Greenock Wee Course</div>
+                    <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
                     <div className="round-card-date">{date} · {r.holes_played} holes</div>
                     <div className="round-card-badges">
                       {r.sent_to_coach
