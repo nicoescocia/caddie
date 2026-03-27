@@ -370,15 +370,20 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   // Load holes for a chosen course
   async function loadCourse(courseIdArg) {
-    const { data } = await supabase
+    console.log("loadCourse called with:", courseIdArg);
+    const { data, error } = await supabase
       .from("course_holes")
       .select("*")
       .eq("course_id", courseIdArg)
       .order("hole_number", { ascending: true });
-    if (data) {
+    console.log("course_holes result:", { data, error });
+    if (data && data.length > 0) {
       const mapped = data.map(h => ({ n: h.hole_number, par: h.par, yds: h.yardage, idx: h.stroke_index }));
+      console.log("mapped holes:", mapped);
       setHoles(mapped);
       setHoleData(mapped.map(h => emptyHole(h.par)));
+    } else {
+      console.log("No data returned or empty array");
     }
   }
 
