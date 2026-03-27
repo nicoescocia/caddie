@@ -26,7 +26,9 @@ const css = `
   .hd { width:30px; height:30px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--text-dim); background:white; transition:all .2s; }
   .hd.done { background:var(--green-light); border-color:var(--green-light); color:white; }
   .hd.current { background:var(--green-dark); border-color:var(--green-dark); color:var(--gold); }
-  .hd.tp { background:var(--red); border-color:var(--red); color:white; }
+  .hd.tp  { background:var(--red); border-color:var(--red); color:white; }
+  .hd.pu  { background:var(--orange); border-color:var(--orange); color:white; }
+  .hd.dna { background:#999; border-color:#999; color:white; }
 
   /* ── HOLE CARD ── */
   .hole-card { background:var(--green-dark); border-radius:18px; padding:18px 20px 16px; margin-bottom:14px; position:relative; overflow:hidden; }
@@ -46,6 +48,26 @@ const css = `
   .gir-auto { font-size:10px; color:rgba(255,255,255,0.25); }
 
   /* ── INPUTS ── */
+  /* ── PICKED UP / DNA ── */
+  .puck-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .puck-btn {
+    background:white; border:1.5px solid var(--border); border-radius:11px;
+    padding:10px 8px; text-align:center; cursor:pointer; font-family:'Outfit',sans-serif;
+    font-size:13px; font-weight:600; color:var(--text-mid); transition:all .15s;
+  }
+  .puck-btn:hover { border-color:var(--text-dim); }
+  .puck-btn.sel-pu  { background:#FEF3E8; border-color:var(--orange); color:var(--orange); }
+  .puck-btn.sel-dna { background:#F0F0F0; border-color:#999; color:#555; }
+
+  /* ── FINISH EARLY ── */
+  .finish-early-btn {
+    background:none; border:1.5px solid var(--border); border-radius:10px;
+    padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px;
+    font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s;
+    white-space:nowrap;
+  }
+  .finish-early-btn:hover { border-color:var(--green-light); color:var(--green); }
+
   .tp-banner { background:#FEF0F0; border:1px solid #F5C6C6; border-radius:10px; padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--red); line-height:1.5; }
   .tp-banner strong { display:block; font-size:13px; margin-bottom:2px; }
   .score-putts-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
@@ -203,13 +225,14 @@ function calcGIR(score, putts, par) {
   return (score - putts) <= (par - 2);
 }
 function emptyHole(par) {
-  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, putt1: null, putt2: null, penalty: "None" };
+  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, putt1: null, putt2: null, penalty: "None", pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
   return {
     score: row.score, putts: row.putts, fairway: row.fairway,
     approach: row.approach, shotsInside50: row.shots_inside_50,
     putt1: row.putt1, putt2: row.putt2, penalty: row.penalty || "None",
+    pickedUp: row.picked_up || false, dna: row.dna || false,
   };
 }
 function scoreLabel(score, par) {
@@ -301,16 +324,23 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
                 </div>
                 {logged ? (
                   <div className="ov-hole-chips">
-                    {gir
-                      ? <span className="chip gir-yes">GIR</span>
-                      : <span className="chip gir-no">Missed GIR</span>}
-                    {hole.par >= 4 && hd.fairway === "yes" && <span className="chip fw-yes">FW hit</span>}
-                    {hole.par >= 4 && hd.fairway === "left" && <span className="chip fw-miss">Miss left</span>}
-                    {hole.par >= 4 && hd.fairway === "right" && <span className="chip fw-miss-r">Miss right</span>}
-                    {is3putt
-                      ? <span className="chip tp">3-putt</span>
-                      : <span className="chip putts">{hd.putts === 0 ? "Chip-in" : hd.putts + " putt" + (hd.putts !== 1 ? "s" : "")}</span>}
-                    {hd.penalty && hd.penalty !== "None" && <span className="chip pen">{hd.penalty}</span>}
+                    {hd.dna
+                      ? <span className="chip" style={{background:"#F0F0F0",color:"#555"}}>Did not play</span>
+                      : hd.pickedUp
+                        ? <span className="chip" style={{background:"#FEF3E8",color:"var(--orange)"}}>Picked up</span>
+                        : <>
+                            {gir
+                              ? <span className="chip gir-yes">GIR</span>
+                              : <span className="chip gir-no">Missed GIR</span>}
+                            {hole.par >= 4 && hd.fairway === "yes" && <span className="chip fw-yes">FW hit</span>}
+                            {hole.par >= 4 && hd.fairway === "left" && <span className="chip fw-miss">Miss left</span>}
+                            {hole.par >= 4 && hd.fairway === "right" && <span className="chip fw-miss-r">Miss right</span>}
+                            {is3putt
+                              ? <span className="chip tp">3-putt</span>
+                              : <span className="chip putts">{hd.putts === 0 ? "Chip-in" : hd.putts + " putt" + (hd.putts !== 1 ? "s" : "")}</span>}
+                            {hd.penalty && hd.penalty !== "None" && <span className="chip pen">{hd.penalty}</span>}
+                          </>
+                    }
                   </div>
                 ) : (
                   <div style={{fontSize:11,color:"var(--text-dim)"}}>Not logged yet</div>
@@ -320,8 +350,13 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
               {logged ? (
                 <>
                   <div style={{textAlign:"right"}}>
-                    <div className={"ov-score-num " + sLabel}>{hd.score}</div>
-                    <div className={"ov-score-diff " + diff.cls}>{diff.text}</div>
+                    {hd.dna || hd.pickedUp
+                      ? <div className="ov-score-num" style={{fontSize:18,color:"#999"}}>—</div>
+                      : <>
+                          <div className={"ov-score-num " + sLabel}>{hd.score}</div>
+                          <div className={"ov-score-diff " + diff.cls}>{diff.text}</div>
+                        </>
+                    }
                   </div>
                 </>
               ) : (
@@ -331,15 +366,20 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
           );
         })}
 
-        {allLogged && (
-          <button className="ov-finish-btn" onClick={onFinish} disabled={sent}>
-            {sent ? "Sent to coach" : (saving ? "Sending..." : isEditMode ? "Resend to coach" : "Send to coach")}
-          </button>
-        )}
-
         {!allLogged && (
           <button className="ov-finish-btn" onClick={() => onEditHole(savedHoles.size)}>
             Continue logging — Hole {savedHoles.size + 1}
+          </button>
+        )}
+
+        {savedHoles.size > 0 && (
+          <button
+            className="ov-finish-btn"
+            style={allLogged ? {} : {background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}}
+            onClick={onFinish}
+            disabled={sent}
+          >
+            {sent ? "✓ Sent to coach" : saving ? "Sending..." : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
           </button>
         )}
 
@@ -488,6 +528,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   }
 
   function isValid() {
+    if (d.pickedUp || d.dna) return true;
     if (d.score === null || d.putts === null) return false;
     if (h.par >= 4 && !d.fairway) return false;
     const par3GIR = h.par === 3 && gir === true;
@@ -502,12 +543,17 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     const hi   = holes[idx];
     const payload = {
       round_id: rid, hole_number: hi.n, par: hi.par,
-      score: hole.score, putts: hole.putts,
-      gir: calcGIR(hole.score, hole.putts, hi.par),
-      fairway: hole.fairway, approach: hole.approach,
-      shots_inside_50: hole.shotsInside50,
-      putt1: hole.putt1, putt2: hole.putt2,
-      penalty: hole.penalty || "None",
+      score: hole.dna ? null : hole.pickedUp ? null : hole.score,
+      putts: hole.dna ? null : hole.pickedUp ? null : hole.putts,
+      gir: hole.dna || hole.pickedUp ? false : calcGIR(hole.score, hole.putts, hi.par),
+      fairway: hole.dna || hole.pickedUp ? null : hole.fairway,
+      approach: hole.dna || hole.pickedUp ? null : hole.approach,
+      shots_inside_50: hole.dna || hole.pickedUp ? null : hole.shotsInside50,
+      putt1: hole.dna || hole.pickedUp ? null : hole.putt1,
+      putt2: hole.dna || hole.pickedUp ? null : hole.putt2,
+      penalty: hole.dna || hole.pickedUp ? "None" : hole.penalty || "None",
+      picked_up: hole.pickedUp || false,
+      dna: hole.dna || false,
     };
     if (savedHoles.has(hi.n)) {
       await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
@@ -667,7 +713,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     <>
       <style>{css}</style>
       <TopBar onSignOut={onSignOut} rightBtn={
-        <button className="bar-btn" onClick={() => setView("overview")}>View round</button>
+        <div style={{display:"flex",gap:6}}>
+          {savedHoles.size > 0 && (
+            <button className="finish-early-btn" onClick={() => setView("overview")}>Finish early</button>
+          )}
+          <button className="bar-btn" onClick={() => setView("overview")}>View round</button>
+        </div>
       } />
 
       <div className="log-wrap">
@@ -675,7 +726,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           {holes.map((hole, i) => {
             const isLogged = savedHoles.has(hole.n) && i !== cur;
             let cls = "hd";
-            if (isLogged) cls += holeData[i].putts >= 3 ? " tp" : " done";
+            if (isLogged) cls += holeData[i].dna ? " dna" : holeData[i].pickedUp ? " pu" : holeData[i].putts >= 3 ? " tp" : " done";
             else if (i === cur) cls += " current";
             return <div
               key={i}
@@ -706,14 +757,29 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         </div>
 
-        {show3putt && (
+        {show3putt && !d.pickedUp && !d.dna && (
           <div className="tp-banner">
             <strong>3-putt detected</strong>
             One extra question helps your coach understand what happened
           </div>
         )}
 
-        <div className="score-putts-row">
+        <div className="puck-row">
+          <button
+            className={"puck-btn " + (d.pickedUp ? "sel-pu" : "")}
+            onClick={() => update({ pickedUp: !d.pickedUp, dna: false })}
+          >
+            🏳️ Picked up
+          </button>
+          <button
+            className={"puck-btn " + (d.dna ? "sel-dna" : "")}
+            onClick={() => update({ dna: !d.dna, pickedUp: false })}
+          >
+            ⏭️ Did not play
+          </button>
+        </div>
+
+        {!d.pickedUp && !d.dna && <div className="score-putts-row">
           <div>
             <div className="step-label">Score</div>
             <div className="stepper">
@@ -737,11 +803,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
               ))}
             </div>
           </div>
-        </div>
+        </div>}
 
-        <div className="divider" />
+        {!d.pickedUp && !d.dna && <div className="divider" />}
 
-        {showFW && (
+        {!d.pickedUp && !d.dna && showFW && (
           <div className="sec">
             <div className="sec-label">Fairway hit?</div>
             <div className="fw-grid">
@@ -760,7 +826,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {showAppr && (
+        {!d.pickedUp && !d.dna && showAppr && (
           <div className="sec">
             <div className="sec-label">Approach distance</div>
             <div className="appr-grid">
@@ -773,7 +839,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {showSI50 && (
+        {!d.pickedUp && !d.dna && showSI50 && (
           <div className="sec">
             <div className="sec-label">Shots inside 50 yds <span className="badge auto">includes approach</span></div>
             <div className="stepper" style={{maxWidth:180}}>
@@ -784,7 +850,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {d.putts > 0 && (
+        {!d.pickedUp && !d.dna && d.putts > 0 && (
           <div className="sec">
             <div className="sec-label">First putt distance</div>
             <div className="tap-grid c5">
@@ -795,7 +861,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {show3putt && (
+        {!d.pickedUp && !d.dna && show3putt && (
           <div className="sec">
             <div className="sec-label">Second putt distance <span className="badge conditional">3-putt</span></div>
             <div className="tap-grid c5">
@@ -806,7 +872,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        <div className="sec">
+        {!d.pickedUp && !d.dna && <div className="sec">
           <div className="sec-label">Penalty strokes</div>
           <div className="pen-grid">
             {[
@@ -820,7 +886,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         <div className="bottom-btns">
           <button className="back-btn" disabled={!isEditMode && cur === 0} onClick={goBackInLogging}>
