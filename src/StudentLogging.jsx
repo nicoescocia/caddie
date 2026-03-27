@@ -430,8 +430,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     loadExisting();
   }, [existingRound]);
 
-  // Guard against holes not yet loaded
-  if (!holes.length || !holeData.length) {
+  // Guard against holes not yet loaded (only block logging/overview, not course picker)
+  if (view !== "course_picker" && (!holes.length || !holeData.length)) {
     return (
       <>
         <style>{css}</style>
