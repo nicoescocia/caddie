@@ -252,14 +252,16 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const p1s    = holes.filter(h => h.putt1).map(h => parseFt(h.putt1));
   const avgP   = p1s.length ? Math.round(p1s.reduce((a, b) => a + b) / p1s.length) : 0;
   const tp     = holes.filter(h => h.putts >= 3).length;
-  const tpPct  = Math.round(tp / holes.length * 100);
-  const girCount = holes.filter(h => h.gir).length;
-  const fwHoles  = holes.filter(h => h.par >= 4);
-  const fwHit    = fwHoles.filter(h => h.fairway === "yes").length;
-  const missL    = fwHoles.filter(h => h.fairway === "left").length;
-  const missR    = fwHoles.filter(h => h.fairway === "right").length;
-  const maxMiss  = Math.max(missL, missR, 1);
-  const missedGIR = holes.filter(h => !h.gir);
+  const tpPct  = attempted.length ? Math.round(tp / attempted.length * 100) : 0;
+  // DNA holes excluded from all stats; picked_up holes count for GIR (started but abandoned)
+  const attempted  = holes.filter(h => !h.dna);
+  const girCount   = attempted.filter(h => h.gir).length;
+  const fwHoles    = attempted.filter(h => h.par >= 4);
+  const fwHit      = fwHoles.filter(h => h.fairway === "yes").length;
+  const missL      = fwHoles.filter(h => h.fairway === "left").length;
+  const missR      = fwHoles.filter(h => h.fairway === "right").length;
+  const maxMiss    = Math.max(missL, missR, 1);
+  const missedGIR  = attempted.filter(h => !h.gir && !h.picked_up);
   const avgSI    = missedGIR.length
     ? (missedGIR.reduce((s, h) => s + (h.shots_inside_50 || 1), 0) / missedGIR.length).toFixed(1)
     : null;
@@ -339,11 +341,11 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           <div className="ccard">
             <div className="cc-title">3-putt rate</div>
             <div className={`bstat ${tpPct > 20 ? "bad" : tpPct > 10 ? "warn" : "ok"}`}>{tpPct}%</div>
-            <div className="bstat-sub">{tp} of {holes.length} holes</div>
+            <div className="bstat-sub">{tp} of {attempted.length} holes</div>
           </div>
           <div className="ccard">
             <div className="cc-title">GIR</div>
-            <div className={`bstat ${girCount / holes.length > 0.55 ? "ok" : girCount / holes.length > 0.33 ? "warn" : "bad"}`}>{girCount}/{holes.length}</div>
+            <div className={`bstat ${girCount / attempted.length > 0.55 ? "ok" : girCount / attempted.length > 0.33 ? "warn" : "bad"}`}>{girCount}/{attempted.length}</div>
             <div className="bstat-sub">Auto-calculated</div>
           </div>
           <div className="ccard">

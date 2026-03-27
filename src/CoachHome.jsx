@@ -256,11 +256,11 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
                   </div>
                   <div className="round-stats-row">
                     <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.gir_count/r.holes_played >= 0.55 ? "ok" : r.gir_count/r.holes_played >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.holes_played}` : "—"}</div>
+                      <div className={"rsc-val " + (r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.55 ? "ok" : r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.attempted_holes ?? r.holes_played}` : "—"}</div>
                       <div className="rsc-lbl">GIR</div>
                     </div>
                     <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.fw_hit/(r.holes_played * 0.55) >= 0.6 ? "ok" : r.fw_hit/(r.holes_played * 0.55) >= 0.4 ? "warn" : "bad")}>{r.fw_hit != null ? r.fw_hit : "—"}</div>
+                      <div className={"rsc-val " + (r.fw_holes > 0 ? (r.fw_hit/r.fw_holes >= 0.6 ? "ok" : r.fw_hit/r.fw_holes >= 0.4 ? "warn" : "bad") : "")}>{r.fw_hit != null && r.fw_holes != null ? `${r.fw_hit}/${r.fw_holes}` : "—"}</div>
                       <div className="rsc-lbl">Fairways</div>
                     </div>
                     <div className="round-stat-chip">
@@ -346,13 +346,18 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
           .order("created_at", { ascending: false });
         const enriched = await Promise.all((rounds || []).map(async r => {
           const { data: holes } = await supabase
-            .from("round_holes").select("gir, fairway, putts, par").eq("round_id", r.id);
+            .from("round_holes").select("gir, fairway, putts, par, dna, picked_up").eq("round_id", r.id);
           if (!holes || holes.length === 0) return r;
+          const attempted = holes.filter(h => !h.dna);
+          const fwHoles   = attempted.filter(h => h.par >= 4);
           return {
             ...r,
-            gir_count:        holes.filter(h => h.gir).length,
-            fw_hit:           holes.filter(h => h.par >= 4 && h.fairway === "yes").length,
-            three_putt_count: holes.filter(h => h.putts >= 3).length,
+            attempted_holes:  attempted.length,
+            gir_count:        attempted.filter(h => h.gir).length,
+            fw_hit:           attempted.filter(h => h.par >= 4 && h.fairway === "yes").length,
+        fw_holes:         fwHoles.length,
+            fw_holes:         fwHoles.length,
+            three_putt_count: attempted.filter(h => h.putts >= 3).length,
           };
         }));
         setStudentRounds(enriched);
@@ -378,14 +383,17 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
     // Always compute stats fresh from round_holes
     const enriched = await Promise.all(rounds.map(async r => {
       const { data: holes } = await supabase
-        .from("round_holes").select("gir, fairway, putts, par")
+        .from("round_holes").select("gir, fairway, putts, par, dna, picked_up")
         .eq("round_id", r.id);
       if (!holes || holes.length === 0) return r;
+      const attempted = holes.filter(h => !h.dna && !h.picked_up);
       return {
         ...r,
-        gir_count:        holes.filter(h => h.gir).length,
-        fw_hit:           holes.filter(h => h.par >= 4 && h.fairway === "yes").length,
-        three_putt_count: holes.filter(h => h.putts >= 3).length,
+        attempted_holes:  attempted.length,
+        gir_count:        attempted.filter(h => h.gir).length,
+        fw_hit:           attempted.filter(h => h.par >= 4 && h.fairway === "yes").length,
+        fw_holes:         fwHoles.length,
+        three_putt_count: attempted.filter(h => h.putts >= 3).length,
       };
     }));
 
