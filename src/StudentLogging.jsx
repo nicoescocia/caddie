@@ -759,11 +759,6 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }
   }
 
-  function goToSummary() {
-    setView("summary");
-    window.scrollTo(0, 0);
-  }
-
   async function sendToCoach() {
     if (!roundId) return;
     setSaving(true);
