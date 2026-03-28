@@ -233,7 +233,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       <>
         <style>{css}</style>
         <div className="mode-bar">
-          <div className="mode-logo">⛳ Caddie</div>
+          <div className="mode-logo" style={{cursor:"pointer"}} onClick={onBack}>⛳ Caddie</div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <button className="back-bar-btn" onClick={onBack}>← Back to rounds</button>
             <button className="signout-btn" onClick={onSignOut}>Sign out</button>

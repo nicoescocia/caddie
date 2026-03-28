@@ -269,10 +269,10 @@ function diffLabel(score, par) {
 }
 
 // ── TOP BAR ──
-function TopBar({ onSignOut, rightBtn }) {
+function TopBar({ onSignOut, rightBtn, onHome }) {
   return (
     <div className="mode-bar">
-      <div className="mode-logo">Caddie</div>
+      <div className="mode-logo" style={{cursor: onHome ? "pointer" : "default"}} onClick={onHome}>Caddie</div>
       <div className="mode-bar-right">
         {rightBtn}
         <button className="bar-btn ghost" onClick={onSignOut}>Sign out</button>
@@ -293,7 +293,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
   return (
     <>
       <style>{css}</style>
-      <TopBar onSignOut={onSignOut} rightBtn={null} />
+      <TopBar onSignOut={onSignOut} onHome={onBackToDashboard} rightBtn={null} />
       <div className="ov-wrap">
 
         <div className="ov-summary-card">
@@ -592,7 +592,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     return (
       <>
         <style>{css}</style>
-        <TopBar onSignOut={onSignOut} rightBtn={
+        <TopBar onSignOut={onSignOut} onHome={onBackToDashboard} rightBtn={
           <button className="bar-btn" onClick={() => setView("overview")}>← Overview</button>
         } />
         <div className="sum-wrap">
