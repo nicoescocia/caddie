@@ -421,7 +421,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
           <button
             className="ov-finish-btn"
             style={allLogged ? {} : {background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}}
-            onClick={onFinish}
+            onClick={onOpenSummary}
             disabled={saving}
           >
             {saving ? "Sending..." : sent && !isEditMode ? "✓ Sent to coach" : isEditMode && sent ? "Resend to coach" : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
@@ -641,20 +641,21 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
 
           <button className="next-btn" onClick={async () => {
-            if (!roundId) { setView("overview"); return; }
-            setSaving(true);
-            await supabase.from("rounds").update({
-              wind, conditions, temperature,
-              student_note: studentNote || null,
-              handicap: handicap !== "" ? parseInt(handicap) : null,
-            }).eq("id", roundId);
-            setSaving(false);
-            setView("overview");
+            if (roundId) {
+              setSaving(true);
+              await supabase.from("rounds").update({
+                wind, conditions, temperature,
+                student_note: studentNote || null,
+                handicap: handicap !== "" ? parseInt(handicap) : null,
+              }).eq("id", roundId);
+              setSaving(false);
+            }
+            await sendToCoach();
           }} disabled={saving}>
-            {saving ? <div className="spinner" /> : <>Save →</>}
+            {saving ? <div className="spinner" /> : <>{sent ? "Resend to coach" : "Send to coach"} <span>→</span></>}
           </button>
           <button className="back-to-dash-btn" style={{marginTop:10,width:"100%"}} onClick={() => setView("overview")}>
-            Cancel
+            Skip — back to overview
           </button>
         </div>
       </>
@@ -874,7 +875,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       <TopBar onSignOut={onSignOut} rightBtn={
         <div style={{display:"flex",gap:6}}>
           {savedHoles.size > 0 && (
-            <button className="finish-early-btn" onClick={() => setView("overview")}>Finish early</button>
+            <button className="finish-early-btn" onClick={() => { setView("summary"); window.scrollTo(0,0); }}>Finish early</button>
           )}
           <button className="bar-btn" onClick={() => setView("overview")}>View round</button>
         </div>
@@ -916,12 +917,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         </div>
 
-        {show3putt && !d.pickedUp && !d.dna && (
-          <div className="tp-banner">
-            <strong>3-putt detected</strong>
-            One extra question helps your coach understand what happened
-          </div>
-        )}
+
 
         <div className="puck-row">
           <button
@@ -1000,7 +996,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
         {!d.pickedUp && !d.dna && showSI50 && (
           <div className="sec">
-            <div className="sec-label">Shots inside 50 yds <span className="badge auto">includes approach</span></div>
+            <div className="sec-label">Shots inside 50 yds <span className="badge auto">not including putts</span></div>
             <div className="stepper" style={{maxWidth:180}}>
               <button className="step-btn" onClick={() => update({ shotsInside50: Math.max(1, (d.shotsInside50||1) - 1) })} disabled={(d.shotsInside50||1) <= 1}>-</button>
               <div className="step-val par">{d.shotsInside50 || 1}</div>
