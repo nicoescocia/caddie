@@ -48,6 +48,23 @@ const css = `
   .gir-auto { font-size:10px; color:rgba(255,255,255,0.25); }
 
   /* ── INPUTS ── */
+  /* ── SUMMARY SCREEN ── */
+  .sum-wrap { max-width:420px; margin:0 auto; padding:16px 16px 80px; }
+  .sum-title { font-family:'Playfair Display',serif; font-size:22px; color:var(--text); margin-bottom:6px; }
+  .sum-sub { font-size:13px; color:var(--text-dim); margin-bottom:24px; line-height:1.6; }
+  .sum-sec { margin-bottom:20px; }
+  .sum-sec-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin-bottom:8px; }
+  .sum-chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .sum-chip {
+    background:white; border:1.5px solid var(--border); border-radius:20px;
+    padding:8px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600;
+    color:var(--text-mid); cursor:pointer; transition:all .15s;
+  }
+  .sum-chip:hover { border-color:var(--green-light); }
+  .sum-chip.sel { background:var(--green-dark); border-color:var(--green-dark); color:white; }
+  .sum-note { width:100%; background:var(--bg); border:1.5px solid var(--border); border-radius:11px; padding:12px 14px; font-family:'Outfit',sans-serif; font-size:14px; color:var(--text); resize:none; outline:none; line-height:1.6; }
+  .sum-note:focus { border-color:var(--green-light); background:white; }
+
   /* ── PICKED UP / DNA ── */
   .puck-row { display:flex; gap:8px; margin-bottom:14px; justify-content:flex-end; }
   .puck-btn {
@@ -265,7 +282,7 @@ function TopBar({ onSignOut, rightBtn }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, onEditHole, onFinish, onSignOut, sent, saving, onBackToDashboard }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, onEditHole, onFinish, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, studentNote }) {
   const loggedHoles = holes.filter(h => savedHoles.has(h.n));
   const totalScore  = loggedHoles.reduce((s, h, i) => s + (holeData[holes.indexOf(h)].score || 0), 0);
   const totalPar    = holes.reduce((s, h) => s + h.par, 0);
@@ -286,6 +303,12 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
               <div className="ov-stat-val">{allLogged ? totalScore : (totalScore || "-")}</div>
               <div className="ov-stat-lbl">{allLogged ? `${totalScore - totalPar > 0 ? "+" : ""}${totalScore - totalPar} vs par` : "total so far"}</div>
             </div>
+            {handicap !== "" && allLogged && (
+              <div className="ov-stat">
+                <div className="ov-stat-val">{totalScore - parseInt(handicap)}</div>
+                <div className="ov-stat-lbl">net score</div>
+              </div>
+            )}
             <div className="ov-stat">
               <div className="ov-stat-val">{girCount}/{loggedHoles.length}</div>
               <div className="ov-stat-lbl">GIR</div>
@@ -378,6 +401,22 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, o
           </button>
         )}
 
+        <button
+          onClick={onOpenSummary}
+          style={{
+            width:"100%", background:"white", border:"1.5px solid var(--border)",
+            borderRadius:13, padding:"12px 16px", marginBottom:10,
+            fontFamily:"'Outfit',sans-serif", fontSize:13, fontWeight:600,
+            color:"var(--text-mid)", cursor:"pointer", textAlign:"left",
+            display:"flex", alignItems:"center", justifyContent:"space-between",
+          }}
+        >
+          <span>🌤 Conditions & notes</span>
+          <span style={{fontSize:12,color:"var(--text-dim)"}}>
+            {[wind, conditions, temperature].filter(Boolean).join(" · ") || "Not set"}
+          </span>
+        </button>
+
         {savedHoles.size > 0 && (
           <button
             className="ov-finish-btn"
@@ -405,11 +444,16 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [holes, setHoles]           = useState([]);
   const [holeData, setHoleData]     = useState([]);
   const [courseId, setCourseId]     = useState(null);
+  const [handicap, setHandicap]       = useState("");
   const [courseName, setCourseName] = useState("");
   const [roundId, setRoundId]       = useState(null);
-  // view: "course_picker" | "overview" | "logging" | "complete"
+  // view: "course_picker" | "overview" | "logging" | "summary" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [saving, setSaving]         = useState(false);
+  const [wind, setWind]               = useState(null);
+  const [conditions, setConditions]   = useState(null);
+  const [temperature, setTemperature] = useState(null);
+  const [studentNote, setStudentNote] = useState("");
   const [sent, setSent]             = useState(false);
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
@@ -471,6 +515,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       }
       setRoundId(existingRound.id);
       setSent(existingRound.sent_to_coach || false);
+      setHandicap(existingRound.handicap ?? "");
+      setWind(existingRound.wind || null);
+      setConditions(existingRound.conditions || null);
+      setTemperature(existingRound.temperature || null);
+      setStudentNote(existingRound.student_note || "");
       setLoading(false);
     }
     loadExisting();
@@ -506,8 +555,106 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
               <div style={{fontSize:12,color:"var(--text-dim)"}}>{course.holes} holes</div>
             </button>
           ))}
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--text-dim)",marginBottom:7}}>
+              Course handicap <span style={{fontWeight:400}}>(optional)</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              max="54"
+              placeholder="e.g. 28"
+              value={handicap}
+              onChange={e => setHandicap(e.target.value)}
+              style={{
+                width:"100%", background:"var(--bg)", border:"1.5px solid var(--border)",
+                borderRadius:11, padding:"12px 14px", fontFamily:"'Outfit',sans-serif",
+                fontSize:15, color:"var(--text)", outline:"none",
+              }}
+            />
+          </div>
           <button className="back-to-dash-btn" style={{marginTop:8}} onClick={onBackToDashboard}>
             Back to my rounds
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  // ── Summary screen ──
+  if (view === "summary") {
+    const netScore = handicap !== "" && holeData.reduce((s,h) => s+(h.score||0),0)
+      ? holeData.reduce((s,h) => s+(h.score||0),0) - parseInt(handicap)
+      : null;
+    const totalScore = holeData.reduce((s,h) => s+(h.score||0),0);
+    const totalPar   = holes.reduce((s,h) => s+h.par,0);
+    const diff       = totalScore - totalPar;
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} rightBtn={
+          <button className="bar-btn" onClick={() => setView("overview")}>← Overview</button>
+        } />
+        <div className="sum-wrap">
+          <div className="sum-title">Round summary</div>
+          <div className="sum-sub">
+            {courseName} · {totalScore} ({diff >= 0 ? "+" : ""}{diff} vs par)
+            {netScore != null ? ` · Net ${netScore}` : ""}
+          </div>
+
+          <div className="sum-sec">
+            <div className="sum-sec-label">Wind</div>
+            <div className="sum-chips">
+              {["Calm","Breezy","Windy","Very windy"].map(w => (
+                <button key={w} className={"sum-chip" + (wind === w ? " sel" : "")} onClick={() => setWind(w === wind ? null : w)}>{w}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="sum-sec">
+            <div className="sum-sec-label">Conditions</div>
+            <div className="sum-chips">
+              {["Dry","Soft","Wet"].map(c => (
+                <button key={c} className={"sum-chip" + (conditions === c ? " sel" : "")} onClick={() => setConditions(c === conditions ? null : c)}>{c}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="sum-sec">
+            <div className="sum-sec-label">Temperature</div>
+            <div className="sum-chips">
+              {["Cold","Mild","Warm"].map(t => (
+                <button key={t} className={"sum-chip" + (temperature === t ? " sel" : "")} onClick={() => setTemperature(t === temperature ? null : t)}>{t}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="sum-sec">
+            <div className="sum-sec-label">Notes <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></div>
+            <textarea
+              className="sum-note"
+              rows={4}
+              placeholder="How did the round feel? Anything specific to mention to your coach..."
+              value={studentNote}
+              onChange={e => setStudentNote(e.target.value)}
+            />
+          </div>
+
+          <button className="next-btn" onClick={async () => {
+            if (!roundId) { setView("overview"); return; }
+            setSaving(true);
+            await supabase.from("rounds").update({
+              wind, conditions, temperature,
+              student_note: studentNote || null,
+              handicap: handicap !== "" ? parseInt(handicap) : null,
+            }).eq("id", roundId);
+            setSaving(false);
+            setView("overview");
+          }} disabled={saving}>
+            {saving ? <div className="spinner" /> : <>Save →</>}
+          </button>
+          <button className="back-to-dash-btn" style={{marginTop:10,width:"100%"}} onClick={() => setView("overview")}>
+            Cancel
           </button>
         </div>
       </>
@@ -575,7 +722,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     let rid = roundId;
     if (!rid) {
       const { data: row, error } = await supabase
-        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length }])
+        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: handicap !== "" ? parseInt(handicap) : null }])
         .select().single();
       if (error) { console.error(error.message); setSaving(false); return; }
       rid = row.id;
@@ -612,10 +759,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }
   }
 
+  function goToSummary() {
+    setView("summary");
+    window.scrollTo(0, 0);
+  }
+
   async function sendToCoach() {
     if (!roundId) return;
     setSaving(true);
-    // Recalculate totals before sending
     const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
     const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
     await supabase.from("rounds").update({
@@ -623,9 +774,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       sent_at: new Date().toISOString(),
       total_score: totalScore,
       total_putts: totalPutts,
+      handicap: handicap !== "" ? parseInt(handicap) : null,
+      wind, conditions, temperature,
+      student_note: studentNote || null,
     }).eq("id", roundId);
     setSaving(false);
     setSent(true);
+    setView("overview");
   }
 
   function scoreClass() {
@@ -655,10 +810,15 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         isEditMode={isEditMode}
         onEditHole={editHole}
         onFinish={sendToCoach}
+        onOpenSummary={() => { setView("summary"); window.scrollTo(0,0); }}
         onSignOut={onSignOut}
         sent={sent}
         saving={saving}
         onBackToDashboard={onBackToDashboard}
+        wind={wind}
+        conditions={conditions}
+        temperature={temperature}
+        studentNote={studentNote}
       />
     );
   }
@@ -682,6 +842,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             <div className="cc-title-big">Round complete</div>
             <div className="cc-score-big">{totalScore}</div>
             <div className="cc-par-line">{diff >= 0 ? "+" : ""}{diff} vs par</div>
+            {handicap !== "" && (
+              <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginTop:4}}>
+                Net {totalScore - parseInt(handicap)} · Hcp {handicap}
+              </div>
+            )}
             <div className="cc-detail">
               {courseName}  ·  {holes.length} holes  ·  {girCount} GIR  ·  {tp} three-putt{tp !== 1 ? "s" : ""}
             </div>

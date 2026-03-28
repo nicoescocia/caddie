@@ -252,6 +252,9 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
                     <div className="round-score-block">
                       <div className="round-score-num">{r.total_score ?? "—"}</div>
                       {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
+                      {r.total_score && r.handicap != null && (
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>Net {r.total_score - r.handicap}</div>
+                      )}
                     </div>
                   </div>
                   <div className="round-stats-row">

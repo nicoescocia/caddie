@@ -328,8 +328,29 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           <div className="ab-right">
             <div className="ab-score">{totalScore}</div>
             <div className="ab-par">{diff >= 0 ? "+" : ""}{diff} vs par</div>
+            {round.handicap != null && (
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.45)",marginTop:2}}>
+                Net {totalScore - round.handicap} · Hcp {round.handicap}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Weather / notes bar */}
+        {(round.wind || round.conditions || round.temperature || round.student_note) && (
+          <div style={{background:"white",border:"1px solid var(--border)",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13}}>
+            {(round.wind || round.conditions || round.temperature) && (
+              <div style={{color:"var(--text-mid)",marginBottom:round.student_note ? 6 : 0}}>
+                🌤 {[round.wind, round.conditions, round.temperature].filter(Boolean).join(" · ")}
+              </div>
+            )}
+            {round.student_note && (
+              <div style={{color:"var(--text-mid)",fontStyle:"italic"}}>
+                💬 &ldquo;{round.student_note}&rdquo;
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Stat cards */}
         <div className="g4">
