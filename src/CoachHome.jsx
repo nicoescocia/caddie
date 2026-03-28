@@ -131,7 +131,7 @@ function StudentList({ coachProfile, students, studentStats, onSelectStudent, on
     <>
       <style>{css}</style>
       <div className="mode-bar">
-        <div className="mode-logo" style={{cursor: screen === "history" ? "pointer" : "default"}} onClick={() => screen === "history" && setScreen("students")}>⛳ Caddie</div>
+        <div className="mode-logo">⛳ Caddie</div>
         <div className="mode-bar-right">
           <button className="signout-btn" onClick={onSignOut}>Sign out</button>
         </div>
@@ -191,7 +191,7 @@ function StudentList({ coachProfile, students, studentStats, onSelectStudent, on
 }
 
 // ── ROUND HISTORY ──
-function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
+function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHome }) {
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
   const diffs      = scored.map(r => r.total_score - getCoursePar(r));
@@ -203,7 +203,7 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut }) {
     <>
       <style>{css}</style>
       <div className="mode-bar">
-        <div className="mode-logo" style={{cursor: screen === "history" ? "pointer" : "default"}} onClick={() => screen === "history" && setScreen("students")}>⛳ Caddie</div>
+        <div className="mode-logo" style={{cursor:"pointer"}} onClick={onHome}>⛳ Caddie</div>
         <div className="mode-bar-right">
           <button className="back-bar-btn" onClick={onBack}>← All students</button>
           <button className="signout-btn" onClick={onSignOut}>Sign out</button>
@@ -420,7 +420,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
         <>
           <style>{css}</style>
           <div className="mode-bar">
-            <div className="mode-logo" style={{cursor: screen === "history" ? "pointer" : "default"}} onClick={() => screen === "history" && setScreen("students")}>⛳ Caddie</div>
+            <div className="mode-logo">⛳ Caddie</div>
             <div className="mode-bar-right">
               <button className="back-bar-btn" onClick={() => setScreen("students")}>← All students</button>
               <button className="signout-btn" onClick={onSignOut}>Sign out</button>
@@ -433,6 +433,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
     return (
       <RoundHistory
         student={selectedStudent}
+        onHome={() => setScreen("students")}
         rounds={studentRounds}
         onSelectRound={r => onSelectRound(r, selectedStudent)}
         onBack={() => setScreen("students")}
