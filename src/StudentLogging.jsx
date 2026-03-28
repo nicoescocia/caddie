@@ -282,7 +282,7 @@ function TopBar({ onSignOut, rightBtn }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, isEditMode, onEditHole, onFinish, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, studentNote }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isEditMode, onEditHole, onFinish, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, studentNote }) {
   const loggedHoles = holes.filter(h => savedHoles.has(h.n));
   const totalScore  = loggedHoles.reduce((s, h, i) => s + (holeData[holes.indexOf(h)].score || 0), 0);
   const totalPar    = holes.reduce((s, h) => s + h.par, 0);
@@ -809,6 +809,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         courseName={courseName}
         isEditMode={isEditMode}
         onEditHole={editHole}
+        handicap={handicap}
         onFinish={sendToCoach}
         onOpenSummary={() => { setView("summary"); window.scrollTo(0,0); }}
         onSignOut={onSignOut}
