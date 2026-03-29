@@ -780,34 +780,29 @@ export default function CaddieAuth({ onAuthSuccess }) {
     const type = params.get("type"); // "coach" = student inviting coach
     if (!code) return;
     setScreen("signup");
+    // Two-step lookup to avoid FK alias issues
     supabase
       .from("invites")
-      .select("id, coach_id, profiles!invites_coach_id_fkey(first_name, last_name)")
+      .select("id, coach_id")
       .eq("code", code)
       .is("used_by", null)
       .single()
-      .then(({ data, error }) => {
-        if (data && !error) {
-          if (type === "coach") {
-            // Student inviting a coach — coach_id here is actually the student_id
-            setInviteCoach({
-              id: data.coach_id,
-              name: `${data.profiles.first_name} ${data.profiles.last_name}`,
-              code,
-              inviteId: data.id,
-              inviteType: "coach", // coach signing up to connect with student
-            });
-          } else {
-            // Coach inviting a student (normal flow)
-            setInviteCoach({
-              id: data.coach_id,
-              name: `${data.profiles.first_name} ${data.profiles.last_name}`,
-              code,
-              inviteId: data.id,
-              inviteType: "student",
-            });
-          }
-        }
+      .then(async ({ data: invite, error }) => {
+        if (!invite || error) return;
+        // Now fetch the coach/student profile separately
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", invite.coach_id)
+          .single();
+        const inviteType = type === "coach" ? "coach" : "student";
+        setInviteCoach({
+          id: invite.coach_id,
+          name: prof ? `${prof.first_name} ${prof.last_name}` : "your coach",
+          code,
+          inviteId: invite.id,
+          inviteType,
+        });
       });
   }, []);
 
