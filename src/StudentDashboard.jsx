@@ -238,15 +238,13 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       ]);
       setProfile(prof);
       setRounds(rds || []);
-      console.log("coach_students link:", link);
       // Fetch coach profile separately if link exists
       if (link?.coach_id) {
-        const { data: coachProf, error: coachErr } = await supabase
+        const { data: coachProf } = await supabase
           .from("profiles")
           .select("first_name, last_name")
           .eq("id", link.coach_id)
           .single();
-        console.log("coach profile:", coachProf, coachErr);
         if (coachProf) setCoach(coachProf);
       }
       setLoading(false);
