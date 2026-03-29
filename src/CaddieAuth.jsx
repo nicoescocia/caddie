@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from './supabaseClient';
 
 // ── Design tokens (matching caddie_v4.html) ──
@@ -551,7 +551,6 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
           first_name: firstName,
           last_name:  lastName,
           role,
-          ...(inviteCoach ? { coach_id: inviteCoach.id } : {})
         }
       }
     });
@@ -563,8 +562,22 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
       first_name: firstName,
       last_name:  lastName,
       role,
-      ...(inviteCoach ? { coach_id: inviteCoach.id } : {})
     }]);
+
+    // If invited: create coach_students link and mark invite used
+    if (inviteCoach) {
+      await supabase.from("coach_students").insert([{
+        coach_id:   inviteCoach.id,
+        student_id: data.user?.id,
+      }]);
+      if (inviteCoach.inviteId) {
+        await supabase.from("invites").update({
+          used_by: data.user?.id,
+          used_at: new Date().toISOString(),
+        }).eq("id", inviteCoach.inviteId);
+      }
+      window.history.replaceState({}, "", window.location.pathname);
+    }
 
     setLoading(false);
     onSuccess(data.user, role);
@@ -750,10 +763,32 @@ function WelcomeScreen({ user, onContinue }) {
 
 // ── ROOT COMPONENT ──
 export default function CaddieAuth({ onAuthSuccess }) {
-  const inviteCoach = null;
+  const [screen, setScreen]         = useState("login");
+  const [authedUser, setAuthedUser]  = useState(null);
+  const [inviteCoach, setInviteCoach] = useState(null);
 
-  const [screen, setScreen]       = useState("login");
-  const [authedUser, setAuthedUser] = useState(null);
+  // Read invite code from URL on mount
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("invite");
+    if (!code) return;
+    setScreen("signup");
+    supabase
+      .from("invites")
+      .select("id, coach_id, profiles!invites_coach_id_fkey(first_name, last_name)")
+      .eq("code", code)
+      .is("used_by", null)
+      .single()
+      .then(({ data, error }) => {
+        if (data && !error) {
+          setInviteCoach({
+            id: data.coach_id,
+            name: `${data.profiles.first_name} ${data.profiles.last_name}`,
+            code,
+            inviteId: data.id,
+          });
+        }
+      });
+  }, []);
 
   function handleAuthSuccess(user, role, skipWelcome = false) {
     const fullUser = { ...user, role };

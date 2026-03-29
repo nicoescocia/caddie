@@ -32,6 +32,18 @@ const css = `
   .section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:12px; }
 
   /* Student cards */
+  /* ── INVITE ── */
+  .invite-section { background:white; border:1.5px solid var(--border); border-radius:16px; padding:18px 20px; margin-bottom:16px; }
+  .invite-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
+  .invite-sub { font-size:12px; color:var(--text-dim); margin-bottom:14px; line-height:1.5; }
+  .invite-link-row { display:flex; gap:8px; align-items:center; }
+  .invite-link-box { flex:1; background:var(--bg); border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Outfit',sans-serif; font-size:12px; color:var(--text-mid); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .invite-copy-btn { background:var(--green-dark); border:none; border-radius:10px; padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:700; color:white; cursor:pointer; white-space:nowrap; transition:all .2s; flex-shrink:0; }
+  .invite-copy-btn:hover { background:var(--green); }
+  .invite-copy-btn.copied { background:var(--green-mid); }
+  .invite-gen-btn { width:100%; background:white; border:1.5px dashed var(--border); border-radius:12px; padding:14px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .2s; }
+  .invite-gen-btn:hover { border-color:var(--green-light); color:var(--green); }
+
   .student-card { background:white; border:1.5px solid var(--border); border-radius:18px; padding:18px 20px; margin-bottom:12px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:16px; }
   .student-card:hover { border-color:var(--green-light); transform:translateY(-1px); box-shadow:var(--shadow); }
   .student-avatar { width:48px; height:48px; border-radius:50%; background:var(--green-dark); display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:18px; color:var(--gold); flex-shrink:0; }
@@ -124,6 +136,27 @@ function parDiff(score, round) {
 
 // ── STUDENT LIST (coach home) ──
 function StudentList({ coachProfile, students, studentStats, onSelectStudent, onSignOut }) {
+  const [inviteLink, setInviteLink] = useState(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function generateInvite() {
+    if (!coachProfile?.id) return;
+    setInviteLoading(true);
+    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const { error } = await supabase.from("invites").insert([{ code, coach_id: coachProfile.id }]);
+    if (!error) {
+      setInviteLink(`${window.location.origin}?invite=${code}`);
+    }
+    setInviteLoading(false);
+  }
+
+  function copyLink() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
   const totalStudents = students.length;
   const totalRounds   = Object.values(studentStats).reduce((s, st) => s + (st.totalRounds || 0), 0);
 
@@ -143,11 +176,29 @@ function StudentList({ coachProfile, students, studentStats, onSelectStudent, on
           <div className="home-hero-sub">{totalStudents} student{totalStudents !== 1 ? "s" : ""} · {totalRounds} round{totalRounds !== 1 ? "s" : ""} logged</div>
         </div>
 
+        {/* Invite section */}
+        <div className="invite-section">
+          <div className="invite-title">🔗 Invite a student</div>
+          <div className="invite-sub">Generate a unique link to share with your student. When they sign up using your link, they'll be automatically connected to your account.</div>
+          {inviteLink ? (
+            <div className="invite-link-row">
+              <div className="invite-link-box">{inviteLink}</div>
+              <button className={"invite-copy-btn" + (copied ? " copied" : "")} onClick={copyLink}>
+                {copied ? "✓ Copied!" : "Copy"}
+              </button>
+            </div>
+          ) : (
+            <button className="invite-gen-btn" onClick={generateInvite} disabled={inviteLoading}>
+              {inviteLoading ? "Generating…" : "+ Generate invite link"}
+            </button>
+          )}
+        </div>
+
         {students.length === 0 ? (
           <div className="empty-state">
             <div className="es-icon">📭</div>
             <div className="es-title">No students linked yet</div>
-            <div className="es-sub">Share your invite link with students to connect them to your account. Once they sign up and send a round, it will appear here.</div>
+            <div className="es-sub">Generate an invite link above and share it with your students.</div>
           </div>
         ) : (
           <>
