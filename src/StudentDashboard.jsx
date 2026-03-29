@@ -76,6 +76,7 @@ const css = `
   .trend-direction.improving { color:var(--green-mid); }
   .trend-direction.worsening { color:var(--red); }
   .trend-direction.stable { color:var(--text-dim); }
+  .trend-charts-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 `;
 
 // Course pars — used to calculate vs-par stats per round
@@ -90,20 +91,40 @@ function getCoursePar(round) {
 }
 
 // ── TREND HELPERS ──
-function TrendLine({ data9, data18, metric, label, height = 80 }) {
+function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 }) {
   const all9  = data9.filter(r => r[metric] != null);
   const all18 = data18.filter(r => r[metric] != null);
   if (!all9.length && !all18.length) return null;
 
+  const allVals = [...all9, ...all18].map(p => p[metric]);
+  const dataMin = Math.min(...allVals);
+  const dataMax = Math.max(...allVals);
+
+  function computeTicks(lo, hi) {
+    const range = hi - lo || 1;
+    const stepsSeq = [0.1, 0.2, 0.25, 0.5, 1, 2, 3, 5, 10, 15, 20, 25];
+    const step = stepsSeq.find(s => s >= range / 5) || 25;
+    const start = Math.floor(lo / step) * step;
+    const end   = Math.ceil(hi / step) * step;
+    const ticks = [];
+    for (let t = start; t <= end + step * 0.01; t = Math.round((t + step) * 1e6) / 1e6) ticks.push(t);
+    return ticks;
+  }
+
+  const ticks  = yTicks || computeTicks(dataMin, dataMax);
+  const domMin = Math.min(...ticks);
+  const domMax = Math.max(...ticks);
+  const domRange = domMax - domMin || 1;
+  const LEFT = 32, W = 248, PAD_T = 8, PAD_B = 8;
+  const chartH = height - PAD_T - PAD_B;
+
+  function toY(v) { return PAD_T + chartH - ((v - domMin) / domRange) * chartH; }
+  function toX(i, n) { return n <= 1 ? LEFT + W / 2 : LEFT + (i / (n - 1)) * W; }
+
   function sparkline(pts, color, dashed = false) {
     if (pts.length < 2) return null;
-    const vals = pts.map(p => p[metric]);
-    const min  = Math.min(...vals);
-    const max  = Math.max(...vals);
-    const range = max - min || 1;
-    const w = 280, h = height;
-    const xs = pts.map((_, i) => (i / (pts.length - 1)) * w);
-    const ys = vals.map(v => h - ((v - min) / range) * (h - 10) - 5);
+    const xs = pts.map((_, i) => toX(i, pts.length));
+    const ys = pts.map(p => toY(p[metric]));
     const d  = xs.map((x, i) => `${i === 0 ? "M" : "L"} ${x} ${ys[i]}`).join(" ");
     return (
       <>
@@ -119,7 +140,17 @@ function TrendLine({ data9, data18, metric, label, height = 80 }) {
   return (
     <div className="trend-chart">
       <div className="trend-chart-title">{label}</div>
-      <svg width="100%" viewBox={`0 0 280 ${height}`} style={{overflow:"visible"}}>
+      <svg width="100%" viewBox={`0 0 ${LEFT + W} ${height}`} style={{overflow:"visible"}}>
+        {ticks.map(t => {
+          const y   = toY(t);
+          const lbl = formatY ? formatY(t) : t % 1 === 0 ? String(t) : t.toFixed(1);
+          return (
+            <g key={t}>
+              <line x1={LEFT} y1={y} x2={LEFT + W} y2={y} stroke="#E2DDD4" strokeWidth={0.8} />
+              <text x={LEFT - 4} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" fill="#999">{lbl}</text>
+            </g>
+          );
+        })}
         {sparkline(all9,  "#1A6B4A", true)}
         {sparkline(all18, "#C9A84C")}
       </svg>
@@ -169,9 +200,12 @@ function StudentRoundTrends({ rounds }) {
   function enrich(rs) {
     return rs.map(r => ({
       ...r,
-      vsPar:   r.total_score - getCoursePar(r),
-      girPct:  r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
-      tpCount: r.three_putt_count,
+      vsPar:        r.total_score - getCoursePar(r),
+      netVsPar:     r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
+      girPct:       r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+      puttsPerHole: r.total_putts != null && r.holes_played
+                      ? Math.round((r.total_putts / r.holes_played) * 10) / 10
+                      : null,
     }));
   }
   const e9  = enrich(r9);
@@ -181,8 +215,10 @@ function StudentRoundTrends({ rounds }) {
   const scoreDiffs = allScored.map(r => r.vsPar);
   const dir = trendDirection(scoreDiffs);
   const tl  = trendLabel(dir, true);
-  const avgVsPar  = scoreDiffs.length ? Math.round(scoreDiffs.reduce((a,b)=>a+b)/scoreDiffs.length) : null;
+  const avgVsPar  = scoreDiffs.length ? Math.round(scoreDiffs.reduce((a,b)=>a+b,0)/scoreDiffs.length) : null;
   const bestVsPar = scoreDiffs.length ? Math.min(...scoreDiffs) : null;
+
+  const fmtPar = v => v > 0 ? "+"+v : v === 0 ? "E" : String(v);
 
   return (
     <div className="trends-wrap">
@@ -193,11 +229,11 @@ function StudentRoundTrends({ rounds }) {
 
       <div className="trend-summary">
         <div className="trend-stat">
-          <div className="trend-stat-val">{avgVsPar != null ? (avgVsPar > 0 ? "+"+avgVsPar : avgVsPar === 0 ? "E" : avgVsPar) : "—"}</div>
+          <div className="trend-stat-val">{avgVsPar != null ? fmtPar(avgVsPar) : "—"}</div>
           <div className="trend-stat-lbl">Avg vs par</div>
         </div>
         <div className="trend-stat">
-          <div className="trend-stat-val">{bestVsPar != null ? (bestVsPar > 0 ? "+"+bestVsPar : bestVsPar === 0 ? "E" : bestVsPar) : "—"}</div>
+          <div className="trend-stat-val">{bestVsPar != null ? fmtPar(bestVsPar) : "—"}</div>
           <div className="trend-stat-lbl">Best</div>
         </div>
         <div className="trend-stat">
@@ -209,14 +245,19 @@ function StudentRoundTrends({ rounds }) {
       <div className="trends-tabs">
         {["score","gir","putts"].map(t => (
           <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "gir" ? "GIR %" : "3-Putts"}
+            {t === "score" ? "Score" : t === "gir" ? "GIR %" : "Putts"}
           </button>
         ))}
       </div>
 
-      {tab === "score" && <TrendLine data9={e9} data18={e18} metric="vsPar" label="Score vs par" />}
-      {tab === "gir"   && <TrendLine data9={e9} data18={e18} metric="girPct" label="GIR %" height={70} />}
-      {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="tpCount" label="3-putts per round" height={70} />}
+      {tab === "score" && (
+        <div className="trend-charts-pair">
+          <TrendLine data9={e9} data18={e18} metric="vsPar"    label="Gross vs Par" formatY={fmtPar} />
+          <TrendLine data9={e9} data18={e18} metric="netVsPar" label="Net vs Par"   formatY={fmtPar} />
+        </div>
+      )}
+      {tab === "gir"   && <TrendLine data9={e9} data18={e18} metric="girPct"       label="GIR %"           yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
+      {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
     </div>
   );
 }
