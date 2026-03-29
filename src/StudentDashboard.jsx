@@ -91,10 +91,12 @@ function getCoursePar(round) {
 }
 
 // ── TREND HELPERS ──
+// When data18 is empty, data9 is rendered as a single solid line (combined / no split).
 function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 }) {
   const all9  = data9.filter(r => r[metric] != null);
   const all18 = data18.filter(r => r[metric] != null);
   if (!all9.length && !all18.length) return null;
+  const hasBoth = all9.length > 0 && all18.length > 0;
 
   const allVals = [...all9, ...all18].map(p => p[metric]);
   const dataMin = Math.min(...allVals);
@@ -151,10 +153,10 @@ function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 
             </g>
           );
         })}
-        {sparkline(all9,  "#1A6B4A", true)}
+        {sparkline(all9,  "#1A6B4A", hasBoth)}
         {sparkline(all18, "#C9A84C")}
       </svg>
-      {all9.length > 0 && all18.length > 0 && (
+      {hasBoth && (
         <div className="trend-legend">
           <div className="trend-legend-item">
             <div className="trend-legend-dot" style={{background:"#1A6B4A"}} />
@@ -256,7 +258,10 @@ function StudentRoundTrends({ rounds }) {
           <TrendLine data9={e9} data18={e18} metric="netVsPar" label="Net vs Par"   formatY={fmtPar} />
         </div>
       )}
-      {tab === "gir"   && <TrendLine data9={e9} data18={e18} metric="girPct"       label="GIR %"           yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
+      {tab === "gir"   && (() => {
+        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
+        return <TrendLine data9={combined} data18={[]} metric="girPct" label="GIR %" yTicks={[0,25,50,75,100]} formatY={v => v+"%"} height={80} />;
+      })()}
       {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
     </div>
   );
@@ -270,6 +275,8 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hcpEditing, setHcpEditing] = useState(false);
+  const [hcpInput, setHcpInput]     = useState("");
 
   useEffect(() => {
     async function load() {
@@ -309,6 +316,18 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     navigator.clipboard.writeText(inviteLink);
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2000);
+  }
+
+  async function saveHandicap() {
+    const val = parseInt(hcpInput, 10);
+    if (isNaN(val) || val < 0 || val > 54) return;
+    // Update the most recent round that has a handicap, or the most recent round overall
+    const target = rounds.find(r => r.handicap != null) || rounds[0];
+    if (target) {
+      await supabase.from("rounds").update({ handicap: val }).eq("id", target.id);
+      setRounds(prev => prev.map(r => r.id === target.id ? { ...r, handicap: val } : r));
+    }
+    setHcpEditing(false);
   }
 
   async function deleteRound(e, roundId) {
@@ -351,7 +370,35 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       <div className="dash-wrap">
         <div className="dash-hero">
           <div className="dash-hero-label">Welcome back</div>
-          <div className="dash-hero-name">{profile?.first_name} {profile?.last_name}</div>
+          <div className="dash-hero-name" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span>{profile?.first_name} {profile?.last_name}</span>
+            {(() => {
+              const currentHcp = rounds.find(r => r.handicap != null)?.handicap;
+              if (hcpEditing) return (
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <input
+                    type="number" min="0" max="54" value={hcpInput}
+                    onChange={e => setHcpInput(e.target.value)}
+                    onKeyDown={e => { if (e.key==="Enter") saveHandicap(); if (e.key==="Escape") setHcpEditing(false); }}
+                    autoFocus
+                    style={{width:52,padding:"3px 6px",borderRadius:6,border:"1px solid rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.12)",color:"white",fontFamily:"'Outfit',sans-serif",fontSize:14,textAlign:"center"}}
+                  />
+                  <button onClick={saveHandicap} style={{background:"var(--gold)",border:"none",borderRadius:6,padding:"3px 10px",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:700,color:"var(--green-dark)",cursor:"pointer"}}>Save</button>
+                  <button onClick={() => setHcpEditing(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontSize:16,cursor:"pointer",padding:"0 4px"}}>✕</button>
+                </div>
+              );
+              return (
+                <span
+                  onClick={() => { setHcpInput(currentHcp != null ? String(currentHcp) : ""); setHcpEditing(true); }}
+                  style={{fontSize:14,color:"rgba(255,255,255,0.6)",cursor:"pointer",display:"flex",alignItems:"center",gap:4,userSelect:"none"}}
+                  title="Edit handicap"
+                >
+                  {currentHcp != null ? `Hcp ${currentHcp}` : "Set hcp"}
+                  <span style={{fontSize:11,opacity:.7}}>✏️</span>
+                </span>
+              );
+            })()}
+          </div>
           <div className="dash-stats">
             <div className="dash-stat">
               <div className="dash-stat-val">{rounds.length}</div>

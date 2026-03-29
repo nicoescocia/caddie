@@ -288,10 +288,12 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
 
 // ── ROUND HISTORY ──
 // ── TREND CHART (SVG) ──
+// When data18 is empty, data9 is rendered as a single solid line (combined / no split).
 function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 }) {
   const all9  = data9.filter(r => r[metric] != null);
   const all18 = data18.filter(r => r[metric] != null);
   if (!all9.length && !all18.length) return null;
+  const hasBoth = all9.length > 0 && all18.length > 0;
 
   const allVals = [...all9, ...all18].map(p => p[metric]);
   const dataMin = Math.min(...allVals);
@@ -348,10 +350,10 @@ function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 
             </g>
           );
         })}
-        {sparkline(all9,  "#1A6B4A", true)}
+        {sparkline(all9,  "#1A6B4A", hasBoth)}
         {sparkline(all18, "#C9A84C")}
       </svg>
-      {all9.length > 0 && all18.length > 0 && (
+      {hasBoth && (
         <div className="trend-legend">
           <div className="trend-legend-item">
             <div className="trend-legend-dot" style={{background:"#1A6B4A"}} />
@@ -454,7 +456,10 @@ function RoundTrends({ rounds }) {
           <TrendLine data9={e9} data18={e18} metric="netVsPar" label="Net vs Par"   formatY={fmtPar} />
         </div>
       )}
-      {tab === "gir"   && <TrendLine data9={e9} data18={e18} metric="girPct"       label="GIR %"           yTicks={[0,25,50,75,100]} formatY={v => v+"%"}      height={80} />}
+      {tab === "gir"   && (() => {
+        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
+        return <TrendLine data9={combined} data18={[]} metric="girPct" label="GIR %" yTicks={[0,25,50,75,100]} formatY={v => v+"%"} height={80} />;
+      })()}
       {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
     </div>
   );
@@ -482,7 +487,13 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
         <div className="student-hero">
           <div className="sh-avatar">{initials(student.first_name, student.last_name)}</div>
           <div className="sh-info">
-            <div className="sh-name">{student.first_name} {student.last_name}</div>
+            <div className="sh-name">
+              {student.first_name} {student.last_name}
+              {(() => {
+                const hcp = scored.find(r => r.handicap != null)?.handicap;
+                return hcp != null ? <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,0.55)",marginLeft:8}}>Hcp {hcp}</span> : null;
+              })()}
+            </div>
             <div className="sh-sub">{sentRounds.length} round{sentRounds.length !== 1 ? "s" : ""} sent to coach</div>
           </div>
           <div className="sh-stats">
@@ -645,9 +656,10 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
             ...r,
             attempted_holes:  attempted.length,
             gir_count:        attempted.filter(h => h.gir).length,
-            fw_hit:           attempted.filter(h => h.par >= 4 && h.fairway === "yes").length,
+            fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
             fw_holes:         fwHoles.length,
             three_putt_count: attempted.filter(h => h.putts >= 3).length,
+            total_putts:      attempted.reduce((s, h) => s + (h.putts || 0), 0),
           };
         }));
         setStudentRounds(enriched);
@@ -685,6 +697,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
         fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
         fw_holes:         fwHoles.length,
         three_putt_count: attempted.filter(h => h.putts >= 3).length,
+        total_putts:      attempted.reduce((s, h) => s + (h.putts || 0), 0),
       };
     }));
 

@@ -41,6 +41,24 @@ async function main() {
   KEEP_IDS.add(jamie.id);
   KEEP_IDS.add(craig.id);
 
+  // ── 1b. Delete any stale accounts with the target demo emails (from previous runs) ──
+  for (const email of [JAMIE_EMAIL, CRAIG_EMAIL]) {
+    const stale = allUsers.find(u => u.email === email);
+    if (stale && !KEEP_IDS.has(stale.id)) {
+      const { data: staleRounds } = await supabase.from("rounds").select("id").eq("student_id", stale.id);
+      if (staleRounds?.length) {
+        const ids = staleRounds.map(r => r.id);
+        await supabase.from("round_holes").delete().in("round_id", ids);
+        await supabase.from("rounds").delete().in("id", ids);
+      }
+      await supabase.from("coach_students").delete().eq("student_id", stale.id);
+      await supabase.from("invites").update({ used_by: null }).eq("used_by", stale.id);
+      await supabase.from("profiles").delete().eq("id", stale.id);
+      await supabase.auth.admin.deleteUser(stale.id);
+      console.log(`  Removed stale demo account: ${email}`);
+    }
+  }
+
   // ── 2. Update Jamie & Craig auth accounts with real credentials ──
   const { error: je } = await supabase.auth.admin.updateUserById(jamie.id, {
     email: JAMIE_EMAIL,
