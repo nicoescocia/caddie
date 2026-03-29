@@ -24,11 +24,16 @@ const css = `
   /* ── HOLE DOTS ── */
   .hole-dots { display:flex; gap:5px; flex-wrap:wrap; justify-content:center; margin-bottom:16px; }
   .hd { width:30px; height:30px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--text-dim); background:white; transition:all .2s; }
-  .hd.done { background:var(--green-light); border-color:var(--green-light); color:white; }
+  .hd.done    { background:var(--green-light); border-color:var(--green-light); color:white; }
   .hd.current { background:var(--green-dark); border-color:var(--green-dark); color:var(--gold); }
-  .hd.tp  { background:var(--red); border-color:var(--red); color:white; }
-  .hd.pu  { background:var(--orange); border-color:var(--orange); color:white; }
-  .hd.dna { background:#999; border-color:#999; color:white; }
+  .hd.eagle   { background:var(--gold); border-color:var(--gold); color:var(--green-dark); }
+  .hd.birdie  { background:var(--green-mid); border-color:var(--green-mid); color:white; }
+  .hd.par     { background:#888; border-color:#888; color:white; }
+  .hd.bogey   { background:var(--sky); border-color:var(--sky); color:white; }
+  .hd.double  { background:var(--red); border-color:var(--red); color:white; }
+  .hd.worse   { background:#8B1A1A; border-color:#8B1A1A; color:white; }
+  .hd.pu      { background:#CCC; border-color:#CCC; color:white; }
+  .hd.dna     { background:#DDD; border-color:#DDD; color:#999; }
 
   /* ── HOLE CARD ── */
   .hole-card { background:var(--green-dark); border-radius:18px; padding:18px 20px 16px; margin-bottom:14px; position:relative; overflow:hidden; }
@@ -486,7 +491,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
             onClick={onOpenSummary}
             disabled={saving}
           >
-            {saving ? "Sending..." : sent && !isEditMode ? "✓ Sent to coach" : isEditMode && sent ? "Resend to coach" : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
+            {saving ? "Sending..." : sent ? "Resend to coach" : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
           </button>
         )}
 
@@ -509,7 +514,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [handicap, setHandicap]       = useState("");
   const [courseName, setCourseName] = useState("");
   const [roundId, setRoundId]       = useState(null);
-  // view: "course_picker" | "overview" | "logging" | "summary" | "complete"
+  // view: "course_picker" | "overview" | "logging" | "summary" | "sent" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [saving, setSaving]         = useState(false);
   const [wind, setWind]               = useState(null);
@@ -724,6 +729,41 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     );
   }
 
+  // ── Sent confirmation screen ──
+  if (view === "sent") {
+    const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
+    const attemptedH = holes.filter((h,i) => !holeData[i]?.dna);
+    const aPar = attemptedH.reduce((s,h) => s + h.par, 0);
+    const diff = totalScore - aPar;
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} onHome={onBackToDashboard} rightBtn={null} />
+        <div className="log-wrap" style={{paddingTop:48,textAlign:"center"}}>
+          <div style={{fontSize:56,marginBottom:16}}>⛳</div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:26,marginBottom:8}}>
+            Round sent!
+          </div>
+          <div style={{fontSize:15,color:"var(--text-mid)",marginBottom:4}}>
+            {totalScore} ({diff >= 0 ? "+" : ""}{diff} vs par)
+          </div>
+          {handicap !== "" && (
+            <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:24}}>
+              Net {totalScore - parseInt(handicap)} · Hcp {handicap}
+            </div>
+          )}
+          {!handicap && <div style={{marginBottom:24}} />}
+          <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:32,lineHeight:1.6}}>
+            Your coach will be able to review your round<br />before your next lesson.
+          </div>
+          <button className="next-btn" onClick={onBackToDashboard}>
+            Back to my rounds →
+          </button>
+        </div>
+      </>
+    );
+  }
+
   // Guard against holes not yet loaded
   if (!holes.length || !holeData.length) {
     return (
@@ -839,7 +879,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }).eq("id", roundId);
     setSaving(false);
     setSent(true);
-    setView("overview");
+    setView("sent");
   }
 
   function scoreClass() {
@@ -949,7 +989,20 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           {holes.map((hole, i) => {
             const isLogged = savedHoles.has(hole.n) && i !== cur;
             let cls = "hd";
-            if (isLogged) cls += holeData[i].dna ? " dna" : holeData[i].pickedUp ? " pu" : holeData[i].putts >= 3 ? " tp" : " done";
+            if (isLogged) {
+              const hd = holeData[i];
+              if (hd.dna) cls += " dna";
+              else if (hd.pickedUp) cls += " pu";
+              else {
+                const diff = (hd.score || 0) - hole.par;
+                if (diff <= -2) cls += " eagle";
+                else if (diff === -1) cls += " birdie";
+                else if (diff === 0) cls += " par";
+                else if (diff === 1) cls += " bogey";
+                else if (diff === 2) cls += " double";
+                else cls += " worse";
+              }
+            }
             else if (i === cur) cls += " current";
             return <div
               key={i}
@@ -1071,7 +1124,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           <div className="sec">
             <div className="sec-label">Why the extra shots? <span className="badge conditional">optional</span></div>
             <div className="sg-reason-grid">
-              {["Bunker","Heavy rough","Chunked","Thinned/topped","Poor aim","Distance control"].map(r => (
+              {["Bunker","Heavy rough","Chunked","Thinned/topped","Poor aim","Distance control","Other"].map(r => (
                 <button
                   key={r}
                   className={"sg-chip" + (d.sgReason === r ? " sel" : "")}
@@ -1085,9 +1138,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         {!d.pickedUp && !d.dna && d.putts > 0 && (
           <div className="sec">
             <div className="sec-label">First putt distance</div>
-            <div className="tap-grid c4">
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
               {PUTT_DIST.map(p => (
-                <button key={p.v} className={"tap-btn " + (d.putt1 === p.v ? "sel" : "")} onClick={() => update({ putt1: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
+                <button key={p.v} className={"tap-btn " + (d.putt1 === p.v ? "sel" : "")} style={{minWidth:52,flexShrink:0}} onClick={() => update({ putt1: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
               ))}
             </div>
           </div>
