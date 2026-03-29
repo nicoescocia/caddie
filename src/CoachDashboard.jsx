@@ -152,7 +152,7 @@ function scoreClass(score, par) {
 }
 
 async function callAI(prompt) {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
