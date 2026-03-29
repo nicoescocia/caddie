@@ -73,20 +73,43 @@ function getCoursePar(round) {
 export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
+  const [coach, setCoach]       = useState(null);
+  const [inviteLink, setInviteLink] = useState(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const [{ data: prof }, { data: rds }] = await Promise.all([
+      const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name").eq("id", user.id).single(),
-        supabase.from("rounds").select("*, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false })
+        supabase.from("rounds").select("*, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("coach_students").select("coach_id, profiles!coach_students_coach_id_fkey(first_name, last_name)").eq("student_id", user.id).single(),
       ]);
       setProfile(prof);
       setRounds(rds || []);
+      if (link?.profiles) setCoach(link.profiles);
       setLoading(false);
     }
     load();
   }, [user.id]);
+
+  async function generateCoachInvite() {
+    setInviteLoading(true);
+    const code = "S-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { error } = await supabase.from("invites").insert([{ code, coach_id: user.id, invite_type: "coach" }]);
+    if (!error) {
+      setInviteLink(`${window.location.origin}?invite=${code}&type=coach`);
+    }
+    setInviteLoading(false);
+  }
+
+  function copyInvite() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }
 
   async function deleteRound(e, roundId) {
     e.stopPropagation(); // don't trigger the edit tap
@@ -144,6 +167,71 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
             </div>
           </div>
         </div>
+
+        {/* Coach card */}
+        {coach ? (
+          <div style={{
+            background:"white", border:"1px solid var(--border)", borderRadius:14,
+            padding:"14px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:12,
+          }}>
+            <div style={{
+              width:40, height:40, borderRadius:"50%", background:"var(--green-dark)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontFamily:"'Playfair Display',serif", fontSize:16, color:"var(--gold)", flexShrink:0,
+            }}>
+              {coach.first_name?.[0]}{coach.last_name?.[0]}
+            </div>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:2}}>Your coach</div>
+              <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>{coach.first_name} {coach.last_name}</div>
+            </div>
+            <div style={{marginLeft:"auto",fontSize:12,color:"var(--green)",fontWeight:600}}>✓ Linked</div>
+          </div>
+        ) : (
+          <div style={{
+            background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
+            padding:"14px 16px", marginBottom:14,
+          }}>
+            <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:10}}>
+              No coach linked yet.{" "}
+              <span style={{color:"var(--text-mid)"}}>Send your coach a link to connect your account.</span>
+            </div>
+            {inviteLink ? (
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <div style={{
+                  flex:1, background:"white", border:"1px solid var(--border)", borderRadius:8,
+                  padding:"8px 10px", fontSize:11, color:"var(--text-mid)",
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                }}>
+                  {inviteLink}
+                </div>
+                <button
+                  onClick={copyInvite}
+                  style={{
+                    background: inviteCopied ? "var(--green-mid)" : "var(--green-dark)",
+                    border:"none", borderRadius:8, padding:"8px 14px",
+                    fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:700,
+                    color:"white", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                  }}
+                >
+                  {inviteCopied ? "✓ Copied" : "Copy"}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={generateCoachInvite}
+                disabled={inviteLoading}
+                style={{
+                  background:"none", border:"none", padding:0,
+                  fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:600,
+                  color:"var(--green)", cursor:"pointer", textDecoration:"underline",
+                }}
+              >
+                {inviteLoading ? "Generating…" : "Generate a link for your coach →"}
+              </button>
+            )}
+          </div>
+        )}
 
         <button className="new-round-btn" onClick={onNewRound}>
           ⛳ Start new round

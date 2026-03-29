@@ -566,9 +566,10 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
 
     // If invited: create coach_students link and mark invite used
     if (inviteCoach) {
+      const isCoachInvite = inviteCoach.inviteType === "coach";
       await supabase.from("coach_students").insert([{
-        coach_id:   inviteCoach.id,
-        student_id: data.user?.id,
+        coach_id:   isCoachInvite ? data.user?.id : inviteCoach.id,
+        student_id: isCoachInvite ? inviteCoach.id : data.user?.id,
       }]);
       if (inviteCoach.inviteId) {
         await supabase.from("invites").update({
@@ -592,7 +593,10 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
         <div className="invite-badge">
           <span className="invite-badge-icon">🔗</span>
           <div className="invite-badge-text">
-            Invited by <span className="invite-badge-coach">{inviteCoach.name}</span> — your account will be linked automatically.
+            {inviteCoach.inviteType === "coach"
+              ? <>Your student <span className="invite-badge-coach">{inviteCoach.name}</span> will be linked to your account automatically.</>
+              : <>Invited by <span className="invite-badge-coach">{inviteCoach.name}</span> — your account will be linked automatically.</>
+            }
           </div>
         </div>
       )}
@@ -769,7 +773,9 @@ export default function CaddieAuth({ onAuthSuccess }) {
 
   // Read invite code from URL on mount
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("invite");
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("invite");
+    const type = params.get("type"); // "coach" = student inviting coach
     if (!code) return;
     setScreen("signup");
     supabase
@@ -780,12 +786,25 @@ export default function CaddieAuth({ onAuthSuccess }) {
       .single()
       .then(({ data, error }) => {
         if (data && !error) {
-          setInviteCoach({
-            id: data.coach_id,
-            name: `${data.profiles.first_name} ${data.profiles.last_name}`,
-            code,
-            inviteId: data.id,
-          });
+          if (type === "coach") {
+            // Student inviting a coach — coach_id here is actually the student_id
+            setInviteCoach({
+              id: data.coach_id,
+              name: `${data.profiles.first_name} ${data.profiles.last_name}`,
+              code,
+              inviteId: data.id,
+              inviteType: "coach", // coach signing up to connect with student
+            });
+          } else {
+            // Coach inviting a student (normal flow)
+            setInviteCoach({
+              id: data.coach_id,
+              name: `${data.profiles.first_name} ${data.profiles.last_name}`,
+              code,
+              inviteId: data.id,
+              inviteType: "student",
+            });
+          }
         }
       });
   }, []);
