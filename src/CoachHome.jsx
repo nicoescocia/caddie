@@ -268,8 +268,8 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
 // ── ROUND HISTORY ──
 // ── TREND CHART (SVG) ──
 function TrendLine({ data9, data18, metric, label, formatVal, height = 80 }) {
-  const all9  = data9.slice(-10).filter(r => r[metric] != null);
-  const all18 = data18.slice(-10).filter(r => r[metric] != null);
+  const all9  = data9.filter(r => r[metric] != null);
+  const all18 = data18.filter(r => r[metric] != null);
   if (!all9.length && !all18.length) return null;
 
   function sparkline(pts, color, dashed = false) {
@@ -297,8 +297,8 @@ function TrendLine({ data9, data18, metric, label, formatVal, height = 80 }) {
     <div className="trend-chart">
       <div className="trend-chart-title">{label}</div>
       <svg width="100%" viewBox={`0 0 280 ${height}`} style={{overflow:"visible"}}>
-        {sparkline(all9,  "#1A6B4A")}
-        {sparkline(all18, "#C9A84C", true)}
+        {sparkline(all9,  "#1A6B4A", true)}
+        {sparkline(all18, "#C9A84C")}
       </svg>
       {all9.length > 0 && all18.length > 0 && (
         <div className="trend-legend">
@@ -336,8 +336,9 @@ function trendLabel(dir, lowerIsBetter = true) {
 function RoundTrends({ rounds }) {
   const [tab, setTab] = useState("score");
   const scored = rounds.filter(r => r.total_score && r.sent_to_coach);
-  const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(-10);
-  const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(-10);
+  // rounds are newest-first; take the 10 most recent of each type, then reverse for chart display (oldest→newest)
+  const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(0, 10).reverse();
+  const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(0, 10).reverse();
   if (scored.length < 2) return null;
 
   // Enrich with computed metrics
