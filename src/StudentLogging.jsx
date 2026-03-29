@@ -305,7 +305,6 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
   const loggedHoles = holes.filter(h => savedHoles.has(h.n));
   const attempted   = loggedHoles.filter((h,i) => !holeData[holes.indexOf(h)].dna);
   const totalScore  = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].score || 0), 0);
-  const totalPar    = holes.reduce((s, h) => s + h.par, 0);
   const attemptedPar = attempted.reduce((s,h) => s + h.par, 0);
   const allLogged   = savedHoles.size === holes.length;
   const girCount    = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par)).length;
