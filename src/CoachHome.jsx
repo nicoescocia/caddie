@@ -233,7 +233,7 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
               const hasNew = stats.newRounds > 0;
               const thisMonth = stats.thisMonth || 0;
               const last = stats.lastRoundDate;
-              const { currentHcp, avgNetVsPar9, avgNetVsPar18 } = stats;
+              const { avgNetVsPar9, avgNetVsPar18 } = stats;
               function fmtNetVsPar(v) {
                 if (v == null) return null;
                 const s = v.toFixed(1);
@@ -249,7 +249,7 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                     </div>
                     <div className="student-meta">
                       {last ? `Last round: ${fmtDateShort(last)}` : "No rounds yet"}
-                      {currentHcp != null && <span style={{marginLeft:6}}>· Hcp {currentHcp}</span>}
+                      {s.official_handicap != null && <span style={{marginLeft:6}}>· Hcp {Number(s.official_handicap).toFixed(1)}</span>}
                     </div>
                   </div>
                   <div className="student-stats">
@@ -460,7 +460,10 @@ function RoundTrends({ rounds }) {
         const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
         return <TrendLine data9={combined} data18={[]} metric="girPct" label="GIR %" yTicks={[0,25,50,75,100]} formatY={v => v+"%"} height={80} />;
       })()}
-      {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
+      {tab === "putts" && (() => {
+        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
+        return <TrendLine data9={combined} data18={[]} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />;
+      })()}
     </div>
   );
 }
@@ -489,10 +492,11 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
           <div className="sh-info">
             <div className="sh-name">
               {student.first_name} {student.last_name}
-              {(() => {
-                const hcp = scored.find(r => r.handicap != null)?.handicap;
-                return hcp != null ? <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,0.55)",marginLeft:8}}>Hcp {hcp}</span> : null;
-              })()}
+              {student.official_handicap != null && (
+                <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,0.55)",marginLeft:8}}>
+                  Hcp {Number(student.official_handicap).toFixed(1)}
+                </span>
+              )}
             </div>
             <div className="sh-sub">{sentRounds.length} round{sentRounds.length !== 1 ? "s" : ""} sent to coach</div>
           </div>
@@ -535,7 +539,7 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
                       {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
                       {r.handicap != null && (
                         <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                          Hcp {r.handicap}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
                         </div>
                       )}
                     </div>
@@ -589,7 +593,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
 
       const ids = links.map(l => l.student_id);
       const { data: profiles } = await supabase
-        .from("profiles").select("id, first_name, last_name").in("id", ids);
+        .from("profiles").select("id, first_name, last_name, official_handicap").in("id", ids);
       setStudents(profiles || []);
 
       // Load rounds for all students to compute stats

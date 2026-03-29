@@ -86,8 +86,8 @@ function generateHoleDetails(holePar, score, abilityLevel) {
     approach = bands[Math.min(3, Math.floor(abilityLevel * 2 + Math.random() * 2))];
   } else if (holePar === 4) {
     const bands = fairway === "yes"
-      ? ["100–125", "125–150", "150–175"]
-      : ["125–150", "150–175", "175–200"];
+      ? ["100–125", "125–150", "150+"]
+      : ["125–150", "150+"];
     approach = bands[Math.floor(Math.random() * bands.length)];
   } else { // par 5
     const bands = ["50–75", "75–100", "100–125", "125–150"];
@@ -147,7 +147,7 @@ function generateHoleDetails(holePar, score, abilityLevel) {
   return { gir, fairway, approach, shots_inside_50, penalty, putts, putt1, putt2 };
 }
 
-async function insertStudent(firstName, lastName) {
+async function insertStudent(firstName, lastName, officialHandicap = null) {
   const email = `test.${firstName.toLowerCase()}.${lastName.toLowerCase()}@caddie-seed.invalid`;
   const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
     email,
@@ -156,10 +156,27 @@ async function insertStudent(firstName, lastName) {
   });
   if (authErr) throw new Error(`Create auth user ${firstName}: ${authErr.message}`);
   const id = authData.user.id;
+
+  // Base profile upsert (always works)
   const { error } = await supabase
     .from("profiles")
     .upsert({ id, first_name: firstName, last_name: lastName, role: "student" });
   if (error) throw new Error(`Upsert profile ${firstName}: ${error.message}`);
+
+  // Set official_handicap (requires profiles.official_handicap column)
+  if (officialHandicap != null) {
+    const { error: hcpErr } = await supabase
+      .from("profiles")
+      .update({ official_handicap: officialHandicap })
+      .eq("id", id);
+    if (hcpErr) {
+      console.warn(`  ⚠ Could not set official_handicap for ${firstName}: ${hcpErr.message}`);
+      console.warn(`    Run in Supabase SQL editor: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS official_handicap numeric(4,1);`);
+    } else {
+      console.log(`  official_handicap set to ${officialHandicap}`);
+    }
+  }
+
   return id;
 }
 
@@ -290,7 +307,8 @@ async function main() {
   // 2. Insert Jamie (improving: +14 → +8, handicap 14 → 8)
   console.log("\nInserting Jamie Stewart (improving)...");
   await cleanupTestStudent("Jamie", "Stewart");
-  const jamieId       = await insertStudent("Jamie", "Stewart");
+  // Jamie official WHS index: 4.0 (course hcp on rounds ≈ 8, Big Course adds ~4 shots)
+  const jamieId       = await insertStudent("Jamie", "Stewart", 4.0);
   await linkToCoach(jamieId);
   const jamieSchedule = buildRoundSchedule();
   const jamieVsPar    = generateVsParValues(14, 8, 12);
@@ -303,7 +321,8 @@ async function main() {
   // 3. Insert Craig (worsening: +8 → +14, handicap 8 → 14)
   console.log("\nInserting Craig Burns (worsening)...");
   await cleanupTestStudent("Craig", "Burns");
-  const craigId       = await insertStudent("Craig", "Burns");
+  // Craig official WHS index: 10.0 (course hcp on rounds ≈ 14, Big Course adds ~4 shots)
+  const craigId       = await insertStudent("Craig", "Burns", 10.0);
   await linkToCoach(craigId);
   const craigSchedule = buildRoundSchedule();
   const craigVsPar    = generateVsParValues(8, 14, 12);

@@ -321,7 +321,14 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           <div className="ab-left">
             <div className="ab-icon">⛳</div>
             <div>
-              <div className="ab-name">Round received · {studentName}</div>
+              <div className="ab-name">
+                Round received · {studentName}
+                {student?.official_handicap != null && (
+                  <span style={{fontSize:13,fontWeight:400,color:"rgba(255,255,255,0.55)",marginLeft:8}}>
+                    Hcp {Number(student.official_handicap).toFixed(1)}
+                  </span>
+                )}
+              </div>
               <div className="ab-detail">{round.courses?.name || "Golf Course"} · {holes.length} holes · {roundDate}</div>
             </div>
           </div>
@@ -330,7 +337,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             <div className="ab-par">{diff >= 0 ? "+" : ""}{diff} vs par</div>
             {round.handicap != null && (
               <div style={{fontSize:12,color:"rgba(255,255,255,0.45)",marginTop:2}}>
-                Net {totalScore - round.handicap} · Hcp {round.handicap}
+                Net {totalScore - round.handicap} · Course Hcp {Number(round.handicap).toFixed(1)}
               </div>
             )}
           </div>
@@ -484,7 +491,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             </table>
             {/* Grouped avg 1st putt by approach band */}
             {(() => {
-              const bands = ["Under 50","50-75","75-100","100-125","125-150","150+"];
+              const bands = ["Under 50","50–75","75–100","100–125","125–150","150+"];
               const grouped = bands.map(band => {
                 const bandHoles = attempted.filter(h => h.approach === band && h.putt1);
                 if (!bandHoles.length) return null;

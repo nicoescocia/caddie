@@ -262,7 +262,10 @@ function StudentRoundTrends({ rounds }) {
         const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
         return <TrendLine data9={combined} data18={[]} metric="girPct" label="GIR %" yTicks={[0,25,50,75,100]} formatY={v => v+"%"} height={80} />;
       })()}
-      {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
+      {tab === "putts" && (() => {
+        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
+        return <TrendLine data9={combined} data18={[]} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />;
+      })()}
     </div>
   );
 }
@@ -281,7 +284,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   useEffect(() => {
     async function load() {
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
-        supabase.from("profiles").select("first_name, last_name").eq("id", user.id).single(),
+        supabase.from("profiles").select("first_name, last_name, official_handicap").eq("id", user.id).single(),
         supabase.from("rounds").select("*, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
@@ -319,13 +322,14 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   }
 
   async function saveHandicap() {
-    const val = parseInt(hcpInput, 10);
+    const val = parseFloat(hcpInput);
     if (isNaN(val) || val < 0 || val > 54) return;
-    // Update the most recent round that has a handicap, or the most recent round overall
-    const target = rounds.find(r => r.handicap != null) || rounds[0];
-    if (target) {
-      await supabase.from("rounds").update({ handicap: val }).eq("id", target.id);
-      setRounds(prev => prev.map(r => r.id === target.id ? { ...r, handicap: val } : r));
+    const { error } = await supabase
+      .from("profiles")
+      .update({ official_handicap: val })
+      .eq("id", user.id);
+    if (!error) {
+      setProfile(prev => ({ ...prev, official_handicap: val }));
     }
     setHcpEditing(false);
   }
@@ -373,15 +377,15 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           <div className="dash-hero-name" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <span>{profile?.first_name} {profile?.last_name}</span>
             {(() => {
-              const currentHcp = rounds.find(r => r.handicap != null)?.handicap;
+              const officialHcp = profile?.official_handicap;
               if (hcpEditing) return (
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <input
-                    type="number" min="0" max="54" value={hcpInput}
+                    type="number" min="0" max="54" step="0.1" value={hcpInput}
                     onChange={e => setHcpInput(e.target.value)}
                     onKeyDown={e => { if (e.key==="Enter") saveHandicap(); if (e.key==="Escape") setHcpEditing(false); }}
                     autoFocus
-                    style={{width:52,padding:"3px 6px",borderRadius:6,border:"1px solid rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.12)",color:"white",fontFamily:"'Outfit',sans-serif",fontSize:14,textAlign:"center"}}
+                    style={{width:60,padding:"3px 6px",borderRadius:6,border:"1px solid rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.12)",color:"white",fontFamily:"'Outfit',sans-serif",fontSize:14,textAlign:"center"}}
                   />
                   <button onClick={saveHandicap} style={{background:"var(--gold)",border:"none",borderRadius:6,padding:"3px 10px",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:700,color:"var(--green-dark)",cursor:"pointer"}}>Save</button>
                   <button onClick={() => setHcpEditing(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontSize:16,cursor:"pointer",padding:"0 4px"}}>✕</button>
@@ -389,11 +393,11 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               );
               return (
                 <span
-                  onClick={() => { setHcpInput(currentHcp != null ? String(currentHcp) : ""); setHcpEditing(true); }}
+                  onClick={() => { setHcpInput(officialHcp != null ? String(officialHcp) : ""); setHcpEditing(true); }}
                   style={{fontSize:14,color:"rgba(255,255,255,0.6)",cursor:"pointer",display:"flex",alignItems:"center",gap:4,userSelect:"none"}}
-                  title="Edit handicap"
+                  title="Edit WHS index"
                 >
-                  {currentHcp != null ? `Hcp ${currentHcp}` : "Set hcp"}
+                  {officialHcp != null ? `Hcp ${Number(officialHcp).toFixed(1)}` : "Set hcp"}
                   <span style={{fontSize:11,opacity:.7}}>✏️</span>
                 </span>
               );
@@ -510,7 +514,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                     </div>
                     {r.handicap != null && (
                       <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                        Hcp {r.handicap}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                        Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
                       </div>
                     )}
                   </div>
