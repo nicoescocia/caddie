@@ -141,9 +141,11 @@ function TrendLine({ data9, data18, metric, label, height = 80 }) {
 
 function trendDirection(vals) {
   if (vals.length < 3) return null;
-  const recent = vals.slice(-3).reduce((a,b) => a+b) / 3;
-  const older  = vals.slice(0, -3).reduce((a,b) => a+b) / vals.slice(0,-3).length;
-  const delta  = recent - older;
+  const recent    = vals.slice(-3).reduce((a,b) => a+b, 0) / 3;
+  const olderVals = vals.slice(0, -3);
+  if (!olderVals.length) return null;
+  const older = olderVals.reduce((a,b) => a+b, 0) / olderVals.length;
+  const delta = recent - older;
   return Math.abs(delta) < 0.5 ? "stable" : delta < 0 ? "improving" : "worsening";
 }
 
