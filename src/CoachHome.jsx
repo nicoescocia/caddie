@@ -231,8 +231,13 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
               const stats = studentStats[s.id] || {};
               const hasNew = stats.newRounds > 0;
               const thisMonth = stats.thisMonth || 0;
-              const avg = stats.avgScore;
               const last = stats.lastRoundDate;
+              const { currentHcp, avgNetVsPar9, avgNetVsPar18 } = stats;
+              function fmtNetVsPar(v) {
+                if (v == null) return null;
+                const s = v.toFixed(1);
+                return v > 0 ? "+" + s : s;
+              }
               return (
                 <div className="student-card" key={s.id} onClick={() => onSelectStudent(s)}>
                   <div className="student-avatar">{initials(s.first_name, s.last_name)}</div>
@@ -243,13 +248,28 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                     </div>
                     <div className="student-meta">
                       {last ? `Last round: ${fmtDateShort(last)}` : "No rounds yet"}
+                      {currentHcp != null && <span style={{marginLeft:6}}>· Hcp {currentHcp}</span>}
                     </div>
                   </div>
                   <div className="student-stats">
-                    <div className="s-stat">
-                      <div className="s-stat-val">{avg ?? "—"}</div>
-                      <div className="s-stat-lbl">Avg score</div>
-                    </div>
+                    {avgNetVsPar18 != null && (
+                      <div className="s-stat">
+                        <div className="s-stat-val" style={{fontSize:17}}>{fmtNetVsPar(avgNetVsPar18)}</div>
+                        <div className="s-stat-lbl">Net par (18h)</div>
+                      </div>
+                    )}
+                    {avgNetVsPar9 != null && (
+                      <div className="s-stat">
+                        <div className="s-stat-val" style={{fontSize:17}}>{fmtNetVsPar(avgNetVsPar9)}</div>
+                        <div className="s-stat-lbl">Net par (9h)</div>
+                      </div>
+                    )}
+                    {avgNetVsPar18 == null && avgNetVsPar9 == null && (
+                      <div className="s-stat">
+                        <div className="s-stat-val">—</div>
+                        <div className="s-stat-lbl">Net vs par</div>
+                      </div>
+                    )}
                     <div className="s-stat">
                       <div className="s-stat-val">{thisMonth}</div>
                       <div className="s-stat-lbl">This month</div>
@@ -459,8 +479,10 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
                     <div className="round-score-block">
                       <div className="round-score-num">{r.total_score ?? "—"}</div>
                       {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
-                      {r.total_score && r.handicap != null && (
-                        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>Net {r.total_score - r.handicap}</div>
+                      {r.handicap != null && (
+                        <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                          Hcp {r.handicap}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -519,7 +541,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
       // Load rounds for all students to compute stats
       const { data: allRounds } = await supabase
         .from("rounds")
-        .select("id, student_id, total_score, handicap, sent_to_coach, created_at")
+        .select("id, student_id, total_score, handicap, holes_played, course_id, sent_to_coach, created_at")
         .in("student_id", ids)
         .eq("sent_to_coach", true)
         .order("created_at", { ascending: false });
@@ -531,13 +553,29 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
 
       (profiles || []).forEach(p => {
         const pRounds = (allRounds || []).filter(r => r.student_id === p.id);
-        const scores  = pRounds.filter(r => r.total_score).map(r => r.total_score);
+        const scored  = pRounds.filter(r => r.total_score);
+
+        // Current handicap = most recent round that has one
+        const currentHcp = pRounds.find(r => r.handicap != null)?.handicap ?? null;
+
+        // Avg net vs par, split by 9-hole and 18-hole
+        const scored9  = scored.filter(r => (r.holes_played || 9) <= 9 && r.handicap != null);
+        const scored18 = scored.filter(r => (r.holes_played || 9) > 9  && r.handicap != null);
+        const avgNetVsPar9  = scored9.length
+          ? scored9.reduce((s, r) => s + ((r.total_score - r.handicap) - getCoursePar(r)), 0) / scored9.length
+          : null;
+        const avgNetVsPar18 = scored18.length
+          ? scored18.reduce((s, r) => s + ((r.total_score - r.handicap) - getCoursePar(r)), 0) / scored18.length
+          : null;
+
         stats[p.id] = {
-          totalRounds:  pRounds.length,
-          avgScore:     scores.length ? Math.round(scores.reduce((a, b) => a + b) / scores.length) : null,
-          lastRoundDate: pRounds[0]?.created_at || null,
-          thisMonth:    pRounds.filter(r => r.created_at >= monthStart).length,
-          newRounds:    pRounds.filter(r => {
+          totalRounds:    pRounds.length,
+          currentHcp,
+          avgNetVsPar9,
+          avgNetVsPar18,
+          lastRoundDate:  pRounds[0]?.created_at || null,
+          thisMonth:      pRounds.filter(r => r.created_at >= monthStart).length,
+          newRounds:      pRounds.filter(r => {
             const d = new Date(r.created_at);
             const daysSince = (now - d) / (1000 * 60 * 60 * 24);
             return daysSince <= 2;

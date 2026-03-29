@@ -420,8 +420,10 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                     <div className={`round-score-par ${diff < 0 ? "under" : diff > 0 ? "over" : ""}`}>
                       {r.total_score ? (diff === 0 ? "Level par" : (diff > 0 ? "+" : "") + diff + " vs par") : "In progress"}
                     </div>
-                    {r.total_score && r.handicap != null && (
-                      <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>Net {r.total_score - r.handicap}</div>
+                    {r.handicap != null && (
+                      <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                        Hcp {r.handicap}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                      </div>
                     )}
                   </div>
                   <button className="delete-btn" onClick={e => deleteRound(e, r.id)} title="Delete round">🗑</button>
