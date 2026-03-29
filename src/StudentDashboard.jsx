@@ -84,11 +84,19 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name").eq("id", user.id).single(),
         supabase.from("rounds").select("*, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("coach_students").select("coach_id, profiles!coach_students_coach_id_fkey(first_name, last_name)").eq("student_id", user.id).single(),
+        supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
       setProfile(prof);
       setRounds(rds || []);
-      if (link?.profiles) setCoach(link.profiles);
+      // Fetch coach profile separately if link exists
+      if (link?.coach_id) {
+        const { data: coachProf } = await supabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", link.coach_id)
+          .single();
+        if (coachProf) setCoach(coachProf);
+      }
       setLoading(false);
     }
     load();
