@@ -249,8 +249,8 @@ const APPROACH_BANDS = [
   { v:"Under 50", u:"yds" }, { v:"50-75", u:"yds" }, { v:"75-100", u:"yds" },
   { v:"100-125", u:"yds" }, { v:"125-150", u:"yds" }, { v:"150+", u:"yds" },
 ];
-const PUTT_DIST  = [{v:"3",u:"ft"},{v:"6",u:"ft"},{v:"9",u:"ft"},{v:"12",u:"ft"},{v:"15",u:"ft"},{v:"20",u:"ft"},{v:"25",u:"ft"},{v:"30+",u:"ft"}];
-const PUTT2_DIST = [{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"5",u:"ft"},{v:"6",u:"ft"},{v:"7+",u:"ft"}];
+const PUTT_DIST  = [{v:"<3",u:"ft"},{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"6",u:"ft"},{v:"9",u:"ft"},{v:"12",u:"ft"},{v:"15",u:"ft"},{v:"20",u:"ft"},{v:"25",u:"ft"},{v:"30+",u:"ft"}];
+const PUTT2_DIST = [{v:"<1",u:"ft"},{v:"1",u:"ft"},{v:"2",u:"ft"},{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"5",u:"ft"},{v:"6",u:"ft"},{v:"7+",u:"ft"}];
 // eslint-disable-next-line no-unused-vars
 const PEN_OPTS   = [
   {icon:"checkmark",label:"None",type:"none"},
@@ -1149,9 +1149,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         {!d.pickedUp && !d.dna && show3putt && (
           <div className="sec">
             <div className="sec-label">Second putt distance <span className="badge conditional">3-putt</span></div>
-            <div className="tap-grid c5">
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
               {PUTT2_DIST.map(p => (
-                <button key={p.v} className={"tap-btn " + (d.putt2 === p.v ? "sel" : "")} onClick={() => update({ putt2: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
+                <button key={p.v} className={"tap-btn " + (d.putt2 === p.v ? "sel" : "")} style={{minWidth:52,flexShrink:0}} onClick={() => update({ putt2: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
               ))}
             </div>
           </div>
