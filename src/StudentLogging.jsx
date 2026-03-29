@@ -48,6 +48,12 @@ const css = `
   .gir-auto { font-size:10px; color:rgba(255,255,255,0.25); }
 
   /* ── INPUTS ── */
+  /* ── SG REASON ── */
+  .sg-reason-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .sg-chip { background:white; border:1.5px solid var(--border); border-radius:20px; padding:6px 12px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:var(--text-mid); cursor:pointer; transition:all .15s; }
+  .sg-chip:hover { border-color:var(--green-light); }
+  .sg-chip.sel { background:#7B4FBF; border-color:#7B4FBF; color:white; }
+
   /* ── SUMMARY SCREEN ── */
   .sum-wrap { max-width:420px; margin:0 auto; padding:16px 16px 80px; }
   .sum-title { font-family:'Playfair Display',serif; font-size:22px; color:var(--text); margin-bottom:6px; }
@@ -64,6 +70,18 @@ const css = `
   .sum-chip.sel { background:var(--green-dark); border-color:var(--green-dark); color:white; }
   .sum-note { width:100%; background:var(--bg); border:1.5px solid var(--border); border-radius:11px; padding:12px 14px; font-family:'Outfit',sans-serif; font-size:14px; color:var(--text); resize:none; outline:none; line-height:1.6; }
   .sum-note:focus { border-color:var(--green-light); background:white; }
+
+  /* ── STUDENT STATS ── */
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .stat-card { background:white; border:1px solid var(--border); border-radius:14px; padding:14px 16px; }
+  .stat-card-val { font-family:'Playfair Display',serif; font-size:32px; line-height:1; color:var(--text); }
+  .stat-card-val.ok   { color:var(--green-mid); }
+  .stat-card-val.warn { color:var(--orange); }
+  .stat-card-val.bad  { color:var(--red); }
+  .stat-card-lbl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-top:5px; }
+  .stat-card-sub { font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .edit-holes-btn { width:100%; background:white; border:1.5px solid var(--border); border-radius:12px; padding:12px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:var(--text-mid); cursor:pointer; text-align:left; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; transition:all .15s; }
+  .edit-holes-btn:hover { border-color:var(--green-light); color:var(--green); }
 
   /* ── PICKED UP / DNA ── */
   .puck-row { display:flex; gap:8px; margin-bottom:14px; justify-content:flex-end; }
@@ -226,7 +244,7 @@ const APPROACH_BANDS = [
   { v:"Under 50", u:"yds" }, { v:"50-75", u:"yds" }, { v:"75-100", u:"yds" },
   { v:"100-125", u:"yds" }, { v:"125-150", u:"yds" }, { v:"150+", u:"yds" },
 ];
-const PUTT_DIST  = [{v:"3",u:"ft"},{v:"6",u:"ft"},{v:"12",u:"ft"},{v:"20",u:"ft"},{v:"30+",u:"ft"}];
+const PUTT_DIST  = [{v:"3",u:"ft"},{v:"6",u:"ft"},{v:"9",u:"ft"},{v:"12",u:"ft"},{v:"15",u:"ft"},{v:"20",u:"ft"},{v:"25",u:"ft"},{v:"30+",u:"ft"}];
 const PUTT2_DIST = [{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"5",u:"ft"},{v:"6",u:"ft"},{v:"7+",u:"ft"}];
 // eslint-disable-next-line no-unused-vars
 const PEN_OPTS   = [
@@ -242,13 +260,13 @@ function calcGIR(score, putts, par) {
   return (score - putts) <= (par - 2);
 }
 function emptyHole(par) {
-  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, putt1: null, putt2: null, penalty: "None", pickedUp: false, dna: false };
+  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, penalty: "None", pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
   return {
     score: row.score, putts: row.putts, fairway: row.fairway,
     approach: row.approach, shotsInside50: row.shots_inside_50,
-    putt1: row.putt1, putt2: row.putt2, penalty: row.penalty || "None",
+    putt1: row.putt1, putt2: row.putt2, penalty: row.penalty || "None", sgReason: row.sg_reason || null,
     pickedUp: row.picked_up || false, dna: row.dna || false,
   };
 }
@@ -283,12 +301,25 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 
 // ── OVERVIEW SCREEN ──
 function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isEditMode, onEditHole, onFinish, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, studentNote }) {
+  const [showHoles, setShowHoles] = useState(false);
   const loggedHoles = holes.filter(h => savedHoles.has(h.n));
-  const totalScore  = loggedHoles.reduce((s, h, i) => s + (holeData[holes.indexOf(h)].score || 0), 0);
+  const attempted   = loggedHoles.filter((h,i) => !holeData[holes.indexOf(h)].dna);
+  const totalScore  = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].score || 0), 0);
   const totalPar    = holes.reduce((s, h) => s + h.par, 0);
+  const attemptedPar = attempted.reduce((s,h) => s + h.par, 0);
   const allLogged   = savedHoles.size === holes.length;
-  const girCount    = holes.filter((h, i) => savedHoles.has(h.n) && calcGIR(holeData[i].score, holeData[i].putts, h.par)).length;
-  const tpCount     = holes.filter((h, i) => savedHoles.has(h.n) && holeData[i].putts >= 3).length;
+  const girCount    = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par)).length;
+  const fwHoles     = attempted.filter(h => h.par >= 4);
+  const fwHit       = fwHoles.filter(h => holeData[holes.indexOf(h)].fairway === "yes").length;
+  const totalPutts  = attempted.reduce((s,h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
+  const avgPutts    = attempted.length ? (totalPutts / attempted.length).toFixed(1) : null;
+  const tpCount     = attempted.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
+  const penalties   = loggedHoles.filter(h => { const p = holeData[holes.indexOf(h)].penalty; return p && p !== "None"; }).length;
+  const missedGIR   = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
+  const upAndDown   = missedGIR.filter(h => holeData[holes.indexOf(h)].putts <= 1 && holeData[holes.indexOf(h)].score !== null).length;
+  const scramblePct = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
+
+  const diff = totalScore - attemptedPar;
 
   return (
     <>
@@ -296,33 +327,64 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
       <TopBar onSignOut={onSignOut} onHome={onBackToDashboard} rightBtn={null} />
       <div className="ov-wrap">
 
+        {/* Score header */}
         <div className="ov-summary-card">
           <div className="ov-summary-title">{courseName}</div>
           <div className="ov-summary-stats">
             <div className="ov-stat">
-              <div className="ov-stat-val">{allLogged ? totalScore : (totalScore || "-")}</div>
-              <div className="ov-stat-lbl">{allLogged ? `${totalScore - totalPar > 0 ? "+" : ""}${totalScore - totalPar} vs par` : "total so far"}</div>
+              <div className="ov-stat-val">{attempted.length > 0 ? totalScore : "—"}</div>
+              <div className="ov-stat-lbl">{attempted.length > 0 ? `${diff > 0 ? "+" : ""}${diff} vs par` : "no holes yet"}</div>
             </div>
-            {handicap !== "" && allLogged && (
+            {handicap !== "" && attempted.length > 0 && (
               <div className="ov-stat">
                 <div className="ov-stat-val">{totalScore - parseInt(handicap)}</div>
                 <div className="ov-stat-lbl">net score</div>
               </div>
             )}
-            <div className="ov-stat">
-              <div className="ov-stat-val">{girCount}/{loggedHoles.length}</div>
-              <div className="ov-stat-lbl">GIR</div>
-            </div>
-            <div className="ov-stat">
-              <div className="ov-stat-val">{tpCount}</div>
-              <div className="ov-stat-lbl">3-putts</div>
-            </div>
           </div>
         </div>
 
-        <div className="ov-section-label">Tap any hole to log or edit</div>
+        {/* Stats grid */}
+        {attempted.length > 0 && (
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className={"stat-card-val " + (girCount/attempted.length > 0.55 ? "ok" : girCount/attempted.length > 0.33 ? "warn" : "bad")}>{girCount}/{attempted.length}</div>
+              <div className="stat-card-lbl">GIR</div>
+            </div>
+            <div className="stat-card">
+              <div className={"stat-card-val " + (fwHoles.length > 0 ? (fwHit/fwHoles.length > 0.6 ? "ok" : fwHit/fwHoles.length > 0.4 ? "warn" : "bad") : "")}>{fwHoles.length > 0 ? `${fwHit}/${fwHoles.length}` : "—"}</div>
+              <div className="stat-card-lbl">Fairways</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-val">{totalPutts}</div>
+              <div className="stat-card-lbl">Total putts</div>
+              <div className="stat-card-sub">avg {avgPutts} per hole</div>
+            </div>
+            <div className="stat-card">
+              <div className={"stat-card-val " + (tpCount === 0 ? "ok" : tpCount <= 1 ? "warn" : "bad")}>{tpCount}</div>
+              <div className="stat-card-lbl">3-putts</div>
+            </div>
+            <div className="stat-card">
+              <div className={"stat-card-val " + (scramblePct != null ? (scramblePct >= 50 ? "ok" : scramblePct >= 30 ? "warn" : "bad") : "")}>{scramblePct != null ? scramblePct + "%" : "—"}</div>
+              <div className="stat-card-lbl">Scrambling</div>
+              <div className="stat-card-sub">{upAndDown}/{missedGIR.length} up & down</div>
+            </div>
+            <div className="stat-card">
+              <div className={"stat-card-val " + (penalties === 0 ? "ok" : penalties <= 1 ? "warn" : "bad")}>{penalties}</div>
+              <div className="stat-card-lbl">Penalties</div>
+            </div>
+          </div>
+        )}
 
-        {holes.map((hole, i) => {
+        {/* Holes toggle */}
+        <button className="edit-holes-btn" onClick={() => setShowHoles(s => !s)}>
+          <span>🏌️ {showHoles ? "Hide holes" : "View / edit holes"}</span>
+          <span style={{fontSize:16}}>{showHoles ? "▲" : "▼"}</span>
+        </button>
+
+        {showHoles && <div style={{marginBottom:0}}>
+          <div className="ov-section-label" style={{marginTop:4,marginBottom:10}}>Tap any hole to log or edit</div>
+          {holes.map((hole, i) => {
           const hd = holeData[i];
           const logged = savedHoles.has(hole.n);
           const gir = calcGIR(hd.score, hd.putts, hole.par);
@@ -388,7 +450,8 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
               )}
             </div>
           );
-        })}
+          })}
+        </div>}
 
         {!allLogged && savedHoles.size > 0 && (
           <button className="ov-finish-btn" style={{background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}} onClick={() => onEditHole(savedHoles.size)}>
@@ -706,6 +769,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       putt1: hole.dna || hole.pickedUp ? null : hole.putt1,
       putt2: hole.dna || hole.pickedUp ? null : hole.putt2,
       penalty: hole.dna || hole.pickedUp ? "None" : hole.penalty || "None",
+      sg_reason: hole.dna || hole.pickedUp ? null : hole.sgReason || null,
       picked_up: hole.pickedUp || false,
       dna: hole.dna || false,
     };
@@ -913,7 +977,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
               : gir
                 ? <div className="gir-badge yes">Green in Regulation</div>
                 : <div className="gir-badge no">Missed GIR</div>}
-            <div className="gir-auto">auto-calculated</div>
+
           </div>
         </div>
 
@@ -998,9 +1062,23 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           <div className="sec">
             <div className="sec-label">Shots inside 50 yds <span className="badge auto">not including putts</span></div>
             <div className="stepper" style={{maxWidth:180}}>
-              <button className="step-btn" onClick={() => update({ shotsInside50: Math.max(1, (d.shotsInside50||1) - 1) })} disabled={(d.shotsInside50||1) <= 1}>-</button>
+              <button className="step-btn" onClick={() => update({ shotsInside50: Math.max(1, (d.shotsInside50||1) - 1), sgReason: (d.shotsInside50||1) <= 2 ? null : d.sgReason })} disabled={(d.shotsInside50||1) <= 1}>-</button>
               <div className="step-val par">{d.shotsInside50 || 1}</div>
               <button className="step-btn" onClick={() => update({ shotsInside50: (d.shotsInside50||1) + 1 })}>+</button>
+            </div>
+          </div>
+        )}
+        {!d.pickedUp && !d.dna && (d.shotsInside50 || 0) >= 2 && (
+          <div className="sec">
+            <div className="sec-label">Why the extra shots? <span className="badge conditional">optional</span></div>
+            <div className="sg-reason-grid">
+              {["Bunker","Heavy rough","Chunked","Thinned/topped","Poor aim","Distance control"].map(r => (
+                <button
+                  key={r}
+                  className={"sg-chip" + (d.sgReason === r ? " sel" : "")}
+                  onClick={() => update({ sgReason: d.sgReason === r ? null : r })}
+                >{r}</button>
+              ))}
             </div>
           </div>
         )}
@@ -1008,7 +1086,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         {!d.pickedUp && !d.dna && d.putts > 0 && (
           <div className="sec">
             <div className="sec-label">First putt distance</div>
-            <div className="tap-grid c5">
+            <div className="tap-grid c4">
               {PUTT_DIST.map(p => (
                 <button key={p.v} className={"tap-btn " + (d.putt1 === p.v ? "sel" : "")} onClick={() => update({ putt1: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
               ))}

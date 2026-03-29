@@ -380,29 +380,27 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           {/* Scorecard */}
           <div className="ccard">
             <div className="cc-title">Scorecard</div>
-            <div className="sc-row hdr">
-              <div>Hole</div><div>Score</div><div>Putts</div><div>GIR</div><div>FW</div><div>Miss</div><div>Penalty</div>
+            <div className="sc-row hdr" style={{gridTemplateColumns:"36px 1fr 44px 44px 70px 70px"}}>
+              <div>Hole</div><div>Score</div><div>Putts</div><div>GIR</div><div>Fairway</div><div>Penalty</div>
             </div>
             {holes.map(h => {
               const cls = scoreClass(h.score, h.par);
-              const fwHtml = h.par >= 4
-                ? h.fairway === "yes" ? "✅"
-                  : h.fairway === "left" ? <span className="miss-tag left">←L</span>
-                  : h.fairway === "right" ? <span className="miss-tag right">R→</span>
-                  : "—"
-                : <span style={{color:"#CCC"}}>—</span>;
+              const fwCell = h.par >= 4
+                ? h.fairway === "yes"
+                  ? <span style={{color:"var(--green-mid)",fontWeight:600}}>✅ Hit</span>
+                  : h.fairway === "left"
+                    ? <span className="miss-tag left">← Miss left</span>
+                  : h.fairway === "right"
+                    ? <span className="miss-tag right">Miss right →</span>
+                  : <span style={{color:"#CCC"}}>—</span>
+                : <span style={{color:"#CCC"}}>Par 3</span>;
               return (
-                <div className="sc-row" key={h.hole_number}>
+                <div className="sc-row" key={h.hole_number} style={{gridTemplateColumns:"36px 1fr 44px 44px 70px 70px"}}>
                   <div style={{fontWeight:700}}>H{h.hole_number}</div>
-                  <div><span className={`score-notation ${cls}`}>{h.score}</span></div>
-                  <div style={{textAlign:"center",fontWeight:h.putts>=3?700:400,color:h.putts>=3?"var(--red)":"inherit"}}>{h.putts}{h.putts>=3?" ⚠️":""}</div>
-                  <div style={{textAlign:"center"}}>{h.gir ? "✅" : "❌"}</div>
-                  <div style={{textAlign:"center"}}>{fwHtml}</div>
-                  <div style={{textAlign:"center"}}>
-                    {h.fairway && h.fairway !== "yes"
-                      ? <span className={`miss-tag ${h.fairway}`}>{h.fairway === "left" ? "←" : "→"}</span>
-                      : <span style={{color:"#CCC"}}>—</span>}
-                  </div>
+                  <div><span className={`score-notation ${cls}`}>{h.dna ? "—" : h.pickedUp ? "PU" : h.score}</span></div>
+                  <div style={{textAlign:"center",fontWeight:h.putts>=3?700:400,color:h.putts>=3?"var(--red)":"inherit"}}>{h.dna || h.pickedUp ? "—" : h.putts}{h.putts>=3&&!h.dna&&!h.pickedUp?" ⚠️":""}</div>
+                  <div style={{textAlign:"center"}}>{h.dna ? "—" : h.gir ? "✅" : "❌"}</div>
+                  <div style={{fontSize:11}}>{fwCell}</div>
                   <div style={{fontSize:12,color:h.penalty&&h.penalty!=="None"?"var(--orange)":"var(--text-dim)"}}>{h.penalty||"None"}</div>
                 </div>
               );
@@ -484,6 +482,34 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 })}
               </tbody>
             </table>
+            {/* Grouped avg 1st putt by approach band */}
+            {(() => {
+              const bands = ["Under 50","50-75","75-100","100-125","125-150","150+"];
+              const grouped = bands.map(band => {
+                const bandHoles = attempted.filter(h => h.approach === band && h.putt1);
+                if (!bandHoles.length) return null;
+                const avg = Math.round(bandHoles.reduce((s,h) => s + parseFt(h.putt1), 0) / bandHoles.length);
+                return { band, avg, count: bandHoles.length };
+              }).filter(Boolean);
+              if (!grouped.length) return null;
+              return (
+                <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--border)"}}>
+                  <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:10}}>
+                    Avg 1st putt distance by approach
+                  </div>
+                  {grouped.map(g => (
+                    <div key={g.band} style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+                      <div style={{fontSize:12,color:"var(--text-mid)",width:80,flexShrink:0}}>{g.band} yds</div>
+                      <div style={{flex:1,height:6,background:"#EEE",borderRadius:3,overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:3,background:g.avg>20?"var(--red)":g.avg>14?"var(--orange)":"var(--green-light)",width:Math.min(100,Math.round(g.avg/35*100))+"%"}} />
+                      </div>
+                      <div style={{fontSize:13,fontWeight:700,color:"var(--text)",width:36,textAlign:"right"}}>{g.avg}ft</div>
+                      <div style={{fontSize:11,color:"var(--text-dim)",width:28}}>×{g.count}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <div className="ai-box">
               <div className="ai-label">✦ AI Coach Analysis</div>
               {aiPutting
@@ -522,7 +548,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
               <>
                 <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:8}}>Shots inside 50 yds (missed GIR)</div>
                 <table className="sg-table">
-                  <thead><tr><th>Hole</th><th>Approach</th><th>Shots ≤50 yds</th><th>1st putt</th></tr></thead>
+                  <thead><tr><th>Hole</th><th>Approach</th><th>Shots ≤50 yds</th><th>Reason</th><th>1st putt</th></tr></thead>
                   <tbody>
                     {missedGIR.map(h => {
                       const si = h.shots_inside_50 || 1;
@@ -532,6 +558,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                           <td>H{h.hole_number}</td>
                           <td>{h.approach || "—"}</td>
                           <td><span style={{fontWeight:700,color:col,fontSize:15}}>{si}</span></td>
+                          <td style={{fontSize:11,color:"var(--text-mid)"}}>{h.sg_reason || "—"}</td>
                           <td>{h.putt1 ? h.putt1 : "—"}</td>
                         </tr>
                       );
