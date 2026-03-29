@@ -564,13 +564,15 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
       role,
     }]);
 
-    // If invited: create coach_students link and mark invite used
+    // If invited: create coach_students link via RPC (bypasses RLS timing issue)
     if (inviteCoach) {
       const isCoachInvite = inviteCoach.inviteType === "coach";
-      await supabase.from("coach_students").insert([{
-        coach_id:   isCoachInvite ? data.user?.id : inviteCoach.id,
-        student_id: isCoachInvite ? inviteCoach.id : data.user?.id,
-      }]);
+      const coachId   = isCoachInvite ? data.user?.id : inviteCoach.id;
+      const studentId = isCoachInvite ? inviteCoach.id : data.user?.id;
+      await supabase.rpc("link_coach_student", {
+        p_coach_id:   coachId,
+        p_student_id: studentId,
+      });
       if (inviteCoach.inviteId) {
         await supabase.from("invites").update({
           used_by: data.user?.id,
