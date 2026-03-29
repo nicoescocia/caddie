@@ -519,7 +519,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
       // Load rounds for all students to compute stats
       const { data: allRounds } = await supabase
         .from("rounds")
-        .select("id, student_id, total_score, sent_to_coach, created_at")
+        .select("id, student_id, total_score, handicap, sent_to_coach, created_at")
         .in("student_id", ids)
         .eq("sent_to_coach", true)
         .order("created_at", { ascending: false });
