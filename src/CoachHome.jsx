@@ -135,18 +135,21 @@ function parDiff(score, round) {
 }
 
 // ── STUDENT LIST (coach home) ──
-function StudentList({ coachProfile, students, studentStats, onSelectStudent, onSignOut }) {
+function StudentList({ coachProfile, user, students, studentStats, onSelectStudent, onSignOut }) {
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   async function generateInvite() {
-    if (!coachProfile?.id) return;
+    const coachId = user?.id || coachProfile?.id;
+    if (!coachId) return;
     setInviteLoading(true);
     const code = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const { error } = await supabase.from("invites").insert([{ code, coach_id: coachProfile.id }]);
+    const { error } = await supabase.from("invites").insert([{ code, coach_id: coachId }]);
     if (!error) {
       setInviteLink(`${window.location.origin}?invite=${code}`);
+    } else {
+      console.error("Invite insert error:", error.message);
     }
     setInviteLoading(false);
   }
@@ -496,6 +499,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
   return (
     <StudentList
       coachProfile={coachProfile}
+      user={user}
       students={students}
       studentStats={studentStats}
       onSelectStudent={handleSelectStudent}
