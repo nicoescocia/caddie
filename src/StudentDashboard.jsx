@@ -57,6 +57,25 @@ const css = `
   @keyframes spin { to{transform:rotate(360deg)} }
   .delete-btn { background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px; transition:all .15s; flex-shrink:0; }
   .delete-btn:hover { background:#FEF0F0; color:var(--red); }
+
+  .trends-wrap { margin-bottom:16px; }
+  .trends-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+  .trends-tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .trend-tab { background:white; border:1.5px solid var(--border); border-radius:8px; padding:5px 12px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s; }
+  .trend-tab.active { background:var(--green-dark); border-color:var(--green-dark); color:white; }
+  .trend-chart { background:white; border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; }
+  .trend-chart-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:10px; }
+  .trend-legend { display:flex; gap:14px; margin-top:8px; }
+  .trend-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-dim); }
+  .trend-legend-dot { width:8px; height:8px; border-radius:50%; }
+  .trend-summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px; }
+  .trend-stat { background:white; border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+  .trend-stat-val { font-family:'Playfair Display',serif; font-size:22px; color:var(--text); line-height:1; }
+  .trend-stat-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-top:3px; }
+  .trend-direction { font-size:10px; font-weight:700; margin-top:2px; }
+  .trend-direction.improving { color:var(--green-mid); }
+  .trend-direction.worsening { color:var(--red); }
+  .trend-direction.stable { color:var(--text-dim); }
 `;
 
 // Course pars — used to calculate vs-par stats per round
@@ -68,6 +87,135 @@ function getCoursePar(round) {
   if (round.course_id && COURSE_PAR[round.course_id]) return COURSE_PAR[round.course_id];
   // Fallback: guess from holes_played
   return round.holes_played === 18 ? 68 : 32;
+}
+
+// ── TREND HELPERS ──
+function TrendLine({ data9, data18, metric, label, height = 80 }) {
+  const all9  = data9.slice(-10).filter(r => r[metric] != null);
+  const all18 = data18.slice(-10).filter(r => r[metric] != null);
+  if (!all9.length && !all18.length) return null;
+
+  function sparkline(pts, color, dashed = false) {
+    if (pts.length < 2) return null;
+    const vals = pts.map(p => p[metric]);
+    const min  = Math.min(...vals);
+    const max  = Math.max(...vals);
+    const range = max - min || 1;
+    const w = 280, h = height;
+    const xs = pts.map((_, i) => (i / (pts.length - 1)) * w);
+    const ys = vals.map(v => h - ((v - min) / range) * (h - 10) - 5);
+    const d  = xs.map((x, i) => `${i === 0 ? "M" : "L"} ${x} ${ys[i]}`).join(" ");
+    return (
+      <>
+        <path d={d} fill="none" stroke={color} strokeWidth={2}
+          strokeDasharray={dashed ? "5,3" : "none"} strokeLinecap="round" strokeLinejoin="round" />
+        {pts.map((_, i) => (
+          <circle key={i} cx={xs[i]} cy={ys[i]} r={3} fill={color} />
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <div className="trend-chart">
+      <div className="trend-chart-title">{label}</div>
+      <svg width="100%" viewBox={`0 0 280 ${height}`} style={{overflow:"visible"}}>
+        {sparkline(all9,  "#1A6B4A")}
+        {sparkline(all18, "#C9A84C", true)}
+      </svg>
+      {all9.length > 0 && all18.length > 0 && (
+        <div className="trend-legend">
+          <div className="trend-legend-item">
+            <div className="trend-legend-dot" style={{background:"#1A6B4A"}} />
+            9 holes
+          </div>
+          <div className="trend-legend-item">
+            <div className="trend-legend-dot" style={{background:"#C9A84C"}} />
+            18 holes
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function trendDirection(vals) {
+  if (vals.length < 3) return null;
+  const recent = vals.slice(-3).reduce((a,b) => a+b) / 3;
+  const older  = vals.slice(0, -3).reduce((a,b) => a+b) / vals.slice(0,-3).length;
+  const delta  = recent - older;
+  return Math.abs(delta) < 0.5 ? "stable" : delta < 0 ? "improving" : "worsening";
+}
+
+function trendLabel(dir, lowerIsBetter = true) {
+  if (!dir) return null;
+  if (dir === "stable") return { text: "Stable", cls: "stable" };
+  const improving = lowerIsBetter ? dir === "improving" : dir === "worsening";
+  return improving
+    ? { text: "↑ Improving", cls: "improving" }
+    : { text: "↓ Worsening", cls: "worsening" };
+}
+
+function StudentRoundTrends({ rounds }) {
+  const [tab, setTab] = useState("score");
+  const scored = rounds.filter(r => r.total_score);
+  const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(-10);
+  const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(-10);
+  if (scored.length < 2) return null;
+
+  function enrich(rs) {
+    return rs.map(r => ({
+      ...r,
+      vsPar:   r.total_score - getCoursePar(r),
+      girPct:  r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+      tpCount: r.three_putt_count,
+    }));
+  }
+  const e9  = enrich(r9);
+  const e18 = enrich(r18);
+
+  const allScored  = [...e9, ...e18];
+  const scoreDiffs = allScored.map(r => r.vsPar);
+  const dir = trendDirection(scoreDiffs);
+  const tl  = trendLabel(dir, true);
+  const avgVsPar  = scoreDiffs.length ? Math.round(scoreDiffs.reduce((a,b)=>a+b)/scoreDiffs.length) : null;
+  const bestVsPar = scoreDiffs.length ? Math.min(...scoreDiffs) : null;
+
+  return (
+    <div className="trends-wrap">
+      <div className="trends-title">
+        Trends — last {Math.min(scored.length, 10)} rounds
+        {tl && <span className={"trend-direction " + tl.cls}>{tl.text}</span>}
+      </div>
+
+      <div className="trend-summary">
+        <div className="trend-stat">
+          <div className="trend-stat-val">{avgVsPar != null ? (avgVsPar > 0 ? "+"+avgVsPar : avgVsPar === 0 ? "E" : avgVsPar) : "—"}</div>
+          <div className="trend-stat-lbl">Avg vs par</div>
+        </div>
+        <div className="trend-stat">
+          <div className="trend-stat-val">{bestVsPar != null ? (bestVsPar > 0 ? "+"+bestVsPar : bestVsPar === 0 ? "E" : bestVsPar) : "—"}</div>
+          <div className="trend-stat-lbl">Best</div>
+        </div>
+        <div className="trend-stat">
+          <div className="trend-stat-val">{scored.length}</div>
+          <div className="trend-stat-lbl">Rounds</div>
+        </div>
+      </div>
+
+      <div className="trends-tabs">
+        {["score","gir","putts"].map(t => (
+          <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
+            {t === "score" ? "Score" : t === "gir" ? "GIR %" : "3-Putts"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "score" && <TrendLine data9={e9} data18={e18} metric="vsPar" label="Score vs par" />}
+      {tab === "gir"   && <TrendLine data9={e9} data18={e18} metric="girPct" label="GIR %" height={70} />}
+      {tab === "putts" && <TrendLine data9={e9} data18={e18} metric="tpCount" label="3-putts per round" height={70} />}
+    </div>
+  );
 }
 
 export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut }) {
@@ -177,6 +325,8 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
             </div>
           </div>
         </div>
+
+        <StudentRoundTrends rounds={completedRounds} />
 
         {/* Coach card */}
         {coach ? (
