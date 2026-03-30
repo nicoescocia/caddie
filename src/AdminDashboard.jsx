@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { supabase } from "./supabaseClient";
 
 export default function AdminDashboard({ user, onSignOut }) {
   return (
