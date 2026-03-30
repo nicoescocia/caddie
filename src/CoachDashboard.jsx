@@ -211,8 +211,8 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
 
     try {
       const [r1, r2] = await Promise.all([
-        callAI(`You are an expert golf coach. Analyse this student's round and give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\nAvg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
-        callAI(`You are an expert golf coach. Analyse this student's short game and fairway miss data. Shots inside 50yds: 1 = good up-and-down, 2+ = struggling. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\nAvg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Shots inside 50yds: 1 = good up-and-down, 2+ = struggling. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
       ]);
       setAiPutting(r1);
       setAiSg(r2);
@@ -262,8 +262,9 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const missR      = fwHoles.filter(h => h.fairway === "right").length;
   const maxMiss    = Math.max(missL, missR, 1);
   const missedGIR  = attempted.filter(h => !h.gir && !h.picked_up);
-  const avgSI    = missedGIR.length
-    ? (missedGIR.reduce((s, h) => s + (h.shots_inside_50 || 1), 0) / missedGIR.length).toFixed(1)
+  const under50GIRMisses = missedGIR.filter(h => h.approach === "Under 50");
+  const avgSI    = under50GIRMisses.length
+    ? (under50GIRMisses.reduce((s, h) => s + (h.shots_inside_50 || 1), 0) / under50GIRMisses.length).toFixed(1)
     : null;
 
   // Focus areas
@@ -286,7 +287,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     d: `${dominantMiss === "left" ? missL : missR} of ${fwHoles.length} fairways missed ${dominantMiss}. Pattern suggests ${dominantMiss === "left" ? "closed face or out-to-in path" : "open face or in-to-out path"}.`,
     s: `Check ${dominantMiss === "left" ? "grip and alignment" : "takeaway and face angle"} at setup`
   });
-  const multiChip = missedGIR.filter(h => (h.shots_inside_50 || 1) >= 2).length;
+  const multiChip = under50GIRMisses.filter(h => (h.shots_inside_50 || 1) >= 2).length;
   if (multiChip >= 2) focusAreas.push({
     p: focusAreas.length < 1 ? "p1" : focusAreas.length < 2 ? "p2" : "p3",
     t: "Short game — multiple shots inside 50 yds",
@@ -558,13 +559,13 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                   <thead><tr><th>Hole</th><th>Approach</th><th>Shots ≤50 yds</th><th>Reason</th><th>1st putt</th></tr></thead>
                   <tbody>
                     {missedGIR.map(h => {
-                      const si = h.shots_inside_50 || 1;
-                      const col = si >= 2 ? "var(--red)" : "var(--green-mid)";
+                      const si = h.approach === "Under 50" ? (h.shots_inside_50 || 1) : null;
+                      const col = si !== null && si >= 2 ? "var(--red)" : "var(--green-mid)";
                       return (
                         <tr key={h.hole_number}>
                           <td>H{h.hole_number}</td>
                           <td>{h.approach || "—"}</td>
-                          <td><span style={{fontWeight:700,color:col,fontSize:15}}>{si}</span></td>
+                          <td>{si !== null ? <span style={{fontWeight:700,color:col,fontSize:15}}>{si}</span> : <span style={{color:"#CCC"}}>—</span>}</td>
                           <td style={{fontSize:11,color:"var(--text-mid)"}}>{h.sg_reason || "—"}</td>
                           <td>{h.putt1 ? h.putt1 : "—"}</td>
                         </tr>
