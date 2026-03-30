@@ -5,6 +5,7 @@ import StudentDashboard from './StudentDashboard'
 import StudentLogging from './StudentLogging'
 import CoachHome from './CoachHome'
 import CoachDashboard from './CoachDashboard'
+import AdminDashboard from './AdminDashboard'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -83,7 +84,9 @@ function App() {
   )
 
   if (!user) return <CaddieAuth onAuthSuccess={handleAuthSuccess} />
-
+if (role === 'admin') {
+  return <AdminDashboard user={user} onSignOut={handleSignOut} />
+}
   if (role === 'coach') {
     if (coachScreen === 'round' && coachRound) {
       return (
