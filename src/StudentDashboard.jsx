@@ -58,8 +58,8 @@ const css = `
   .delete-btn { background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px; transition:all .15s; flex-shrink:0; }
   .delete-btn:hover { background:#FEF0F0; color:var(--red); }
 
-  .coach-note-block { margin-top:10px; padding:10px 12px; background:#F0F6FF; border:1px solid #C8DCF5; border-radius:10px; }
-  .coach-note-from { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#4A7EC0; margin-bottom:4px; }
+  .coach-note-block { margin-top:10px; padding:10px 12px; background:#EAF5EF; border:1px solid #A8D8BC; border-radius:10px; }
+  .coach-note-from { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--green); margin-bottom:4px; }
   .coach-note-text { font-size:13px; color:var(--text-mid); line-height:1.55; font-style:italic; }
 
   .trends-wrap { margin-bottom:16px; }
@@ -289,7 +289,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     async function load() {
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap").eq("id", user.id).single(),
-        supabase.from("rounds").select("*, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
       setProfile(prof);
@@ -528,9 +528,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                   </div>
                   {r.coach_note && (
                     <div className="coach-note-block" onClick={e => e.stopPropagation()}>
-                      <div className="coach-note-from">
-                        📝 Coach{coach ? ` — ${coach.first_name} ${coach.last_name}` : ""}
-                      </div>
+                      <div className="coach-note-from">📝 Coach note:</div>
                       <div className="coach-note-text">{r.coach_note}</div>
                     </div>
                   )}

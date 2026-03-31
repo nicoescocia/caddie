@@ -208,11 +208,14 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     const avgP  = p1s.length ? Math.round(p1s.reduce((a, b) => a + b) / p1s.length) : 0;
     const missL = holeRows.filter(h => h.fairway === "left").length;
     const missR = holeRows.filter(h => h.fairway === "right").length;
+    const aiMissedGIR    = holeRows.filter(h => !h.gir && !h.picked_up && !h.dna);
+    const aiUnder50      = aiMissedGIR.filter(h => h.approach === "Under 50");
+    const aiScrambMade   = aiUnder50.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length;
 
     try {
       const [r1, r2] = await Promise.all([
         callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\nAvg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Shots inside 50yds: 1 = good up-and-down, 2+ = struggling. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
       ]);
       setAiPutting(r1);
       setAiSg(r2);
@@ -287,12 +290,13 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     d: `${dominantMiss === "left" ? missL : missR} of ${fwHoles.length} fairways missed ${dominantMiss}. Pattern suggests ${dominantMiss === "left" ? "closed face or out-to-in path" : "open face or in-to-out path"}.`,
     s: `Check ${dominantMiss === "left" ? "grip and alignment" : "takeaway and face angle"} at setup`
   });
-  const multiChip = under50GIRMisses.filter(h => (h.shots_inside_50 || 1) >= 2).length;
-  if (multiChip >= 2) focusAreas.push({
+  const scrambMade = under50GIRMisses.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length;
+  const multiChip  = under50GIRMisses.filter(h => (h.shots_inside_50 || 1) >= 2).length;
+  if (under50GIRMisses.length > 0 && scrambMade / under50GIRMisses.length < 0.5) focusAreas.push({
     p: focusAreas.length < 1 ? "p1" : focusAreas.length < 2 ? "p2" : "p3",
-    t: "Short game — multiple shots inside 50 yds",
-    d: `${multiChip} holes required 2+ shots inside 50 yds. Up-and-down rate will be low.`,
-    s: "Drill: up and down from rough/fringe in one chip"
+    t: "Scrambling — up-and-down conversion",
+    d: `Converted ${scrambMade} of ${under50GIRMisses.length} up-and-down chances (1 chip + 1 putt from inside 50 yds).${multiChip > 0 ? ` ${multiChip} holes required 2+ chips.` : ""}`,
+    s: "Drill: chip to within 3ft from rough/fringe"
   });
   if (focusAreas.length === 0) focusAreas.push({
     p: "p1", t: "Solid round overall",
@@ -571,9 +575,10 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                     })}
                   </tbody>
                 </table>
-                {avgSI && (
+                {under50GIRMisses.length > 0 && (
                   <div style={{marginTop:10,fontSize:12,color:"var(--text-mid)",padding:"8px 10px",background:"var(--bg)",borderRadius:8}}>
-                    Avg <strong>{avgSI} shots</strong> inside 50 yds on missed GIR holes · target is 1
+                    Scrambling: <strong>{scrambMade}/{under50GIRMisses.length}</strong> up-and-down conversions (1 chip + 1 putt)
+                    {avgSI && <span style={{marginLeft:8,color:"var(--text-dim)"}}>· avg {avgSI} shots inside 50</span>}
                   </div>
                 )}
               </>

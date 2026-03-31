@@ -120,6 +120,13 @@ const css = `
   .spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
+  /* AI pattern box */
+  .ai-box { background:linear-gradient(135deg,#F9F6EE,#EFF6EF); border:1px solid #D4E8D4; border-radius:11px; padding:13px 15px; margin-bottom:16px; }
+  .ai-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--green); margin-bottom:7px; display:flex; align-items:center; gap:6px; }
+  .ai-text { font-size:13px; color:var(--text-mid); line-height:1.7; white-space:pre-line; }
+  .ai-loading { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-dim); }
+  .ai-spinner { width:14px; height:14px; border:2px solid #DDD; border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
+
   @media(max-width:520px) {
     .student-stats { display:none; }
     .sh-stats { display:none; }
@@ -468,13 +475,52 @@ function RoundTrends({ rounds }) {
   );
 }
 
+async function callAI(prompt) {
+  const r = await fetch("/api/ai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 800,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const d = await r.json();
+  return d.content?.map(c => c.text || "").join("") || "Analysis unavailable.";
+}
+
 function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHome }) {
+  const [aiPatterns, setAiPatterns] = useState(null);
+
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
   const diffs      = scored.map(r => r.total_score - getCoursePar(r));
   const avgDiff    = diffs.length ? Math.round(diffs.reduce((a, b) => a + b) / diffs.length) : null;
   const bestDiff   = diffs.length ? Math.min(...diffs) : null;
   function fmtDiff(d) { return d == null ? "—" : d === 0 ? "E" : d > 0 ? "+" + d : String(d); }
+
+  useEffect(() => {
+    const scoredRounds = sentRounds.filter(r => r.total_score);
+    if (scoredRounds.length < 3) return;
+    setAiPatterns(null);
+    const last5 = scoredRounds.slice(0, 5).reverse(); // oldest → newest
+    const roundSummaries = last5.map((r, i) => {
+      const vsPar        = r.total_score - getCoursePar(r);
+      const girPct       = r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : 0;
+      const fwPct        = r.fw_holes ? Math.round(r.fw_hit / r.fw_holes * 100) : null;
+      const puttsPerHole = r.holes_played ? (r.total_putts / r.holes_played).toFixed(1) : null;
+      const fmtDate      = new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      return `Round ${i + 1} (${fmtDate}): ${vsPar >= 0 ? "+" : ""}${vsPar} vs par` +
+        `, GIR ${girPct}%` +
+        (fwPct != null ? `, fairways ${fwPct}% (${r.miss_left ?? 0}L ${r.miss_right ?? 0}R miss)` : "") +
+        `, 3-putts ${r.three_putt_count ?? 0}` +
+        (puttsPerHole ? `, ${puttsPerHole} putts/hole` : "") +
+        (r.scrambling_opps > 0 ? `, scrambling ${r.scrambling_made}/${r.scrambling_opps}` : "");
+    }).join("\n");
+    callAI(
+      `You are an expert golf coach. Analyse these ${last5.length} rounds from ${student.first_name} ${student.last_name} and identify exactly 3 specific patterns detected across multiple rounds. Look for trends in: scoring, GIR%, fairway accuracy/miss direction, 3-putt frequency, and scrambling (up-and-down = 1 chip + 1 putt from inside 50 yds on a missed GIR). Be specific with numbers. Write in third person — 'the student', 'they'. No preamble.\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}\n\nList exactly 3 numbered patterns, each 1-2 sentences.`
+    ).then(setAiPatterns).catch(() => setAiPatterns("Pattern analysis unavailable."));
+  }, [rounds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -524,6 +570,14 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
         ) : (
           <>
             <RoundTrends rounds={sentRounds} />
+            {scored.length >= 3 && (
+              <div className="ai-box">
+                <div className="ai-label">✦ Multi-round pattern analysis — last {Math.min(scored.length, 5)} rounds</div>
+                {aiPatterns
+                  ? <div className="ai-text">{aiPatterns}</div>
+                  : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns across rounds…</div>}
+              </div>
+            )}
             <div className="section-label">Round history</div>
             {sentRounds.map(r => {
               const diff = parDiff(r.total_score, r);
@@ -652,18 +706,23 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
           .order("created_at", { ascending: false });
         const enriched = await Promise.all((rounds || []).map(async r => {
           const { data: holes } = await supabase
-            .from("round_holes").select("gir, fairway, putts, par, dna, picked_up").eq("round_id", r.id);
+            .from("round_holes").select("gir, fairway, putts, par, dna, picked_up, approach, shots_inside_50").eq("round_id", r.id);
           if (!holes || holes.length === 0) return r;
-          const attempted = holes.filter(h => !h.dna);
-          const fwHoles   = attempted.filter(h => h.par >= 4);
+          const attempted      = holes.filter(h => !h.dna);
+          const fwHoles        = attempted.filter(h => h.par >= 4);
+          const under50Misses  = attempted.filter(h => !h.gir && !h.picked_up && h.approach === "Under 50");
           return {
             ...r,
             attempted_holes:  attempted.length,
             gir_count:        attempted.filter(h => h.gir).length,
             fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
             fw_holes:         fwHoles.length,
+            miss_left:        fwHoles.filter(h => h.fairway === "left").length,
+            miss_right:       fwHoles.filter(h => h.fairway === "right").length,
             three_putt_count: attempted.filter(h => h.putts >= 3).length,
             total_putts:      attempted.reduce((s, h) => s + (h.putts || 0), 0),
+            scrambling_made:  under50Misses.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length,
+            scrambling_opps:  under50Misses.length,
           };
         }));
         setStudentRounds(enriched);
@@ -689,19 +748,24 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
     // Always compute stats fresh from round_holes
     const enriched = await Promise.all(rounds.map(async r => {
       const { data: holes } = await supabase
-        .from("round_holes").select("gir, fairway, putts, par, dna, picked_up")
+        .from("round_holes").select("gir, fairway, putts, par, dna, picked_up, approach, shots_inside_50")
         .eq("round_id", r.id);
       if (!holes || holes.length === 0) return r;
-      const attempted = holes.filter(h => !h.dna);
-      const fwHoles   = attempted.filter(h => h.par >= 4);
+      const attempted      = holes.filter(h => !h.dna);
+      const fwHoles        = attempted.filter(h => h.par >= 4);
+      const under50Misses  = attempted.filter(h => !h.gir && !h.picked_up && h.approach === "Under 50");
       return {
         ...r,
         attempted_holes:  attempted.length,
         gir_count:        attempted.filter(h => h.gir).length,
         fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
         fw_holes:         fwHoles.length,
+        miss_left:        fwHoles.filter(h => h.fairway === "left").length,
+        miss_right:       fwHoles.filter(h => h.fairway === "right").length,
         three_putt_count: attempted.filter(h => h.putts >= 3).length,
         total_putts:      attempted.reduce((s, h) => s + (h.putts || 0), 0),
+        scrambling_made:  under50Misses.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length,
+        scrambling_opps:  under50Misses.length,
       };
     }));
 
