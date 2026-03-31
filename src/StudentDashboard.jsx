@@ -564,7 +564,10 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                   style={{flexDirection:"column",alignItems:"stretch",gap:0}}>
                   <div
                     style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,cursor:r.historical?"default":"pointer"}}
-                    onClick={r.historical ? undefined : () => onEditRound(r)}
+                    onClick={r.historical ? undefined : () => {
+                      console.log('[Caddie] round click fired', r.id, 'historical:', r.historical, 'onEditRound type:', typeof onEditRound);
+                      onEditRound(r);
+                    }}
                   >
                     <div className="round-card-left">
                       <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
