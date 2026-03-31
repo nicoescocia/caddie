@@ -27,8 +27,9 @@ function App() {
   }
 
   async function fetchAndSetRole(userId) {
-    const { data } = await supabase
-      .from('profiles').select('role').eq('id', userId).single()
+    const { data, error } = await supabase
+      .from('profiles').select('role, first_name, last_name, official_handicap').eq('id', userId).single()
+    console.log('[fetchAndSetRole] userId:', userId, 'data:', data, 'error:', error)
     setRole(data?.role ?? null)
     return data?.role ?? null
   }
