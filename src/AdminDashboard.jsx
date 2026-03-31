@@ -109,7 +109,7 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default function AdminDashboard({ user, onSignOut }) {
+export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState([]);
   const [roundCount, setRoundCount] = useState(0);
@@ -235,7 +235,14 @@ export default function AdminDashboard({ user, onSignOut }) {
         <div className="adm-mode-logo">
           Caddie <span>Admin</span>
         </div>
-        <button className="adm-signout-btn" onClick={onSignOut}>Sign out</button>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {onStudentView && (
+            <button className="adm-signout-btn" onClick={onStudentView} style={{color:"rgba(255,255,255,0.8)"}}>
+              My rounds →
+            </button>
+          )}
+          <button className="adm-signout-btn" onClick={onSignOut}>Sign out</button>
+        </div>
       </div>
 
       <div className="adm-wrap">

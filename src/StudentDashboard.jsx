@@ -274,7 +274,7 @@ function StudentRoundTrends({ rounds }) {
   );
 }
 
-export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut }) {
+export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut, onBackToAdmin }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
   const [coach, setCoach]       = useState(null);
@@ -355,6 +355,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     <>
       <style>{css}</style>
       <div className="mode-bar"><div className="mode-logo">⛳ Caddie</div><button className="signout-btn" onClick={onSignOut}>Sign out</button></div>
+
       <div className="loading-wrap"><div className="big-spinner" /></div>
     </>
   );
@@ -372,7 +373,14 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       <style>{css}</style>
       <div className="mode-bar">
         <div className="mode-logo">⛳ Caddie</div>
-        <button className="signout-btn" onClick={onSignOut}>Sign out</button>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {onBackToAdmin && (
+            <button className="signout-btn" onClick={onBackToAdmin} style={{color:"rgba(255,255,255,0.8)"}}>
+              ← Admin
+            </button>
+          )}
+          <button className="signout-btn" onClick={onSignOut}>Sign out</button>
+        </div>
       </div>
 
       <div className="dash-wrap">
@@ -381,7 +389,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           <div className="dash-hero-name" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <span>{profile?.first_name} {profile?.last_name}</span>
             {(() => {
-              const officialHcp = profile?.official_handicap;
+              const officialHcp = profile?.official_handicap ?? rounds.find(r => r.handicap != null)?.handicap ?? null;
               if (hcpEditing) return (
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <input

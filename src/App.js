@@ -12,6 +12,7 @@ function App() {
   const [role, setRole]     = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [adminView, setAdminView]         = useState('admin')
   const [studentScreen, setStudentScreen] = useState('dashboard')
   const [editRound, setEditRound]         = useState(null)
   const [coachScreen, setCoachScreen]     = useState('home')
@@ -84,9 +85,20 @@ function App() {
   )
 
   if (!user) return <CaddieAuth onAuthSuccess={handleAuthSuccess} />
-if (role === 'admin') {
-  return <AdminDashboard user={user} onSignOut={handleSignOut} />
-}
+  if (role === 'admin') {
+    if (adminView === 'student') {
+      return (
+        <StudentDashboard
+          user={user}
+          onSignOut={handleSignOut}
+          onNewRound={() => setStudentScreen('logging')}
+          onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
+          onBackToAdmin={() => setAdminView('admin')}
+        />
+      )
+    }
+    return <AdminDashboard user={user} onSignOut={handleSignOut} onStudentView={() => setAdminView('student')} />
+  }
   if (role === 'coach') {
     if (coachScreen === 'round' && coachRound) {
       return (
