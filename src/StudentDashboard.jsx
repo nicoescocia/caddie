@@ -422,6 +422,15 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     setHcpEditing(false);
   }
 
+  async function sendHistToCoach(e, roundId) {
+    e.stopPropagation();
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("rounds").update({ sent_to_coach: true, sent_at: now }).eq("id", roundId);
+    if (!error) {
+      setRounds(prev => prev.map(r => r.id === roundId ? { ...r, sent_to_coach: true, sent_at: now } : r));
+    }
+  }
+
   async function deleteRound(e, roundId) {
     e.stopPropagation(); // don't trigger the edit tap
     if (!window.confirm("Delete this round? This can't be undone.")) return;
@@ -654,18 +663,17 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                 <div className="round-card" key={r.id}
                   style={{flexDirection:"column",alignItems:"stretch",gap:0}}>
                   <div
-                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,cursor:"pointer"}}
-                    onClick={r.historical ? () => openHistModal(r) : () => onEditRound(r)}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,cursor:(r.historical && r.sent_to_coach)?"default":"pointer"}}
+                    onClick={r.historical ? (r.sent_to_coach ? undefined : () => openHistModal(r)) : () => onEditRound(r)}
                   >
                     <div className="round-card-left">
                       <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
                       <div className="round-card-date">{date} · {r.holes_played} holes</div>
                       <div className="round-card-badges">
-                        {r.historical
-                          ? <span className="badge-historical">Historical</span>
-                          : r.sent_to_coach
-                            ? <span className="badge-sent">✓ Sent to coach</span>
-                            : <span className="badge-unsent">Not sent yet</span>}
+                        {r.historical && <span className="badge-historical">Historical</span>}
+                        {r.sent_to_coach
+                          ? <span className="badge-sent">✓ Sent to coach</span>
+                          : !r.historical && <span className="badge-unsent">Not sent yet</span>}
                       </div>
                     </div>
                     <div className="round-card-score">
@@ -681,6 +689,20 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                     </div>
                     <button className="delete-btn" onClick={e => deleteRound(e, r.id)} title="Delete round">🗑</button>
                   </div>
+                  {r.historical && !r.sent_to_coach && coach && (
+                    <div style={{paddingTop:10}}>
+                      <button
+                        onClick={e => sendHistToCoach(e, r.id)}
+                        style={{
+                          width:"100%", background:"var(--gold)", border:"none", borderRadius:10,
+                          padding:"10px 14px", fontFamily:"'Outfit',sans-serif", fontSize:13,
+                          fontWeight:700, color:"var(--green-dark)", cursor:"pointer",
+                        }}
+                      >
+                        Send to coach →
+                      </button>
+                    </div>
+                  )}
                   {r.coach_note && (
                     <div className="coach-note-block">
                       <div className="coach-note-from">📝 Coach note:</div>

@@ -585,7 +585,10 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
                 <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
                   <div className="round-card-top">
                     <div>
-                      <div className="round-card-date" style={{fontWeight:700,color:"var(--text)",fontSize:14}}>{r.courses?.name || "Golf Course"}</div>
+                      <div className="round-card-date" style={{fontWeight:700,color:"var(--text)",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+                        {r.courses?.name || "Golf Course"}
+                        {r.historical && <span style={{background:"#EEF0FF",color:"#4A5FBD",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6}}>Historical</span>}
+                      </div>
                       <div className="round-card-course">{fmtDate(r.created_at)} · {r.attempted_holes != null && r.attempted_holes !== r.holes_played ? `${r.attempted_holes}/${r.holes_played} holes` : `${r.holes_played} holes`}</div>
                     </div>
                     <div className="round-score-block">
