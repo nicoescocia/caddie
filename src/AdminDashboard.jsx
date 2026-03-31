@@ -109,6 +109,9 @@ function fmtDate(iso) {
 }
 
 export default function AdminDashboard({ user, onSignOut }) {
+  const svcKey = process.env.REACT_APP_SUPABASE_SERVICE_KEY;
+  console.log("[AdminDashboard] REACT_APP_SUPABASE_SERVICE_KEY defined:", !!svcKey, "| first 10 chars:", svcKey ? svcKey.slice(0, 10) : "n/a");
+
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState([]);
   const [roundCount, setRoundCount] = useState(0);
