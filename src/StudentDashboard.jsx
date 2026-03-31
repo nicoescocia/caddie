@@ -93,12 +93,37 @@ const css = `
   .modal-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:6px; display:block; }
   .modal-input { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'Outfit',sans-serif; font-size:15px; color:var(--text); background:white; outline:none; transition:border-color .15s; }
   .modal-input:focus { border-color:var(--green); }
-  .modal-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
-  .modal-actions { display:flex; gap:10px; margin-top:20px; }
+  .modal-actions { display:flex; gap:10px; margin-top:16px; }
   .modal-submit { flex:1; background:var(--green); border:none; border-radius:12px; padding:14px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:white; cursor:pointer; }
   .modal-submit:disabled { opacity:.5; cursor:not-allowed; }
   .modal-cancel { background:none; border:1.5px solid var(--border); border-radius:12px; padding:14px 20px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:600; color:var(--text-mid); cursor:pointer; }
+
+  .hist-section { padding-top:14px; border-top:1.5px solid var(--border); margin-bottom:6px; }
+  .hist-col-headers { display:flex; gap:6px; padding-bottom:5px; border-bottom:1.5px solid var(--border); }
+  .hist-ch { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim); text-align:center; }
+  .hist-row { display:flex; gap:6px; align-items:center; padding:5px 0; border-bottom:1px solid var(--border); }
+  .hist-row:last-of-type { border-bottom:none; }
+  .hist-lbl { width:28px; flex-shrink:0; line-height:1.2; }
+  .hist-lbl-n { font-size:12px; font-weight:700; color:var(--text); }
+  .hist-lbl-p { font-size:10px; color:var(--text-dim); }
+  .hist-stepper { display:flex; flex-shrink:0; }
+  .hist-sb { width:24px; height:30px; border:1.5px solid var(--border); background:white; color:var(--green); font-size:18px; font-weight:300; cursor:pointer; display:flex; align-items:center; justify-content:center; font-family:'Outfit',sans-serif; flex-shrink:0; }
+  .hist-sb.dec { border-radius:6px 0 0 6px; }
+  .hist-sb.inc { border-radius:0 6px 6px 0; }
+  .hist-sv { width:30px; height:30px; border-top:1.5px solid var(--border); border-bottom:1.5px solid var(--border); background:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; }
+  .hist-group { display:flex; gap:3px; }
+  .hist-t { height:28px; border:1.5px solid var(--border); border-radius:6px; background:white; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:1; min-width:0; padding:0 2px; color:var(--text-mid); transition:all .1s; }
+  .hist-total { display:flex; justify-content:space-between; padding:10px 2px 2px; font-size:13px; color:var(--text-mid); }
 `;
+
+// Hole-by-hole pars for historical round entry
+const HIST_COURSE_HOLES = {
+  "89e2ad4e-8d5a-4244-8568-b2c8a448a77f": [4,4,3,4,3,4,4,3,3],
+  "b1a2c3d4-e5f6-7890-abcd-ef1234567890": [4,4,3,4,5,4,3,4,4,3,4,4,3,4,4,3,4,4],
+};
+function initHistHoles(courseId) {
+  return (HIST_COURSE_HOLES[courseId] || []).map(par => ({ score: par, fairway: null, putts: 2, penalty: 0 }));
+}
 
 // Course pars — used to calculate vs-par stats per round
 const COURSE_PAR = {
@@ -302,8 +327,19 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   const [hcpEditing, setHcpEditing] = useState(false);
   const [hcpInput, setHcpInput]     = useState("");
   const [showHistModal, setShowHistModal] = useState(false);
-  const [histForm, setHistForm] = useState({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", score: "", putts: "", note: "" });
+  const [histForm, setHistForm] = useState({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", note: "" });
+  const [histHoles, setHistHoles] = useState(() => initHistHoles("89e2ad4e-8d5a-4244-8568-b2c8a448a77f"));
   const [histSaving, setHistSaving] = useState(false);
+
+  function updateHistHole(i, fields) {
+    setHistHoles(prev => prev.map((h, idx) => idx === i ? { ...h, ...fields } : h));
+  }
+  function closeHistModal() {
+    const def = "89e2ad4e-8d5a-4244-8568-b2c8a448a77f";
+    setShowHistModal(false);
+    setHistForm({ course_id: def, date: "", note: "" });
+    setHistHoles(initHistHoles(def));
+  }
 
   useEffect(() => {
     async function load() {
@@ -372,28 +408,40 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   }
 
   async function saveHistoricalRound() {
-    const score = parseInt(histForm.score, 10);
-    const putts = parseInt(histForm.putts, 10);
-    if (!histForm.date || isNaN(score) || score < 1) return;
+    if (!histForm.date) return;
     setHistSaving(true);
-    const holes_played = histForm.course_id === "b1a2c3d4-e5f6-7890-abcd-ef1234567890" ? 18 : 9;
-    const { data, error } = await supabase.from("rounds").insert([{
-      student_id:   user.id,
-      course_id:    histForm.course_id,
-      holes_played,
-      total_score:  score,
-      total_putts:  isNaN(putts) ? null : putts,
-      student_note: histForm.note || null,
-      historical:   true,
+    const pars = HIST_COURSE_HOLES[histForm.course_id] || [];
+    const total_score = histHoles.reduce((s, h) => s + h.score, 0);
+    const total_putts = histHoles.reduce((s, h) => s + h.putts, 0);
+    const { data: roundData, error: roundError } = await supabase.from("rounds").insert([{
+      student_id:    user.id,
+      course_id:     histForm.course_id,
+      holes_played:  pars.length,
+      total_score,
+      total_putts,
+      student_note:  histForm.note || null,
+      historical:    true,
       sent_to_coach: false,
-      created_at:   new Date(histForm.date).toISOString(),
+      created_at:    new Date(histForm.date).toISOString(),
     }]).select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").single();
-    if (!error && data) {
-      setRounds(prev => [data, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+    if (!roundError && roundData) {
+      const holeRows = histHoles.map((h, i) => ({
+        round_id:    roundData.id,
+        hole_number: i + 1,
+        par:         pars[i],
+        score:       h.score,
+        putts:       h.putts,
+        fairway:     pars[i] >= 4 ? (h.fairway || null) : null,
+        penalty:     h.penalty === 0 ? 'None' : String(h.penalty),
+        gir:         h.putts === 0 ? true : (h.score - h.putts) <= (pars[i] - 2),
+        dna:         false,
+        picked_up:   false,
+      }));
+      await supabase.from("round_holes").insert(holeRows);
+      setRounds(prev => [roundData, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     }
     setHistSaving(false);
-    setShowHistModal(false);
-    setHistForm({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", score: "", putts: "", note: "" });
+    closeHistModal();
   }
 
   if (loading) return (
@@ -612,79 +660,126 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       </div>
 
       {showHistModal && (
-        <div className="modal-backdrop" onClick={() => setShowHistModal(false)}>
+        <div className="modal-backdrop" onClick={closeHistModal}>
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
             <div className="modal-title">Add Historical Round</div>
 
+            {/* ── Section 1: Round details ── */}
             <div className="modal-field">
               <label className="modal-label">Course</label>
-              <select
-                className="modal-input"
-                value={histForm.course_id}
-                onChange={e => setHistForm(f => ({ ...f, course_id: e.target.value }))}
-              >
-                <option value="89e2ad4e-8d5a-4244-8568-b2c8a448a77f">Wee Course (9 holes)</option>
-                <option value="b1a2c3d4-e5f6-7890-abcd-ef1234567890">Big Course (18 holes)</option>
+              <select className="modal-input" value={histForm.course_id}
+                onChange={e => { const cid = e.target.value; setHistForm(f=>({...f,course_id:cid})); setHistHoles(initHistHoles(cid)); }}>
+                <option value="89e2ad4e-8d5a-4244-8568-b2c8a448a77f">Wee Course — 9 holes</option>
+                <option value="b1a2c3d4-e5f6-7890-abcd-ef1234567890">Big Course — 18 holes</option>
               </select>
             </div>
-
-            <div className="modal-field">
-              <label className="modal-label">Date played</label>
-              <input
-                className="modal-input"
-                type="date"
-                max={new Date().toISOString().split("T")[0]}
-                value={histForm.date}
-                onChange={e => setHistForm(f => ({ ...f, date: e.target.value }))}
-              />
-            </div>
-
-            <div className="modal-row">
-              <div className="modal-field" style={{marginBottom:0}}>
-                <label className="modal-label">Gross score</label>
-                <input
-                  className="modal-input"
-                  type="number"
-                  min="1"
-                  max="200"
-                  placeholder="e.g. 42"
-                  value={histForm.score}
-                  onChange={e => setHistForm(f => ({ ...f, score: e.target.value }))}
-                />
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              <div>
+                <label className="modal-label">Date played</label>
+                <input className="modal-input" type="date"
+                  max={new Date().toISOString().split("T")[0]}
+                  value={histForm.date}
+                  onChange={e => setHistForm(f=>({...f,date:e.target.value}))} />
               </div>
-              <div className="modal-field" style={{marginBottom:0}}>
-                <label className="modal-label">Total putts <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
-                <input
-                  className="modal-input"
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="e.g. 18"
-                  value={histForm.putts}
-                  onChange={e => setHistForm(f => ({ ...f, putts: e.target.value }))}
-                />
+              <div>
+                <label className="modal-label">Note <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                <input className="modal-input" type="text" placeholder="e.g. played well"
+                  value={histForm.note}
+                  onChange={e => setHistForm(f=>({...f,note:e.target.value}))} />
               </div>
             </div>
 
-            <div className="modal-field" style={{marginTop:16}}>
-              <label className="modal-label">Note <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
-              <textarea
-                className="modal-input"
-                rows={3}
-                placeholder="Anything worth remembering about this round…"
-                value={histForm.note}
-                onChange={e => setHistForm(f => ({ ...f, note: e.target.value }))}
-                style={{resize:"vertical"}}
-              />
+            {/* ── Section 2: Hole by hole ── */}
+            <div className="hist-section">
+              <div className="modal-label" style={{marginBottom:8}}>Hole by hole</div>
+
+              {/* Column headers */}
+              <div className="hist-col-headers">
+                <div style={{width:28,flexShrink:0}} />
+                <div className="hist-ch" style={{width:78,flexShrink:0}}>Score</div>
+                <div className="hist-ch" style={{width:78,flexShrink:0}}>Tee</div>
+                <div className="hist-ch" style={{flex:1}}>Putts</div>
+                <div className="hist-ch" style={{width:66,flexShrink:0}}>Pen</div>
+              </div>
+
+              {histHoles.map((h, i) => {
+                const par = HIST_COURSE_HOLES[histForm.course_id][i];
+                const diff = h.score - par;
+                const scoreColor = diff < 0 ? "var(--gold)" : diff > 0 ? "var(--orange)" : "var(--green-mid)";
+                return (
+                  <div key={i} className="hist-row">
+                    {/* Hole label */}
+                    <div className="hist-lbl">
+                      <div className="hist-lbl-n">{i+1}</div>
+                      <div className="hist-lbl-p">P{par}</div>
+                    </div>
+
+                    {/* Score stepper */}
+                    <div className="hist-stepper">
+                      <button className="hist-sb dec" onClick={() => updateHistHole(i,{score:Math.max(1,h.score-1)})}>−</button>
+                      <div className="hist-sv" style={{color:scoreColor}}>{h.score}</div>
+                      <button className="hist-sb inc" onClick={() => updateHistHole(i,{score:h.score+1})}>+</button>
+                    </div>
+
+                    {/* Tee direction — hidden on par 3 */}
+                    <div className="hist-group" style={{width:78,flexShrink:0,visibility:par===3?"hidden":"visible"}}>
+                      {[["←","left","var(--sky)","#EEF0FE"],["↑","yes","var(--green)","#E8F4EE"],["→","right","var(--orange)","#FEF3E8"]].map(([lbl,val,ac,abg]) => (
+                        <button key={val} className="hist-t"
+                          onClick={() => updateHistHole(i,{fairway:h.fairway===val?null:val})}
+                          style={{borderColor:h.fairway===val?ac:"var(--border)",background:h.fairway===val?abg:"white",color:h.fairway===val?ac:"var(--text-mid)"}}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Putts */}
+                    <div className="hist-group" style={{flex:1}}>
+                      {[[0,"0"],[1,"1"],[2,"2"],[3,"3+"]].map(([val,lbl]) => (
+                        <button key={val} className="hist-t"
+                          onClick={() => updateHistHole(i,{putts:val})}
+                          style={{borderColor:h.putts===val?"var(--green-dark)":"var(--border)",background:h.putts===val?"var(--green-dark)":"white",color:h.putts===val?"white":"var(--text-mid)"}}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Penalty */}
+                    <div className="hist-group" style={{width:66,flexShrink:0}}>
+                      {[0,1,2].map(p => (
+                        <button key={p} className="hist-t"
+                          onClick={() => updateHistHole(i,{penalty:p})}
+                          style={{borderColor:h.penalty===p?(p===0?"var(--green-light)":"var(--red)"):"var(--border)",background:h.penalty===p?(p===0?"#E8F4EE":"#FEF0F0"):"white",color:h.penalty===p?(p===0?"var(--green)":"var(--red)"):"var(--text-mid)"}}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Running total */}
+              {(() => {
+                const total = histHoles.reduce((s,h)=>s+h.score,0);
+                const totalPutts = histHoles.reduce((s,h)=>s+h.putts,0);
+                const coursePar = HIST_COURSE_HOLES[histForm.course_id].reduce((s,p)=>s+p,0);
+                const diff = total - coursePar;
+                return (
+                  <div className="hist-total">
+                    <span style={{fontWeight:700,color:"var(--text)"}}>
+                      Total: {total}{" "}
+                      <span style={{fontWeight:400,color:diff>0?"var(--orange)":diff<0?"var(--gold)":"var(--green-mid)"}}>
+                        ({diff>0?"+":""}{diff})
+                      </span>
+                    </span>
+                    <span>{totalPutts} putts</span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="modal-actions">
-              <button className="modal-cancel" onClick={() => setShowHistModal(false)}>Cancel</button>
-              <button
-                className="modal-submit"
-                disabled={histSaving || !histForm.date || !histForm.score}
-                onClick={saveHistoricalRound}
-              >
+              <button className="modal-cancel" onClick={closeHistModal}>Cancel</button>
+              <button className="modal-submit" disabled={histSaving || !histForm.date} onClick={saveHistoricalRound}>
                 {histSaving ? "Saving…" : "Save round"}
               </button>
             </div>
