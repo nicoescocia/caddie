@@ -245,6 +245,12 @@ const KNOWN_COURSES = [
   { id: "b1a2c3d4-e5f6-7890-abcd-ef1234567890", name: "Greenock — Big Course", holes: 18 },
 ];
 
+// Fallback hole pars when course_holes table has no data for a course
+const HOLE_PARS = {
+  "89e2ad4e-8d5a-4244-8568-b2c8a448a77f": [4,4,3,4,3,4,4,3,3],
+  "b1a2c3d4-e5f6-7890-abcd-ef1234567890": [4,4,3,4,5,4,3,4,4,3,4,4,3,4,4,3,4,4],
+};
+
 const APPROACH_BANDS = [
   { v:"Under 50", u:"yds" }, { v:"50-75", u:"yds" }, { v:"75-100", u:"yds" },
   { v:"100-125", u:"yds" }, { v:"125-150", u:"yds" }, { v:"150+", u:"yds" },
@@ -328,7 +334,9 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
   return (
     <>
       <style>{css}</style>
-      <TopBar onSignOut={onSignOut} onHome={onBackToDashboard} rightBtn={null} />
+      <TopBar onSignOut={onSignOut} onHome={onBackToDashboard} rightBtn={
+        <button className="bar-btn" onClick={onBackToDashboard}>← My rounds</button>
+      } />
       <div className="ov-wrap">
 
         {/* Score header */}
@@ -527,21 +535,20 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   // Load holes for a chosen course
   async function loadCourse(courseIdArg) {
-    console.log("loadCourse called with:", courseIdArg);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("course_holes")
       .select("*")
       .eq("course_id", courseIdArg)
       .order("hole_number", { ascending: true });
-    console.log("course_holes result:", { data, error });
+    let mapped;
     if (data && data.length > 0) {
-      const mapped = data.map(h => ({ n: h.hole_number, par: h.par, yds: h.yardage, idx: h.stroke_index }));
-      console.log("mapped holes:", mapped);
-      setHoles(mapped);
-      setHoleData(mapped.map(h => emptyHole(h.par)));
+      mapped = data.map(h => ({ n: h.hole_number, par: h.par, yds: h.yardage || 0, idx: h.stroke_index || 0 }));
     } else {
-      console.log("No data returned or empty array");
+      const pars = HOLE_PARS[courseIdArg] || [];
+      mapped = pars.map((par, i) => ({ n: i + 1, par, yds: 0, idx: i + 1 }));
     }
+    setHoles(mapped);
+    setHoleData(mapped.map(h => emptyHole(h.par)));
   }
 
   async function handleCourseSelect(course) {
@@ -563,7 +570,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         .from("course_holes").select("*")
         .eq("course_id", cId)
         .order("hole_number", { ascending: true });
-      const mapped = (holeRows || []).map(h => ({ n: h.hole_number, par: h.par, yds: h.yards, idx: h.stroke_index }));
+      let mapped = (holeRows || []).map(h => ({ n: h.hole_number, par: h.par, yds: h.yardage || h.yards || 0, idx: h.stroke_index || 0 }));
+      if (mapped.length === 0) {
+        const pars = HOLE_PARS[cId] || [];
+        mapped = pars.map((par, i) => ({ n: i + 1, par, yds: 0, idx: i + 1 }));
+      }
       setHoles(mapped);
 
       const { data } = await supabase
@@ -769,7 +780,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     return (
       <>
         <style>{css}</style>
-        <TopBar onSignOut={onSignOut} />
+        <TopBar onSignOut={onSignOut} rightBtn={
+          <button className="bar-btn" onClick={onBackToDashboard}>← My rounds</button>
+        } />
         <div className="ov-loading"><div className="big-spinner" /></div>
       </>
     );
@@ -892,7 +905,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     return (
       <>
         <style>{css}</style>
-        <TopBar onSignOut={onSignOut} />
+        <TopBar onSignOut={onSignOut} rightBtn={
+          <button className="bar-btn" onClick={onBackToDashboard}>← My rounds</button>
+        } />
         <div className="ov-loading"><div className="big-spinner" /></div>
       </>
     );

@@ -87,13 +87,32 @@ function App() {
   if (!user) return <CaddieAuth onAuthSuccess={handleAuthSuccess} />
   if (role === 'admin') {
     if (adminView === 'student') {
+      if (studentScreen === 'logging') {
+        return (
+          <StudentLogging
+            user={user}
+            onSignOut={handleSignOut}
+            onBackToDashboard={() => setStudentScreen('dashboard')}
+          />
+        )
+      }
+      if (studentScreen === 'editing') {
+        return (
+          <StudentLogging
+            user={user}
+            onSignOut={handleSignOut}
+            onBackToDashboard={() => { setEditRound(null); setStudentScreen('dashboard') }}
+            existingRound={editRound}
+          />
+        )
+      }
       return (
         <StudentDashboard
           user={user}
           onSignOut={handleSignOut}
           onNewRound={() => setStudentScreen('logging')}
           onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
-          onBackToAdmin={() => setAdminView('admin')}
+          onBackToAdmin={() => { resetScreenState(); setAdminView('admin') }}
         />
       )
     }
