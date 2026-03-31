@@ -195,11 +195,12 @@ The React app env vars (`REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_ANON_KEY`)
 
 ## Priority Task List
 
+- [x] Coach ability to add written feedback on a round — textarea in CoachDashboard saves to `rounds.coach_note`
+- [x] Student-facing view of coach notes — displayed on round cards in StudentDashboard when `coach_note` is set
 - [ ] Push notifications / email alerts when a student sends a round to their coach
-- [ ] Coach ability to add written feedback on a round (coach note is stored in `rounds.coach_note` but there is no send/display flow for the student)
-- [ ] Student-facing view of coach notes
 - [ ] Handicap tracking over time (chart of handicap progression on student dashboard)
 - [ ] Multi-course support — currently only Wee Course and Big Course are hardcoded
 - [ ] Invite link expiry / single-use enforcement
 - [ ] Round editing after send (currently locked once sent to coach)
 - [ ] Mobile PWA / add-to-home-screen manifest
+- [ ] Admin dashboard: `REACT_APP_SUPABASE_SERVICE_KEY` must be set as a Vercel env var (it's not in `.env` like other script keys) — without it the admin client falls back to the anon key and RLS filters results

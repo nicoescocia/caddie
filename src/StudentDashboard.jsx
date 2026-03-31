@@ -58,6 +58,10 @@ const css = `
   .delete-btn { background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px; transition:all .15s; flex-shrink:0; }
   .delete-btn:hover { background:#FEF0F0; color:var(--red); }
 
+  .coach-note-block { margin-top:10px; padding:10px 12px; background:#F0F6FF; border:1px solid #C8DCF5; border-radius:10px; }
+  .coach-note-from { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#4A7EC0; margin-bottom:4px; }
+  .coach-note-text { font-size:13px; color:var(--text-mid); line-height:1.55; font-style:italic; }
+
   .trends-wrap { margin-bottom:16px; }
   .trends-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
   .trends-tabs { display:flex; gap:6px; margin-bottom:12px; }
@@ -497,28 +501,39 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               const diff = (r.total_score || 0) - getCoursePar(r);
               const date = new Date(r.created_at).toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" });
               return (
-                <div className="round-card" key={r.id} onClick={() => onEditRound(r)}>
-                  <div className="round-card-left">
-                    <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
-                    <div className="round-card-date">{date} · {r.holes_played} holes</div>
-                    <div className="round-card-badges">
-                      {r.sent_to_coach
-                        ? <span className="badge-sent">✓ Sent to coach</span>
-                        : <span className="badge-unsent">Not sent yet</span>}
-                    </div>
-                  </div>
-                  <div className="round-card-score">
-                    <div className="round-score-big">{r.total_score || "—"}</div>
-                    <div className={`round-score-par ${diff < 0 ? "under" : diff > 0 ? "over" : ""}`}>
-                      {r.total_score ? (diff === 0 ? "Level par" : (diff > 0 ? "+" : "") + diff + " vs par") : "In progress"}
-                    </div>
-                    {r.handicap != null && (
-                      <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                        Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                <div className="round-card" key={r.id} onClick={() => onEditRound(r)}
+                  style={{flexDirection:"column",alignItems:"stretch",gap:0}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                    <div className="round-card-left">
+                      <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
+                      <div className="round-card-date">{date} · {r.holes_played} holes</div>
+                      <div className="round-card-badges">
+                        {r.sent_to_coach
+                          ? <span className="badge-sent">✓ Sent to coach</span>
+                          : <span className="badge-unsent">Not sent yet</span>}
                       </div>
-                    )}
+                    </div>
+                    <div className="round-card-score">
+                      <div className="round-score-big">{r.total_score || "—"}</div>
+                      <div className={`round-score-par ${diff < 0 ? "under" : diff > 0 ? "over" : ""}`}>
+                        {r.total_score ? (diff === 0 ? "Level par" : (diff > 0 ? "+" : "") + diff + " vs par") : "In progress"}
+                      </div>
+                      {r.handicap != null && (
+                        <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                        </div>
+                      )}
+                    </div>
+                    <button className="delete-btn" onClick={e => deleteRound(e, r.id)} title="Delete round">🗑</button>
                   </div>
-                  <button className="delete-btn" onClick={e => deleteRound(e, r.id)} title="Delete round">🗑</button>
+                  {r.coach_note && (
+                    <div className="coach-note-block" onClick={e => e.stopPropagation()}>
+                      <div className="coach-note-from">
+                        📝 Coach{coach ? ` — ${coach.first_name} ${coach.last_name}` : ""}
+                      </div>
+                      <div className="coach-note-text">{r.coach_note}</div>
+                    </div>
+                  )}
                 </div>
               );
             })}

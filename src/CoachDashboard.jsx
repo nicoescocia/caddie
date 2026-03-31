@@ -433,16 +433,14 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             <div className="note-box">
               <div className="note-lbl" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span>📝 Coach notes</span>
-                {coachNote.length > 0 && (
-                  <button onClick={saveNote} style={{
-                    background: noteSaved ? "var(--green-light)" : "var(--green)",
-                    color:"white", border:"none", borderRadius:6, padding:"3px 10px",
-                    fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"'Outfit',sans-serif",
-                    transition:"background .2s"
-                  }}>
-                    {noteSaved ? "✓ Saved" : "Save"}
-                  </button>
-                )}
+                <button onClick={saveNote} style={{
+                  background: noteSaved ? "var(--green-light)" : "var(--green)",
+                  color:"white", border:"none", borderRadius:6, padding:"3px 10px",
+                  fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"'Outfit',sans-serif",
+                  transition:"background .2s"
+                }}>
+                  {noteSaved ? "✓ Saved" : "Save"}
+                </button>
               </div>
               <textarea
                 className="note-area"
