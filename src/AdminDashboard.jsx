@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import { createClient } from "@supabase/supabase-js";
+
+// Service-role client — elevated privileges, admin operations only
+const adminClient = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_SERVICE_KEY
+);
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -38,7 +45,7 @@ const css = `
   .adm-table th:last-child { text-align:right; }
   .adm-table td { padding:12px 10px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:middle; }
   .adm-table td:first-child { padding-left:0; }
-  .adm-table td:last-child { text-align:right; color:var(--text-dim); }
+  .adm-table td:last-child { text-align:right; }
   .adm-table tr:last-child td { border-bottom:none; }
   .adm-table tr:hover td { background:rgba(244,241,235,0.5); }
 
@@ -46,6 +53,15 @@ const css = `
   .adm-role-badge.student { background:#EAF5EF; color:var(--green-mid); }
   .adm-role-badge.coach { background:#FFF4E0; color:#B07A10; }
   .adm-role-badge.admin { background:#F0E8FF; color:#6B3FA0; }
+
+  /* Action buttons */
+  .adm-btn-delete { background:none; border:1px solid #F5C0C0; color:var(--red); border-radius:7px; padding:4px 10px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .adm-btn-delete:hover { background:#FFF0F0; border-color:var(--red); }
+  .adm-btn-delete:disabled { opacity:0.4; cursor:not-allowed; }
+
+  .adm-btn-unlink { background:none; border:1px solid var(--border); color:var(--text-dim); border-radius:7px; padding:3px 9px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; margin-left:auto; }
+  .adm-btn-unlink:hover { border-color:var(--red); color:var(--red); }
+  .adm-btn-unlink:disabled { opacity:0.4; cursor:not-allowed; }
 
   /* Coach-student relationships */
   .adm-coach-block { margin-bottom:16px; }
@@ -59,8 +75,17 @@ const css = `
   .adm-student-row:last-child { border-bottom:none; }
   .adm-student-dot { width:6px; height:6px; border-radius:50%; background:var(--green-mid); flex-shrink:0; }
   .adm-student-name { font-size:13px; color:var(--text); }
-  .adm-student-hcp { font-size:12px; color:var(--text-dim); margin-left:auto; }
+  .adm-student-hcp { font-size:12px; color:var(--text-dim); }
   .adm-no-students { font-size:12px; color:var(--text-dim); padding:10px 0 4px 50px; font-style:italic; }
+
+  /* Link form */
+  .adm-link-form { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:20px; padding-top:16px; border-top:1.5px solid var(--border); }
+  .adm-link-form select { flex:1; min-width:120px; font-family:'Outfit',sans-serif; font-size:13px; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:white; color:var(--text); outline:none; cursor:pointer; }
+  .adm-link-form select:focus { border-color:var(--green); }
+  .adm-btn-link { background:var(--green); color:white; border:none; border-radius:9px; padding:8px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .2s; }
+  .adm-btn-link:hover { background:var(--green-mid); }
+  .adm-btn-link:disabled { opacity:0.5; cursor:not-allowed; }
+  .adm-link-error { font-size:12px; color:var(--red); width:100%; }
 
   .adm-loading-wrap { display:flex; align-items:center; justify-content:center; padding:80px; }
   .adm-spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:adm-spin .7s linear infinite; }
@@ -71,6 +96,7 @@ const css = `
   @media(max-width:520px) {
     .adm-summary-row { grid-template-columns:1fr 1fr; }
     .adm-table th.adm-hide-sm, .adm-table td.adm-hide-sm { display:none; }
+    .adm-link-form { flex-direction:column; align-items:stretch; }
   }
 `;
 
@@ -87,53 +113,119 @@ export default function AdminDashboard({ user, onSignOut }) {
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState([]);
   const [roundCount, setRoundCount] = useState(0);
-  const [relationships, setRelationships] = useState([]); // [{ coach, students: [] }]
+  const [relationships, setRelationships] = useState([]);
+  const [deletingId, setDeletingId] = useState(null);
+  const [unlinkingKey, setUnlinkingKey] = useState(null);
 
-  useEffect(() => {
-    async function load() {
-      const [profilesRes, roundsRes, csRes] = await Promise.all([
-        supabase.from("profiles").select("id, first_name, last_name, role, official_handicap, created_at"),
-        supabase.from("rounds").select("id", { count: "exact", head: true }),
-        supabase.from("coach_students").select("coach_id, student_id"),
-      ]);
+  // Link form state
+  const [linkCoachId, setLinkCoachId] = useState("");
+  const [linkStudentId, setLinkStudentId] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState("");
 
-      const allProfiles = profilesRes.data || [];
-      if (profilesRes.data) setProfiles(allProfiles);
-      if (roundsRes.count != null) setRoundCount(roundsRes.count);
+  async function load() {
+    const [profilesRes, roundsRes, csRes] = await Promise.all([
+      adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, created_at"),
+      adminClient.from("rounds").select("id", { count: "exact", head: true }),
+      adminClient.from("coach_students").select("coach_id, student_id"),
+    ]);
 
-      if (csRes.data) {
-        const profileById = Object.fromEntries(allProfiles.map(p => [p.id, p]));
-        const coachMap = {};
-        for (const row of csRes.data) {
-          const cid = row.coach_id;
-          if (!coachMap[cid]) coachMap[cid] = { coach: profileById[cid], students: [] };
-          const student = profileById[row.student_id];
-          if (student) coachMap[cid].students.push(student);
-        }
-        setRelationships(Object.values(coachMap).sort((a, b) => {
-          const an = `${a.coach?.first_name} ${a.coach?.last_name}`;
-          const bn = `${b.coach?.first_name} ${b.coach?.last_name}`;
-          return an.localeCompare(bn);
-        }));
+    const allProfiles = profilesRes.data || [];
+    if (profilesRes.data) setProfiles(allProfiles);
+    if (roundsRes.count != null) setRoundCount(roundsRes.count);
+
+    if (csRes.data) {
+      const profileById = Object.fromEntries(allProfiles.map(p => [p.id, p]));
+      const coachMap = {};
+      for (const row of csRes.data) {
+        const cid = row.coach_id;
+        if (!coachMap[cid]) coachMap[cid] = { coach: profileById[cid], students: [] };
+        const student = profileById[row.student_id];
+        if (student) coachMap[cid].students.push({ ...student, _coachId: cid });
       }
-
-      setLoading(false);
+      setRelationships(Object.values(coachMap).sort((a, b) => {
+        const an = `${a.coach?.first_name} ${a.coach?.last_name}`;
+        const bn = `${b.coach?.first_name} ${b.coach?.last_name}`;
+        return an.localeCompare(bn);
+      }));
     }
-    load();
-  }, []);
+
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleDeleteUser(profile) {
+    const name = `${profile.first_name} ${profile.last_name}`;
+    if (!window.confirm(`Delete user "${name}"? This cannot be undone.`)) return;
+
+    setDeletingId(profile.id);
+    try {
+      // Null out any invite foreign key references first
+      await adminClient.from("invites").update({ used_by: null }).eq("used_by", profile.id);
+      // Delete the profile row (cascades handled by DB, or handle coach_students)
+      await adminClient.from("coach_students").delete().or(`coach_id.eq.${profile.id},student_id.eq.${profile.id}`);
+      await adminClient.from("profiles").delete().eq("id", profile.id);
+      // Delete the auth user
+      await adminClient.auth.admin.deleteUser(profile.id);
+      await load();
+    } catch (err) {
+      alert(`Failed to delete user: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleUnlink(coachId, studentId) {
+    const key = `${coachId}:${studentId}`;
+    if (!window.confirm("Remove this coach-student link?")) return;
+    setUnlinkingKey(key);
+    const { error } = await adminClient
+      .from("coach_students")
+      .delete()
+      .eq("coach_id", coachId)
+      .eq("student_id", studentId);
+    if (error) alert(`Failed to unlink: ${error.message}`);
+    else await load();
+    setUnlinkingKey(null);
+  }
+
+  async function handleLink() {
+    setLinkError("");
+    if (!linkCoachId || !linkStudentId) {
+      setLinkError("Select both a coach and a student.");
+      return;
+    }
+    if (linkCoachId === linkStudentId) {
+      setLinkError("Coach and student cannot be the same person.");
+      return;
+    }
+    setLinking(true);
+    const { error } = await adminClient
+      .from("coach_students")
+      .insert({ coach_id: linkCoachId, student_id: linkStudentId });
+    if (error) {
+      setLinkError(error.message.includes("duplicate") ? "This link already exists." : error.message);
+    } else {
+      setLinkCoachId("");
+      setLinkStudentId("");
+      await load();
+    }
+    setLinking(false);
+  }
 
   const totalRelationships = relationships.reduce((s, r) => s + r.students.length, 0);
 
-  // Sort profiles: coach first, then student, then admin; within role by name
   const sortedProfiles = [...profiles].sort((a, b) => {
     const roleOrder = { coach: 0, student: 1, admin: 2 };
     const ra = roleOrder[a.role] ?? 3;
     const rb = roleOrder[b.role] ?? 3;
     if (ra !== rb) return ra - rb;
-    const an = `${a.first_name} ${a.last_name}`;
-    const bn = `${b.first_name} ${b.last_name}`;
-    return an.localeCompare(bn);
+    return `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
   });
+
+  const coaches = profiles.filter(p => p.role === "coach");
+  const students = profiles.filter(p => p.role === "student");
 
   return (
     <>
@@ -183,6 +275,7 @@ export default function AdminDashboard({ user, onSignOut }) {
                       <th>Role</th>
                       <th className="adm-hide-sm">Handicap</th>
                       <th>Joined</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -200,6 +293,17 @@ export default function AdminDashboard({ user, onSignOut }) {
                           {p.official_handicap != null ? p.official_handicap : "—"}
                         </td>
                         <td>{fmtDate(p.created_at)}</td>
+                        <td>
+                          {p.id !== user?.id && (
+                            <button
+                              className="adm-btn-delete"
+                              disabled={deletingId === p.id}
+                              onClick={() => handleDeleteUser(p)}
+                            >
+                              {deletingId === p.id ? "Deleting…" : "Delete"}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -213,7 +317,7 @@ export default function AdminDashboard({ user, onSignOut }) {
               {relationships.length === 0 ? (
                 <div className="adm-empty">No relationships found.</div>
               ) : (
-                relationships.map(({ coach, students }) => (
+                relationships.map(({ coach, students: coachStudents }) => (
                   <div className="adm-coach-block" key={coach?.id}>
                     <div className="adm-coach-row">
                       <div className="adm-coach-avatar">
@@ -224,33 +328,77 @@ export default function AdminDashboard({ user, onSignOut }) {
                           {coach?.first_name} {coach?.last_name}
                         </div>
                         <div className="adm-coach-count">
-                          {students.length} {students.length === 1 ? "student" : "students"}
+                          {coachStudents.length} {coachStudents.length === 1 ? "student" : "students"}
                         </div>
                       </div>
                     </div>
-                    {students.length === 0 ? (
+                    {coachStudents.length === 0 ? (
                       <div className="adm-no-students">No students linked</div>
                     ) : (
                       <div className="adm-student-list">
-                        {students
+                        {coachStudents
                           .slice()
                           .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
-                          .map(s => (
-                            <div className="adm-student-row" key={s.id}>
-                              <div className="adm-student-dot" />
-                              <span className="adm-student-name">
-                                {s.first_name} {s.last_name}
-                              </span>
-                              <span className="adm-student-hcp">
-                                {s.official_handicap != null ? `HCP ${s.official_handicap}` : "\u00a0"}
-                              </span>
-                            </div>
-                          ))}
+                          .map(s => {
+                            const key = `${coach?.id}:${s.id}`;
+                            return (
+                              <div className="adm-student-row" key={s.id}>
+                                <div className="adm-student-dot" />
+                                <span className="adm-student-name">
+                                  {s.first_name} {s.last_name}
+                                </span>
+                                <span className="adm-student-hcp">
+                                  {s.official_handicap != null ? `HCP ${s.official_handicap}` : "\u00a0"}
+                                </span>
+                                <button
+                                  className="adm-btn-unlink"
+                                  disabled={unlinkingKey === key}
+                                  onClick={() => handleUnlink(coach?.id, s.id)}
+                                >
+                                  {unlinkingKey === key ? "…" : "Unlink"}
+                                </button>
+                              </div>
+                            );
+                          })}
                       </div>
                     )}
                   </div>
                 ))
               )}
+
+              {/* Link form */}
+              <div className="adm-link-form">
+                <select
+                  value={linkCoachId}
+                  onChange={e => setLinkCoachId(e.target.value)}
+                >
+                  <option value="">Select coach…</option>
+                  {coaches.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.first_name} {c.last_name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={linkStudentId}
+                  onChange={e => setLinkStudentId(e.target.value)}
+                >
+                  <option value="">Select student…</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.first_name} {s.last_name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="adm-btn-link"
+                  disabled={linking}
+                  onClick={handleLink}
+                >
+                  {linking ? "Linking…" : "Link"}
+                </button>
+                {linkError && <span className="adm-link-error">{linkError}</span>}
+              </div>
             </div>
 
             <p style={{ textAlign: "center", fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>
