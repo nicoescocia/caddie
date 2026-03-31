@@ -4,7 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 // Service-role client — elevated privileges, admin operations only
 const adminClient = createClient(
   process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_SERVICE_KEY
+  process.env.REACT_APP_SUPABASE_SERVICE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
 const css = `
