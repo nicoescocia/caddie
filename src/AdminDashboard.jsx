@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { supabase } from "./supabaseClient";
 import { createClient } from "@supabase/supabase-js";
 
 // Service-role client — elevated privileges, admin operations only
