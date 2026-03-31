@@ -560,9 +560,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               const diff = (r.total_score || 0) - getCoursePar(r);
               const date = new Date(r.created_at).toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" });
               return (
-                <div className="round-card" key={r.id} onClick={r.historical ? undefined : () => onEditRound(r)}
-                  style={{flexDirection:"column",alignItems:"stretch",gap:0,cursor:r.historical?"default":"pointer"}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div className="round-card" key={r.id}
+                  style={{flexDirection:"column",alignItems:"stretch",gap:0}}>
+                  <div
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,cursor:r.historical?"default":"pointer"}}
+                    onClick={r.historical ? undefined : () => onEditRound(r)}
+                  >
                     <div className="round-card-left">
                       <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
                       <div className="round-card-date">{date} · {r.holes_played} holes</div>
@@ -588,7 +591,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
                     <button className="delete-btn" onClick={e => deleteRound(e, r.id)} title="Delete round">🗑</button>
                   </div>
                   {r.coach_note && (
-                    <div className="coach-note-block" onClick={e => e.stopPropagation()}>
+                    <div className="coach-note-block">
                       <div className="coach-note-from">📝 Coach note:</div>
                       <div className="coach-note-text">{r.coach_note}</div>
                     </div>
