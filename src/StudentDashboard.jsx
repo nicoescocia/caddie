@@ -41,6 +41,7 @@ const css = `
   .round-card-badges { display:flex; gap:6px; margin-top:8px; }
   .badge-sent { background:#E8F4EE; color:var(--green); font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; }
   .badge-unsent { background:#FFF8E6; color:#8A6A00; font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; }
+  .badge-historical { background:#EEF0FF; color:#4A5FBD; font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; }
   .round-card-score { text-align:right; flex-shrink:0; }
   .round-score-big { font-family:'Playfair Display',serif; font-size:36px; color:var(--text); line-height:1; }
   .round-score-par { font-size:12px; color:var(--text-dim); margin-top:2px; }
@@ -81,6 +82,22 @@ const css = `
   .trend-direction.worsening { color:var(--red); }
   .trend-direction.stable { color:var(--text-dim); }
   .trend-charts-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+  .hist-btn { width:100%; background:none; border:1.5px solid var(--border); border-radius:14px; padding:13px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-mid); cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:24px; }
+  .hist-btn:hover { border-color:var(--green-light); color:var(--green); background:white; }
+
+  .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
+  .modal-sheet { background:white; border-radius:20px 20px 0 0; padding:24px 20px 40px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; }
+  .modal-title { font-family:'Playfair Display',serif; font-size:20px; color:var(--text); margin-bottom:20px; }
+  .modal-field { margin-bottom:16px; }
+  .modal-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:6px; display:block; }
+  .modal-input { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'Outfit',sans-serif; font-size:15px; color:var(--text); background:white; outline:none; transition:border-color .15s; }
+  .modal-input:focus { border-color:var(--green); }
+  .modal-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  .modal-actions { display:flex; gap:10px; margin-top:20px; }
+  .modal-submit { flex:1; background:var(--green); border:none; border-radius:12px; padding:14px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:white; cursor:pointer; }
+  .modal-submit:disabled { opacity:.5; cursor:not-allowed; }
+  .modal-cancel { background:none; border:1.5px solid var(--border); border-radius:12px; padding:14px 20px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:600; color:var(--text-mid); cursor:pointer; }
 `;
 
 // Course pars — used to calculate vs-par stats per round
@@ -284,12 +301,15 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   const [loading, setLoading] = useState(true);
   const [hcpEditing, setHcpEditing] = useState(false);
   const [hcpInput, setHcpInput]     = useState("");
+  const [showHistModal, setShowHistModal] = useState(false);
+  const [histForm, setHistForm] = useState({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", score: "", putts: "", note: "" });
+  const [histSaving, setHistSaving] = useState(false);
 
   useEffect(() => {
     async function load() {
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap").eq("id", user.id).single(),
-        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
       setProfile(prof);
@@ -349,6 +369,31 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       return;
     }
     setRounds(prev => prev.filter(r => r.id !== roundId));
+  }
+
+  async function saveHistoricalRound() {
+    const score = parseInt(histForm.score, 10);
+    const putts = parseInt(histForm.putts, 10);
+    if (!histForm.date || isNaN(score) || score < 1) return;
+    setHistSaving(true);
+    const holes_played = histForm.course_id === "b1a2c3d4-e5f6-7890-abcd-ef1234567890" ? 18 : 9;
+    const { data, error } = await supabase.from("rounds").insert([{
+      student_id:   user.id,
+      course_id:    histForm.course_id,
+      holes_played,
+      total_score:  score,
+      total_putts:  isNaN(putts) ? null : putts,
+      student_note: histForm.note || null,
+      historical:   true,
+      sent_to_coach: false,
+      created_at:   new Date(histForm.date).toISOString(),
+    }]).select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").single();
+    if (!error && data) {
+      setRounds(prev => [data, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+    }
+    setHistSaving(false);
+    setShowHistModal(false);
+    setHistForm({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", score: "", putts: "", note: "" });
   }
 
   if (loading) return (
@@ -502,6 +547,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           ⛳ Start new round
         </button>
 
+        {rounds.filter(r => r.historical).length < 5 && (
+          <button className="hist-btn" onClick={() => setShowHistModal(true)}>
+            📅 Add a historical round
+          </button>
+        )}
+
         {rounds.length > 0 && (
           <>
             <div className="section-title">Past rounds</div>
@@ -509,16 +560,18 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               const diff = (r.total_score || 0) - getCoursePar(r);
               const date = new Date(r.created_at).toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" });
               return (
-                <div className="round-card" key={r.id} onClick={() => onEditRound(r)}
-                  style={{flexDirection:"column",alignItems:"stretch",gap:0}}>
+                <div className="round-card" key={r.id} onClick={r.historical ? undefined : () => onEditRound(r)}
+                  style={{flexDirection:"column",alignItems:"stretch",gap:0,cursor:r.historical?"default":"pointer"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
                     <div className="round-card-left">
                       <div className="round-card-course">{r.courses?.name || "Golf Course"}</div>
                       <div className="round-card-date">{date} · {r.holes_played} holes</div>
                       <div className="round-card-badges">
-                        {r.sent_to_coach
-                          ? <span className="badge-sent">✓ Sent to coach</span>
-                          : <span className="badge-unsent">Not sent yet</span>}
+                        {r.historical
+                          ? <span className="badge-historical">Historical</span>
+                          : r.sent_to_coach
+                            ? <span className="badge-sent">✓ Sent to coach</span>
+                            : <span className="badge-unsent">Not sent yet</span>}
                       </div>
                     </div>
                     <div className="round-card-score">
@@ -554,6 +607,87 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           </div>
         )}
       </div>
+
+      {showHistModal && (
+        <div className="modal-backdrop" onClick={() => setShowHistModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">Add Historical Round</div>
+
+            <div className="modal-field">
+              <label className="modal-label">Course</label>
+              <select
+                className="modal-input"
+                value={histForm.course_id}
+                onChange={e => setHistForm(f => ({ ...f, course_id: e.target.value }))}
+              >
+                <option value="89e2ad4e-8d5a-4244-8568-b2c8a448a77f">Wee Course (9 holes)</option>
+                <option value="b1a2c3d4-e5f6-7890-abcd-ef1234567890">Big Course (18 holes)</option>
+              </select>
+            </div>
+
+            <div className="modal-field">
+              <label className="modal-label">Date played</label>
+              <input
+                className="modal-input"
+                type="date"
+                max={new Date().toISOString().split("T")[0]}
+                value={histForm.date}
+                onChange={e => setHistForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+
+            <div className="modal-row">
+              <div className="modal-field" style={{marginBottom:0}}>
+                <label className="modal-label">Gross score</label>
+                <input
+                  className="modal-input"
+                  type="number"
+                  min="1"
+                  max="200"
+                  placeholder="e.g. 42"
+                  value={histForm.score}
+                  onChange={e => setHistForm(f => ({ ...f, score: e.target.value }))}
+                />
+              </div>
+              <div className="modal-field" style={{marginBottom:0}}>
+                <label className="modal-label">Total putts <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                <input
+                  className="modal-input"
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="e.g. 18"
+                  value={histForm.putts}
+                  onChange={e => setHistForm(f => ({ ...f, putts: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="modal-field" style={{marginTop:16}}>
+              <label className="modal-label">Note <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+              <textarea
+                className="modal-input"
+                rows={3}
+                placeholder="Anything worth remembering about this round…"
+                value={histForm.note}
+                onChange={e => setHistForm(f => ({ ...f, note: e.target.value }))}
+                style={{resize:"vertical"}}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setShowHistModal(false)}>Cancel</button>
+              <button
+                className="modal-submit"
+                disabled={histSaving || !histForm.date || !histForm.score}
+                onClick={saveHistoricalRound}
+              >
+                {histSaving ? "Saving…" : "Save round"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
