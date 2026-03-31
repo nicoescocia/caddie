@@ -129,6 +129,7 @@ export default function AdminDashboard({ user, onSignOut }) {
       adminClient.from("coach_students").select("coach_id, student_id"),
     ]);
 
+    console.log("[AdminDashboard] profiles fetch — data:", profilesRes.data, "error:", profilesRes.error);
     const allProfiles = profilesRes.data || [];
     if (profilesRes.data) setProfiles(allProfiles);
     if (roundsRes.count != null) setRoundCount(roundsRes.count);
