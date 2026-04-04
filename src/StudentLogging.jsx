@@ -1268,9 +1268,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     setSaving(true);
     let rid = roundId;
     if (!rid) {
-      // Use entered handicap; if none, default to ceil(official_handicap)
+      // Use entered handicap; if none, default based on course length
+      const is9Hole = holes.length <= 9;
       const hcpToUse = handicap !== "" ? parseInt(handicap, 10)
-        : (officialHandicap != null ? Math.ceil(officialHandicap) : null);
+        : (officialHandicap != null
+            ? (is9Hole ? Math.ceil(officialHandicap / 2) : Math.ceil(officialHandicap))
+            : null);
       if (handicap === "" && hcpToUse != null) setHandicap(String(hcpToUse));
       const { data: row, error } = await supabase
         .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse }])

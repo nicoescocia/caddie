@@ -335,6 +335,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   const [histEditId, setHistEditId] = useState(null);
   const [histEditLoading, setHistEditLoading] = useState(false);
   const [roundHoleStats, setRoundHoleStats]   = useState({});
+  const [roundHolesData, setRoundHolesData]   = useState({});
   const [statTab, setStatTab]                 = useState(null);
 
   function updateHistHole(i, fields) {
@@ -354,9 +355,10 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       setHistHoles(initHistHoles(round.course_id));
       setHistEditLoading(true);
       setShowHistModal(true);
-      const { data: holes } = await supabase.from("round_holes").select("*").eq("round_id", round.id).order("hole_number");
-      if (holes) {
-        setHistHoles(holes.map(h => ({
+      // Use bulk-fetched hole data — no per-round query needed
+      const stored = roundHolesData[round.id];
+      if (stored && stored.length > 0) {
+        setHistHoles(stored.map(h => ({
           score:   h.score,
           fairway: h.fairway,
           putts:   h.putts,
@@ -387,8 +389,9 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       if (roundIds.length > 0) {
         const { data: holeRows } = await supabase
           .from("round_holes")
-          .select("round_id, gir, dna, fairway, par, score, picked_up, stroke_index")
-          .in("round_id", roundIds);
+          .select("round_id, hole_number, gir, dna, fairway, par, score, putts, penalty, picked_up, stroke_index")
+          .in("round_id", roundIds)
+          .order("hole_number", { ascending: true });
         const roundsById = Object.fromEntries((rds || []).map(r => [r.id, r]));
         // Build SI map from course_holes — round_holes.stroke_index may be null for older rounds
         const uniqueCourseIds = [...new Set((rds || []).map(r => r.course_id).filter(Boolean))];
@@ -404,10 +407,13 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           }
         }
         const statsMap = {};
+        const holesByRound = {};
         for (const h of (holeRows || [])) {
           if (!statsMap[h.round_id]) {
             statsMap[h.round_id] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0, stableford_total: 0, stableford_holes: 0 };
           }
+          if (!holesByRound[h.round_id]) holesByRound[h.round_id] = [];
+          holesByRound[h.round_id].push(h);
           if (!h.dna) {
             statsMap[h.round_id].attempted_holes++;
             if (h.gir) statsMap[h.round_id].gir_count++;
@@ -437,6 +443,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           }
         }
         setRoundHoleStats(statsMap);
+        setRoundHolesData(holesByRound);
       }
       // Fetch coach profile separately if link exists
       if (link?.coach_id) {
