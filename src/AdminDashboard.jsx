@@ -349,15 +349,13 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                         <td className="adm-hide-sm">{fmtDate(p.created_at)}</td>
                         <td>
                           <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
-                            {p.role === "student" && (
-                              <button
-                                className={"adm-premium-toggle " + (p.is_premium ? "is-premium" : "is-free")}
-                                disabled={togglingPremium === p.id}
-                                onClick={() => handleTogglePremium(p)}
-                              >
-                                {togglingPremium === p.id ? "…" : p.is_premium ? "★ Premium" : "Free"}
-                              </button>
-                            )}
+                            <button
+                              className={"adm-premium-toggle " + (p.is_premium ? "is-premium" : "is-free")}
+                              disabled={togglingPremium === p.id}
+                              onClick={() => handleTogglePremium(p)}
+                            >
+                              {togglingPremium === p.id ? "…" : p.is_premium ? "★ Premium" : "Free"}
+                            </button>
                             <button
                               className="adm-btn-view"
                               disabled={profileLoadingId === p.id}

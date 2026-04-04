@@ -316,7 +316,7 @@ function StudentRoundTrends({ rounds }) {
   );
 }
 
-export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut, onBackToAdmin, onProfile }) {
+export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut, onBackToAdmin, onProfile, onSettings }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
   const [coach, setCoach]       = useState(null);
@@ -522,6 +522,11 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           {onBackToAdmin && (
             <button className="signout-btn" onClick={onBackToAdmin} style={{color:"rgba(255,255,255,0.8)"}}>
               ← Admin
+            </button>
+          )}
+          {onSettings && (
+            <button className="signout-btn" onClick={onSettings} style={{color:"rgba(255,255,255,0.8)"}}>
+              Settings
             </button>
           )}
           {onProfile && (

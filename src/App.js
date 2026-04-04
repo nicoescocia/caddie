@@ -7,6 +7,7 @@ import CoachHome from './CoachHome'
 import CoachDashboard from './CoachDashboard'
 import AdminDashboard from './AdminDashboard'
 import ProfilePage from './ProfilePage'
+import StudentSettings from './StudentSettings'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -97,6 +98,15 @@ function App() {
           />
         )
       }
+      if (studentScreen === 'settings') {
+        return (
+          <StudentSettings
+            user={user}
+            onBack={() => setStudentScreen('dashboard')}
+            onSignOut={handleSignOut}
+          />
+        )
+      }
       if (studentScreen === 'logging') {
         return (
           <StudentLogging
@@ -124,6 +134,7 @@ function App() {
           onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
           onBackToAdmin={() => { resetScreenState(); setAdminView('admin') }}
           onProfile={() => setStudentScreen('profile')}
+          onSettings={() => setStudentScreen('settings')}
         />
       )
     }
@@ -176,6 +187,16 @@ function App() {
     )
   }
 
+  if (studentScreen === 'settings') {
+    return (
+      <StudentSettings
+        user={user}
+        onBack={() => setStudentScreen('dashboard')}
+        onSignOut={handleSignOut}
+      />
+    )
+  }
+
   if (studentScreen === 'logging') {
     return (
       <StudentLogging
@@ -202,6 +223,7 @@ function App() {
       onNewRound={() => setStudentScreen('logging')}
       onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
       onProfile={() => setStudentScreen('profile')}
+      onSettings={() => setStudentScreen('settings')}
     />
   )
 }

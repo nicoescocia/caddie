@@ -271,13 +271,14 @@ function calcGIR(score, putts, par) {
   return (score - putts) <= (par - 2);
 }
 function emptyHole(par) {
-  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, penalty: "None", pickedUp: false, dna: false };
+  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: "None", pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
   return {
     score: row.score, putts: row.putts, fairway: row.fairway,
     approach: row.approach, shotsInside50: row.shots_inside_50,
-    putt1: row.putt1, putt2: row.putt2, penalty: row.penalty || "None", sgReason: row.sg_reason || null,
+    putt1: row.putt1, putt2: row.putt2, putt3: row.putt3 || null,
+    penalty: row.penalty || "None", sgReason: row.sg_reason || null,
     pickedUp: row.picked_up || false, dna: row.dna || false,
   };
 }
@@ -522,6 +523,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [handicap, setHandicap]       = useState("");
   const [courseName, setCourseName] = useState("");
   const [roundId, setRoundId]       = useState(null);
+  const [fullPuttMode, setFullPuttMode] = useState(false);
   // view: "course_picker" | "overview" | "logging" | "summary" | "sent" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [saving, setSaving]         = useState(false);
@@ -602,6 +604,21 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }
     loadExisting();
   }, [existingRound]);
+
+  // Fetch student settings (non-blocking — defaults to standard if not yet loaded)
+  useEffect(() => {
+    async function fetchSettings() {
+      const { data } = await supabase
+        .from("profiles")
+        .select("settings, is_premium")
+        .eq("id", user.id)
+        .single();
+      if (data?.is_premium && data?.settings?.putt_tracking === "full") {
+        setFullPuttMode(true);
+      }
+    }
+    fetchSettings();
+  }, [user.id]);
 
   // ── Course picker screen — must be before all other guards ──
   if (view === "course_picker") {
@@ -803,7 +820,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     const par3GIR = h.par === 3 && gir === true;
     if (d.putts !== 0 && !par3GIR && !d.approach) return false;
     if (d.putts > 0 && !d.putt1) return false;
-    if (d.putts >= 3 && !d.putt2) return false;
+    if (fullPuttMode) {
+      if (d.putts >= 2 && !d.putt2) return false;
+      if (d.putts >= 3 && !d.putt3) return false;
+    } else {
+      if (d.putts >= 3 && !d.putt2) return false;
+    }
     return true;
   }
 
@@ -820,6 +842,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       shots_inside_50: hole.dna || hole.pickedUp ? null : hole.shotsInside50,
       putt1: hole.dna || hole.pickedUp ? null : hole.putt1,
       putt2: hole.dna || hole.pickedUp ? null : hole.putt2,
+      putt3: hole.dna || hole.pickedUp ? null : hole.putt3 || null,
       penalty: hole.dna || hole.pickedUp ? "None" : hole.penalty || "None",
       sg_reason: hole.dna || hole.pickedUp ? null : hole.sgReason || null,
       picked_up: hole.pickedUp || false,
@@ -1081,7 +1104,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                 <button
                   key={p.n}
                   className={"putt-btn " + (d.putts === p.n ? (p.n >= 3 ? "sel-tp" : "sel") : "")}
-                  onClick={() => update({ putts: p.n, putt2: p.n < 3 ? null : d.putt2 })}
+                  onClick={() => update({
+                    putts: p.n,
+                    putt1: p.n < 1 ? null : d.putt1,
+                    putt2: fullPuttMode ? (p.n < 2 ? null : d.putt2) : (p.n < 3 ? null : d.putt2),
+                    putt3: p.n < 3 ? null : d.putt3,
+                  })}
                 >
                   <span className="pv">{p.n === 3 ? "3+" : p.n}</span>
                   <span className="pu">{p.label}</span>
@@ -1161,12 +1189,26 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {!d.pickedUp && !d.dna && show3putt && (
+        {!d.pickedUp && !d.dna && (fullPuttMode ? d.putts >= 2 : show3putt) && (
           <div className="sec">
-            <div className="sec-label">Second putt distance <span className="badge conditional">3-putt</span></div>
+            <div className="sec-label">
+              Second putt distance
+              {!fullPuttMode && <span className="badge conditional">3-putt</span>}
+            </div>
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
               {PUTT2_DIST.map(p => (
                 <button key={p.v} className={"tap-btn " + (d.putt2 === p.v ? "sel" : "")} style={{minWidth:52,flexShrink:0}} onClick={() => update({ putt2: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!d.pickedUp && !d.dna && fullPuttMode && show3putt && (
+          <div className="sec">
+            <div className="sec-label">Third putt distance <span className="badge conditional">3-putt</span></div>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
+              {PUTT2_DIST.map(p => (
+                <button key={p.v} className={"tap-btn " + (d.putt3 === p.v ? "sel" : "")} style={{minWidth:52,flexShrink:0}} onClick={() => update({ putt3: p.v })}><span className="tv">{p.v}</span><span className="tu">{p.u}</span></button>
               ))}
             </div>
           </div>

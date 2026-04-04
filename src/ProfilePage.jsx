@@ -44,6 +44,9 @@ const css = `
   .prof-textarea { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'Outfit',sans-serif; font-size:14px; color:var(--text); background:white; outline:none; transition:border-color .15s; resize:vertical; min-height:90px; line-height:1.55; }
   .prof-textarea:focus { border-color:var(--green); }
 
+  .prof-add-link { background:none; border:none; padding:0; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:var(--green); cursor:pointer; margin-top:8px; display:inline-flex; align-items:center; gap:4px; }
+  .prof-add-link:hover { color:var(--green-mid); }
+
   .prof-save-btn { width:100%; background:var(--green); border:none; border-radius:14px; padding:16px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:white; cursor:pointer; transition:all .2s; }
   .prof-save-btn:hover { background:var(--green-mid); }
   .prof-save-btn:disabled { opacity:.6; cursor:not-allowed; }
@@ -60,6 +63,7 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [visibleCourses, setVisibleCourses] = useState(1);
   const [form, setForm] = useState({
     first_name: "", last_name: "", phone: "", bio: "",
     home_courses: ["", "", ""],
@@ -75,6 +79,8 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
       setProfile(prof);
       setEmail(authRes.data?.user?.email || user.email || "");
       const courses = prof?.home_courses || [];
+      // Show as many fields as there are saved values, minimum 1
+      setVisibleCourses(Math.max(1, courses.filter(c => c).length));
       setForm({
         first_name:   prof?.first_name || "",
         last_name:    prof?.last_name  || "",
@@ -105,18 +111,23 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
     setSaving(true);
     setSaved(false);
     const home_courses = form.home_courses.map(c => c.trim()).filter(Boolean);
-    const { error } = await supabase.from("profiles").update({
+    const updatePayload = {
       first_name:   form.first_name.trim(),
       last_name:    form.last_name.trim(),
       phone:        form.phone.trim() || null,
-      bio:          form.bio.trim()   || null,
       home_courses: home_courses.length ? home_courses : null,
-    }).eq("id", user.id);
+    };
+    if (profile?.role !== "student") {
+      updatePayload.bio = form.bio.trim() || null;
+    }
+    const { error } = await supabase.from("profiles").update(updatePayload).eq("id", user.id);
     if (!error) setSaved(true);
     setSaving(false);
   }
 
   const avatarInitials = ((form.first_name || "?")[0] + (form.last_name || "")[0]).toUpperCase();
+  // Show "+ Add another" if last visible field has content and fewer than 3 shown
+  const canAddCourse = visibleCourses < 3 && form.home_courses[visibleCourses - 1].trim() !== "";
 
   if (loading) return (
     <>
@@ -181,7 +192,7 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
 
         <div className="prof-card">
           <div className="prof-section-label">Home courses &amp; ranges</div>
-          {[0, 1, 2].map(i => (
+          {Array.from({ length: visibleCourses }, (_, i) => (
             <div className="prof-field" key={i}>
               <label className="prof-label">
                 Course {i + 1} <span className="prof-label-opt">— optional</span>
@@ -194,19 +205,26 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
               />
             </div>
           ))}
+          {canAddCourse && (
+            <button className="prof-add-link" onClick={() => setVisibleCourses(v => v + 1)}>
+              + Add another
+            </button>
+          )}
         </div>
 
-        <div className="prof-card">
-          <div className="prof-field">
-            <label className="prof-label">Bio <span className="prof-label-opt">— optional</span></label>
-            <textarea
-              className="prof-textarea"
-              value={form.bio}
-              onChange={e => set("bio", e.target.value)}
-              placeholder="Tell your coach a bit about yourself…"
-            />
+        {profile?.role !== "student" && (
+          <div className="prof-card">
+            <div className="prof-field">
+              <label className="prof-label">Bio <span className="prof-label-opt">— optional</span></label>
+              <textarea
+                className="prof-textarea"
+                value={form.bio}
+                onChange={e => set("bio", e.target.value)}
+                placeholder="Tell students about your coaching background, specialisms, and approach..."
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <button
           className={"prof-save-btn" + (saved ? " saved" : "")}
