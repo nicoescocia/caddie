@@ -6,22 +6,17 @@ const css = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
     --green-dark:#0F3D2E; --green:#1A6B4A; --green-mid:#2A8A60; --green-light:#3DAA78;
-    --grass:#52C97A; --bg:#F4F1EB; --gold:#C9A84C; --red:#C94040; --orange:#D4763A;
-    --sky:#4A90D9; --text:#1C1C1C; --text-mid:#555; --text-dim:#999; --border:#E2DDD4;
+    --bg:#F4F1EB; --gold:#C9A84C; --red:#C94040; --text:#1C1C1C;
+    --text-mid:#555; --text-dim:#999; --border:#E2DDD4;
   }
   body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 
-  .cf-bar { background:var(--green-dark); padding:0 20px; display:flex; align-items:center; justify-content:space-between; height:54px; position:sticky; top:0; z-index:100; }
-  .cf-logo { font-family:'Playfair Display',serif; font-size:20px; color:var(--gold); }
-  .cf-bar-right { display:flex; align-items:center; gap:8px; }
+  .cf-header { background:var(--green-dark); padding:0 20px; display:flex; align-items:center; justify-content:space-between; height:54px; position:sticky; top:0; z-index:100; }
+  .cf-header-title { font-family:'Playfair Display',serif; font-size:18px; color:var(--gold); }
   .cf-back-btn { background:none; border:none; color:rgba(255,255,255,0.7); font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; cursor:pointer; padding:0; display:flex; align-items:center; gap:5px; transition:color .15s; }
   .cf-back-btn:hover { color:white; }
-  .cf-signout-btn { background:none; border:1px solid rgba(255,255,255,0.2); color:rgba(255,255,255,0.6); border-radius:8px; padding:5px 12px; font-family:'Outfit',sans-serif; font-size:12px; cursor:pointer; transition:all .2s; }
-  .cf-signout-btn:hover { border-color:rgba(255,255,255,0.5); color:white; }
 
-  .cf-wrap { max-width:480px; margin:0 auto; padding:24px 16px 80px; }
-  .cf-title { font-family:'Playfair Display',serif; font-size:24px; color:var(--text); margin-bottom:6px; }
-  .cf-sub { font-size:13px; color:var(--text-dim); margin-bottom:24px; line-height:1.6; }
+  .cf-body { max-width:480px; margin:0 auto; padding:24px 16px 120px; }
 
   .cf-field { margin-bottom:20px; }
   .cf-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:7px; display:block; }
@@ -35,7 +30,7 @@ const css = `
   .cf-pill:hover { border-color:var(--green-light); }
   .cf-pill.sel { background:var(--green-dark); border-color:var(--green-dark); color:white; }
 
-  .cf-card { background:white; border:1.5px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:16px; }
+  .cf-card { background:white; border:1.5px solid var(--border); border-radius:16px; overflow:hidden; }
   .cf-table { width:100%; border-collapse:collapse; }
   .cf-table th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); padding:10px 6px; text-align:center; border-bottom:1.5px solid var(--border); background:var(--bg); }
   .cf-table th:first-child { padding-left:12px; text-align:left; }
@@ -51,7 +46,9 @@ const css = `
   .cf-num-input:focus { border-color:var(--green); }
   .cf-num-input.err { border-color:var(--red); background:#FFF8F8; }
 
-  .cf-submit-btn { width:100%; background:var(--green); border:none; border-radius:14px; padding:16px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:white; cursor:pointer; transition:all .2s; margin-top:8px; }
+  .cf-footer { position:fixed; bottom:0; left:0; right:0; background:var(--bg); border-top:1px solid var(--border); padding:14px 16px calc(14px + env(safe-area-inset-bottom)); z-index:100; }
+  .cf-footer-inner { max-width:480px; margin:0 auto; }
+  .cf-submit-btn { width:100%; background:var(--green); border:none; border-radius:14px; padding:16px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:white; cursor:pointer; transition:all .2s; }
   .cf-submit-btn:hover:not(:disabled) { background:var(--green-mid); transform:translateY(-1px); box-shadow:0 6px 20px rgba(26,107,74,0.3); }
   .cf-submit-btn:disabled { background:#C8C4BB; cursor:not-allowed; transform:none; }
 
@@ -64,14 +61,14 @@ function initHoles(n) {
   return Array.from({ length: n }, () => ({ par: 4, yardage: "", si: "" }));
 }
 
-export default function CourseForm({ user, editCourseId, onBack, onDone, onSignOut }) {
-  const [name, setName]         = useState("");
+export default function CourseForm({ user, editCourseId, onBack, onDone }) {
+  const [name, setName]           = useState("");
   const [holeCount, setHoleCount] = useState(18);
-  const [holes, setHoles]       = useState(() => initHoles(18));
-  const [saving, setSaving]     = useState(false);
-  const [loading, setLoading]   = useState(!!editCourseId);
-  const [nameErr, setNameErr]   = useState("");
-  const [siErr, setSiErr]       = useState("");
+  const [holes, setHoles]         = useState(() => initHoles(18));
+  const [saving, setSaving]       = useState(false);
+  const [loading, setLoading]     = useState(!!editCourseId);
+  const [nameErr, setNameErr]     = useState("");
+  const [siErr, setSiErr]         = useState("");
 
   useEffect(() => {
     if (!editCourseId) return;
@@ -83,7 +80,7 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
       ]);
       if (course) {
         setName(course.name || "");
-        const n = course.hole_count || (holeRows?.length) || 18;
+        const n = course.hole_count || holeRows?.length || 18;
         setHoleCount(n);
         setHoles(
           holeRows && holeRows.length > 0
@@ -101,22 +98,23 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
   }, [editCourseId]);
 
   function handleHoleCount(n) {
+    if (holes.some(h => h.yardage !== "" || h.si !== "")) {
+      if (!window.confirm("Switching hole count will reset all hole data. Continue?")) return;
+    }
     setHoleCount(n);
     setHoles(initHoles(n));
-    setNameErr(""); setSiErr("");
+    setNameErr("");
+    setSiErr("");
   }
 
   function updateHole(i, fields) {
     setHoles(prev => prev.map((h, idx) => idx === i ? { ...h, ...fields } : h));
   }
 
-  // Per-hole SI validity for inline highlighting
   function siStatus() {
     const nums = holes.map(h => parseInt(h.si, 10));
     const counts = {};
-    nums.forEach((n, i) => {
-      if (!isNaN(n)) counts[n] = (counts[n] || []).concat(i);
-    });
+    nums.forEach((n, i) => { if (!isNaN(n)) counts[n] = (counts[n] || []).concat(i); });
     const dupes = new Set();
     Object.values(counts).forEach(idxs => { if (idxs.length > 1) idxs.forEach(i => dupes.add(i)); });
     return nums.map((n, i) => {
@@ -159,8 +157,10 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
         .update({ name: name.trim(), hole_count: holeCount })
         .eq("id", editCourseId);
       if (!error) {
-        await supabase.from("course_holes").delete().eq("course_id", editCourseId);
-        await supabase.from("course_holes").insert(holeRows.map(r => ({ ...r, course_id: editCourseId })));
+        await supabase.from("course_holes").upsert(
+          holeRows.map(r => ({ ...r, course_id: editCourseId })),
+          { onConflict: "course_id,hole_number" }
+        );
         onDone({ id: editCourseId, name: name.trim(), hole_count: holeCount });
       }
     } else {
@@ -169,7 +169,9 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
         .select("id, name, hole_count")
         .single();
       if (!error && courseData) {
-        await supabase.from("course_holes").insert(holeRows.map(r => ({ ...r, course_id: courseData.id })));
+        await supabase.from("course_holes").insert(
+          holeRows.map(r => ({ ...r, course_id: courseData.id }))
+        );
         onDone({ id: courseData.id, name: courseData.name, hole_count: courseData.hole_count });
       }
     }
@@ -181,24 +183,17 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
   return (
     <>
       <style>{css}</style>
-      <div className="cf-bar">
+
+      <div className="cf-header">
         <button className="cf-back-btn" onClick={onBack}>← Back</button>
-        <div className="cf-logo">Caddie</div>
-        <div className="cf-bar-right">
-          {onSignOut && <button className="cf-signout-btn" onClick={onSignOut}>Sign out</button>}
-        </div>
+        <div className="cf-header-title">{editCourseId ? "Edit Course" : "Add Course"}</div>
+        <div style={{ width: 60 }} />
       </div>
 
       {loading ? (
         <div className="cf-loading"><div className="cf-spinner" /></div>
       ) : (
-        <div className="cf-wrap">
-          <div className="cf-title">{editCourseId ? "Edit course" : "Add new course"}</div>
-          <div className="cf-sub">
-            {editCourseId
-              ? "Update the course details and hole-by-hole data below."
-              : "Enter the course details. Stroke indexes must be unique and within range."}
-          </div>
+        <div className="cf-body">
 
           {/* Course name */}
           <div className="cf-field">
@@ -232,7 +227,7 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
           {/* Hole table */}
           <div className="cf-field">
             <label className="cf-label">Hole by hole</label>
-            {siErr && <div className="cf-err-msg" style={{marginBottom:8}}>{siErr}</div>}
+            {siErr && <div className="cf-err-msg" style={{ marginBottom: 8 }}>{siErr}</div>}
             <div className="cf-card">
               <table className="cf-table">
                 <thead>
@@ -289,11 +284,16 @@ export default function CourseForm({ user, editCourseId, onBack, onDone, onSignO
             </div>
           </div>
 
-          <button className="cf-submit-btn" onClick={handleSubmit} disabled={saving}>
+        </div>
+      )}
+
+      <div className="cf-footer">
+        <div className="cf-footer-inner">
+          <button className="cf-submit-btn" onClick={handleSubmit} disabled={saving || loading}>
             {saving ? "Saving…" : editCourseId ? "Save changes" : "Add course"}
           </button>
         </div>
-      )}
+      </div>
     </>
   );
 }
