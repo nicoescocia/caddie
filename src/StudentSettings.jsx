@@ -35,23 +35,31 @@ const css = `
   .set-card { background:white; border:1.5px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
   .set-section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:14px; }
 
-  .set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
-  .set-row-info { flex:1; }
-  .set-row-title { font-size:15px; font-weight:700; color:var(--text); margin-bottom:4px; }
-  .set-row-desc { font-size:13px; color:var(--text-dim); line-height:1.55; }
-
-  .set-toggle-group { display:flex; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; flex-shrink:0; margin-top:12px; }
-  .set-toggle-opt { flex:1; padding:10px 14px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:var(--text-mid); background:white; border:none; cursor:pointer; transition:all .18s; white-space:nowrap; text-align:center; }
-  .set-toggle-opt:not(:last-child) { border-right:1.5px solid var(--border); }
-  .set-toggle-opt.active { background:var(--green-dark); color:white; }
-  .set-toggle-opt.locked { opacity:.45; cursor:not-allowed; }
-
-  .set-premium-badge { display:inline-flex; align-items:center; gap:5px; background:#FFF8E6; border:1px solid #E8D080; color:#7A5A00; border-radius:7px; padding:3px 8px; font-size:11px; font-weight:700; margin-top:8px; }
-
   .loading-wrap { display:flex; align-items:center; justify-content:center; padding:60px; }
   .big-spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to{transform:rotate(360deg)} }
 `;
+
+const PUTT_OPTIONS = [
+  {
+    value: "first_only",
+    label: "First putt only",
+    desc: "Record the distance of your first putt only. Nothing else.",
+    premiumOnly: false,
+  },
+  {
+    value: "standard",
+    label: "Standard",
+    desc: "Record first putt distance always. On 3-putts, also record second putt distance.",
+    premiumOnly: false,
+  },
+  {
+    value: "full",
+    label: "Full putt distances",
+    desc: "Record a distance for every putt — 1 putt, 2 putts, or 3 putts.",
+    premiumOnly: true,
+  },
+];
 
 export default function StudentSettings({ user, onBack, onSignOut }) {
   const [loading, setLoading] = useState(true);
@@ -73,13 +81,13 @@ export default function StudentSettings({ user, onBack, onSignOut }) {
     load();
   }, [user.id]);
 
-  async function handlePuttTrackingChange(val) {
-    if (val === "full" && !isPremium) return;
+  async function handleSelect(val) {
+    const opt = PUTT_OPTIONS.find(o => o.value === val);
+    if (opt?.premiumOnly && !isPremium) return;
     setSaving(true);
-    const newSettings = { putt_tracking: val };
     const { error } = await supabase
       .from("profiles")
-      .update({ settings: newSettings })
+      .update({ settings: { putt_tracking: val } })
       .eq("id", user.id);
     if (!error) setPuttTracking(val);
     setSaving(false);
@@ -114,102 +122,77 @@ export default function StudentSettings({ user, onBack, onSignOut }) {
 
         <div className="set-card">
           <div className="set-section-label">Putting</div>
-          <div>
-            <div className="set-row-title">Putt tracking detail</div>
-            <div className="set-row-desc" style={{marginTop:4,marginBottom:12}}>
-              Controls how much putt distance data is recorded per hole.
+          <div style={{marginBottom:4}}>
+            <div style={{fontSize:15,fontWeight:700,color:"var(--text)",marginBottom:4}}>Putt tracking detail</div>
+            <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:14,lineHeight:1.55}}>
+              Controls how much distance data is recorded for your putts.
             </div>
 
-            <div style={{marginBottom:12}}>
-              <div style={{
-                background: puttTracking === "standard" ? "var(--green-dark)" : "white",
-                border: "1.5px solid " + (puttTracking === "standard" ? "var(--green-dark)" : "var(--border)"),
-                borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer",
-                transition: "all .18s",
-              }} onClick={() => handlePuttTrackingChange("standard")}>
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}>
-                  <div>
-                    <div style={{
-                      fontSize: 14, fontWeight: 700,
-                      color: puttTracking === "standard" ? "white" : "var(--text)",
-                      marginBottom: 3,
-                    }}>
-                      Standard
-                    </div>
-                    <div style={{
-                      fontSize: 12,
-                      color: puttTracking === "standard" ? "rgba(255,255,255,0.6)" : "var(--text-dim)",
-                      lineHeight: 1.5,
-                    }}>
-                      Record first putt distance. On 3-putts, also record second putt distance.
-                    </div>
-                  </div>
-                  {puttTracking === "standard" && (
-                    <div style={{
-                      width: 20, height: 20, borderRadius: "50%", background: "var(--gold)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      flexShrink: 0, marginLeft: 12, fontSize: 12, color: "var(--green-dark)", fontWeight: 700,
-                    }}>✓</div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{
-                background: puttTracking === "full" ? "var(--green-dark)" : "white",
-                border: "1.5px solid " + (puttTracking === "full" ? "var(--green-dark)" : "var(--border)"),
-                borderRadius: 12, padding: "14px 16px",
-                cursor: isPremium ? "pointer" : "not-allowed",
-                opacity: isPremium ? 1 : 0.65,
-                transition: "all .18s",
-              }} onClick={() => isPremium && handlePuttTrackingChange("full")}>
-                <div style={{display: "flex", alignItems: "center", justifyContent: "space-between"}}>
-                  <div>
-                    <div style={{
-                      fontSize: 14, fontWeight: 700,
-                      color: puttTracking === "full" ? "white" : "var(--text)",
-                      marginBottom: 3, display: "flex", alignItems: "center", gap: 8,
-                    }}>
-                      Full putt distances
-                      {!isPremium && (
-                        <span style={{
-                          background: "var(--gold)", color: "var(--green-dark)",
-                          fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-                          textTransform: "uppercase", letterSpacing: ".05em",
-                        }}>Premium</span>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {PUTT_OPTIONS.map(opt => {
+                const isActive    = puttTracking === opt.value;
+                const isLocked    = opt.premiumOnly && !isPremium;
+                return (
+                  <div
+                    key={opt.value}
+                    onClick={() => handleSelect(opt.value)}
+                    style={{
+                      background: isActive ? "var(--green-dark)" : "white",
+                      border: "1.5px solid " + (isActive ? "var(--green-dark)" : "var(--border)"),
+                      borderRadius: 12, padding: "14px 16px",
+                      cursor: isLocked ? "not-allowed" : "pointer",
+                      opacity: isLocked ? 0.6 : 1,
+                      transition: "all .18s",
+                    }}
+                  >
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{flex:1}}>
+                        <div style={{
+                          fontSize: 14, fontWeight: 700, marginBottom: 3,
+                          color: isActive ? "white" : "var(--text)",
+                          display: "flex", alignItems: "center", gap: 8,
+                        }}>
+                          {opt.label}
+                          {opt.premiumOnly && !isPremium && (
+                            <span style={{
+                              background: "var(--gold)", color: "var(--green-dark)",
+                              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
+                              textTransform: "uppercase", letterSpacing: ".05em",
+                            }}>Premium</span>
+                          )}
+                        </div>
+                        <div style={{
+                          fontSize: 12, lineHeight: 1.5,
+                          color: isActive ? "rgba(255,255,255,0.6)" : "var(--text-dim)",
+                        }}>
+                          {opt.desc}
+                        </div>
+                      </div>
+                      {isActive && (
+                        <div style={{
+                          width: 20, height: 20, borderRadius: "50%", background: "var(--gold)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0, marginLeft: 12, fontSize: 12,
+                          color: "var(--green-dark)", fontWeight: 700,
+                        }}>✓</div>
                       )}
                     </div>
-                    <div style={{
-                      fontSize: 12,
-                      color: puttTracking === "full" ? "rgba(255,255,255,0.6)" : "var(--text-dim)",
-                      lineHeight: 1.5,
-                    }}>
-                      Record a distance for every putt — 1 putt, 2 putts, or 3 putts.
-                    </div>
                   </div>
-                  {puttTracking === "full" && (
-                    <div style={{
-                      width: 20, height: 20, borderRadius: "50%", background: "var(--gold)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      flexShrink: 0, marginLeft: 12, fontSize: 12, color: "var(--green-dark)", fontWeight: 700,
-                    }}>✓</div>
-                  )}
-                </div>
-              </div>
+                );
+              })}
             </div>
 
             {!isPremium && (
               <div style={{
                 background: "#FFF8E6", border: "1px solid #E8D080", borderRadius: 10,
-                padding: "10px 13px", fontSize: 12, color: "#7A5A00", lineHeight: 1.55,
+                padding: "10px 13px", fontSize: 12, color: "#7A5A00", lineHeight: 1.55, marginTop: 12,
               }}>
                 Full putt distances is a <strong>Premium</strong> feature. Upgrade to unlock detailed putt tracking.
               </div>
             )}
 
             {saving && (
-              <div style={{fontSize:12,color:"var(--text-dim)",marginTop:8,textAlign:"center"}}>Saving…</div>
+              <div style={{fontSize:12,color:"var(--text-dim)",marginTop:10,textAlign:"center"}}>Saving…</div>
             )}
           </div>
         </div>
