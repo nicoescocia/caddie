@@ -243,6 +243,7 @@ function StudentRoundTrends({ rounds }) {
   // rounds are newest-first; take the 10 most recent of each type, then reverse for chart display (oldest→newest)
   const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(0, 10).reverse();
   const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(0, 10).reverse();
+  const r10 = scored.slice(0, 10).reverse();
   if (scored.length < 2) return null;
 
   function enrich(rs) {
@@ -254,10 +255,12 @@ function StudentRoundTrends({ rounds }) {
       puttsPerHole: r.total_putts != null && r.holes_played
                       ? Math.round((r.total_putts / r.holes_played) * 10) / 10
                       : null,
+      fwPct:        r.fw_holes ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
     }));
   }
   const e9  = enrich(r9);
   const e18 = enrich(r18);
+  const e10 = enrich(r10);
 
   const allScored  = [...e9, ...e18];
   const scoreDiffs = allScored.map(r => r.vsPar);
@@ -291,9 +294,9 @@ function StudentRoundTrends({ rounds }) {
       </div>
 
       <div className="trends-tabs">
-        {["score","gir","putts"].map(t => (
+        {["score","gir","putts","fairways"].map(t => (
           <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "gir" ? "GIR %" : "Putts"}
+            {t === "score" ? "Score" : t === "gir" ? "GIR %" : t === "putts" ? "Putts" : "Fairways"}
           </button>
         ))}
       </div>
@@ -304,14 +307,9 @@ function StudentRoundTrends({ rounds }) {
           <TrendLine data9={e9} data18={e18} metric="netVsPar" label="Net vs Par"   formatY={fmtPar} />
         </div>
       )}
-      {tab === "gir"   && (() => {
-        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
-        return <TrendLine data9={combined} data18={[]} metric="girPct" label="GIR %" yTicks={[0,25,50,75,100]} formatY={v => v+"%"} height={80} />;
-      })()}
-      {tab === "putts" && (() => {
-        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
-        return <TrendLine data9={combined} data18={[]} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />;
-      })()}
+      {tab === "gir"      && <TrendLine data9={e10} data18={[]} metric="girPct"      label="GIR %"           yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
+      {tab === "putts"    && <TrendLine data9={e10} data18={[]} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
+      {tab === "fairways" && <TrendLine data9={e10} data18={[]} metric="fwPct"       label="Fairways %"      yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
     </div>
   );
 }
@@ -332,6 +330,8 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   const [histSaving, setHistSaving] = useState(false);
   const [histEditId, setHistEditId] = useState(null);
   const [histEditLoading, setHistEditLoading] = useState(false);
+  const [roundHoleStats, setRoundHoleStats]   = useState({});
+  const [statTab, setStatTab]                 = useState(null);
 
   function updateHistHole(i, fields) {
     setHistHoles(prev => prev.map((h, idx) => idx === i ? { ...h, ...fields } : h));
@@ -378,6 +378,27 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       ]);
       setProfile(prof);
       setRounds(rds || []);
+      // Fetch per-hole stats for GIR and fairway charts
+      const roundIds = (rds || []).map(r => r.id);
+      if (roundIds.length > 0) {
+        const { data: holeRows } = await supabase
+          .from("round_holes")
+          .select("round_id, gir, dna, fairway, par")
+          .in("round_id", roundIds);
+        const statsMap = {};
+        for (const h of (holeRows || [])) {
+          if (!statsMap[h.round_id]) statsMap[h.round_id] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0 };
+          if (!h.dna) {
+            statsMap[h.round_id].attempted_holes++;
+            if (h.gir) statsMap[h.round_id].gir_count++;
+            if (h.par >= 4) {
+              statsMap[h.round_id].fw_holes++;
+              if (h.fairway === "yes") statsMap[h.round_id].fw_hit++;
+            }
+          }
+        }
+        setRoundHoleStats(statsMap);
+      }
       // Fetch coach profile separately if link exists
       if (link?.coach_id) {
         const { data: coachProf } = await supabase
@@ -506,12 +527,23 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   );
 
   const completedRounds = rounds.filter(r => r.total_score);
-  const avgDiff  = completedRounds.length
-    ? Math.round(completedRounds.reduce((s,r) => s + ((r.total_score||0) - getCoursePar(r)), 0) / completedRounds.length)
+  const rounds9  = completedRounds.filter(r => r.holes_played === 9);
+  const rounds18 = completedRounds.filter(r => r.holes_played === 18);
+  const activeStatTab = statTab ?? (rounds18.length >= rounds9.length ? 18 : 9);
+  const activeRounds  = activeStatTab === 9 ? rounds9 : rounds18;
+  const avgDiff = activeRounds.length
+    ? Math.round(activeRounds.reduce((s, r) => s + ((r.total_score || 0) - getCoursePar(r)), 0) / activeRounds.length)
     : null;
-  const bestDiff = completedRounds.length
-    ? Math.min(...completedRounds.map(r => (r.total_score||0) - getCoursePar(r)))
+  const bestDiff = activeRounds.length
+    ? Math.min(...activeRounds.map(r => (r.total_score || 0) - getCoursePar(r)))
     : null;
+  const enrichedForTrends = completedRounds.map(r => ({
+    ...r,
+    gir_count:       roundHoleStats[r.id]?.gir_count       ?? null,
+    attempted_holes: roundHoleStats[r.id]?.attempted_holes ?? null,
+    fw_hit:          roundHoleStats[r.id]?.fw_hit           ?? null,
+    fw_holes:        roundHoleStats[r.id]?.fw_holes         ?? null,
+  }));
 
   return (
     <>
@@ -576,23 +608,46 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               );
             })()}
           </div>
+          {completedRounds.length > 0 && (rounds9.length > 0 || rounds18.length > 0) && (
+            <div style={{display:"flex",gap:6,marginBottom:10}}>
+              {[9, 18].map(n => {
+                const hasRounds = n === 9 ? rounds9.length > 0 : rounds18.length > 0;
+                return (
+                  <button
+                    key={n}
+                    onClick={() => hasRounds && setStatTab(n)}
+                    style={{
+                      padding:"3px 11px", borderRadius:20, fontSize:11, fontWeight:700,
+                      fontFamily:"'Outfit',sans-serif", transition:"all .15s",
+                      cursor: hasRounds ? "pointer" : "default",
+                      border:"1.5px solid " + (activeStatTab === n ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.18)"),
+                      background: activeStatTab === n ? "rgba(255,255,255,0.14)" : "none",
+                      color: activeStatTab === n ? "white" : (hasRounds ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.2)"),
+                    }}
+                  >
+                    {n} holes
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="dash-stats">
             <div className="dash-stat">
               <div className="dash-stat-val">{rounds.length}</div>
               <div className="dash-stat-lbl">Rounds logged</div>
             </div>
             <div className="dash-stat">
-              <div className="dash-stat-val">{avgDiff != null ? (avgDiff > 0 ? "+" + avgDiff : avgDiff === 0 ? "E" : avgDiff) : "—"}</div>
+              <div className="dash-stat-val">{activeRounds.length > 0 ? (avgDiff != null ? (avgDiff > 0 ? "+" + avgDiff : avgDiff === 0 ? "E" : String(avgDiff)) : "—") : "—"}</div>
               <div className="dash-stat-lbl">Avg vs par</div>
             </div>
             <div className="dash-stat">
-              <div className="dash-stat-val">{bestDiff != null ? (bestDiff > 0 ? "+" + bestDiff : bestDiff === 0 ? "E" : bestDiff) : "—"}</div>
+              <div className="dash-stat-val">{activeRounds.length > 0 ? (bestDiff != null ? (bestDiff > 0 ? "+" + bestDiff : bestDiff === 0 ? "E" : String(bestDiff)) : "—") : "—"}</div>
               <div className="dash-stat-lbl">Best vs par</div>
             </div>
           </div>
         </div>
 
-        <StudentRoundTrends rounds={completedRounds} />
+        <StudentRoundTrends rounds={enrichedForTrends} />
 
         {/* Coach card */}
         {coach ? (
