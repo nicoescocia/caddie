@@ -104,6 +104,18 @@ const css = `
   .adm-btn-view { background:none; border:1px solid var(--border); color:var(--text-dim); border-radius:7px; padding:4px 10px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; }
   .adm-btn-view:hover { border-color:var(--green); color:var(--green); }
 
+  /* Flagged courses */
+  .adm-flag-row { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .adm-flag-row:last-child { border-bottom:none; }
+  .adm-flag-icon { font-size:18px; flex-shrink:0; padding-top:2px; }
+  .adm-flag-body { flex:1; min-width:0; }
+  .adm-flag-course { font-size:14px; font-weight:700; color:var(--text); margin-bottom:2px; }
+  .adm-flag-note { font-size:13px; color:var(--text-mid); margin-bottom:4px; line-height:1.5; }
+  .adm-flag-meta { font-size:11px; color:var(--text-dim); }
+  .adm-btn-resolve { background:none; border:1px solid var(--border); color:var(--text-dim); border-radius:7px; padding:4px 10px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; flex-shrink:0; }
+  .adm-btn-resolve:hover { border-color:var(--green); color:var(--green); }
+  .adm-btn-resolve:disabled { opacity:0.4; cursor:not-allowed; }
+
   /* Profile modal */
   .adm-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:300; display:flex; align-items:flex-end; justify-content:center; }
   .adm-modal-sheet { background:white; border-radius:20px 20px 0 0; padding:28px 22px 44px; width:100%; max-width:520px; max-height:85vh; overflow-y:auto; }
@@ -142,6 +154,8 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [togglingPremium, setTogglingPremium] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [profileLoadingId, setProfileLoadingId] = useState(null);
+  const [flaggedCourses, setFlaggedCourses] = useState([]);
+  const [resolvingFlagId, setResolvingFlagId] = useState(null);
 
   // Link form state
   const [linkCoachId, setLinkCoachId] = useState("");
@@ -150,10 +164,11 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [linkError, setLinkError] = useState("");
 
   async function load() {
-    const [profilesRes, roundsRes, csRes] = await Promise.all([
+    const [profilesRes, roundsRes, csRes, flagsRes] = await Promise.all([
       adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, phone, home_courses, bio, created_at"),
       adminClient.from("rounds").select("id", { count: "exact", head: true }),
       adminClient.from("coach_students").select("coach_id, student_id"),
+      adminClient.from("course_flags").select("id, note, created_at, courses(name), profiles!flagged_by(first_name, last_name)").eq("resolved", false).order("created_at", { ascending: false }),
     ]);
 
     const allProfiles = profilesRes.data || [];
@@ -176,10 +191,19 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
       }));
     }
 
+    if (flagsRes.data) setFlaggedCourses(flagsRes.data);
+
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleResolveFlag(flagId) {
+    setResolvingFlagId(flagId);
+    const { error } = await adminClient.from("course_flags").update({ resolved: true }).eq("id", flagId);
+    if (!error) setFlaggedCourses(prev => prev.filter(f => f.id !== flagId));
+    setResolvingFlagId(null);
+  }
 
   async function handleDeleteUser(profile) {
     const name = `${profile.first_name} ${profile.last_name}`;
@@ -469,6 +493,34 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                 </button>
                 {linkError && <span className="adm-link-error">{linkError}</span>}
               </div>
+            </div>
+
+            {/* ── Flagged Courses ── */}
+            <div className="adm-card">
+              <div className="adm-card-title">Flagged courses</div>
+              {flaggedCourses.length === 0 ? (
+                <div className="adm-empty">No open flags.</div>
+              ) : (
+                flaggedCourses.map(flag => (
+                  <div className="adm-flag-row" key={flag.id}>
+                    <div className="adm-flag-icon">🚩</div>
+                    <div className="adm-flag-body">
+                      <div className="adm-flag-course">{flag.courses?.name || "Unknown course"}</div>
+                      <div className="adm-flag-note">{flag.note}</div>
+                      <div className="adm-flag-meta">
+                        Flagged by {flag.profiles ? `${flag.profiles.first_name} ${flag.profiles.last_name}` : "unknown"} · {fmtDate(flag.created_at)}
+                      </div>
+                    </div>
+                    <button
+                      className="adm-btn-resolve"
+                      disabled={resolvingFlagId === flag.id}
+                      onClick={() => handleResolveFlag(flag.id)}
+                    >
+                      {resolvingFlagId === flag.id ? "…" : "Resolve"}
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
 
             <p style={{ textAlign: "center", fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>

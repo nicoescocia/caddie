@@ -260,6 +260,31 @@ const css = `
   .ov-ai-text { font-size:13px; color:var(--text); line-height:1.75; white-space:pre-wrap; }
   .ov-ai-loading { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-dim); }
   .ov-ai-spinner { width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--gold); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+
+  /* ── COURSE PICKER ── */
+  .cp-course-row { display:flex; align-items:center; width:100%; background:white; border:1.5px solid var(--border); border-radius:14px; padding:0; margin-bottom:10px; overflow:hidden; transition:border-color .15s; }
+  .cp-course-row:hover { border-color:var(--green-light); }
+  .cp-course-row.highlighted { border-color:var(--gold); background:#FFFDF5; }
+  .cp-course-tap { flex:1; padding:16px 18px; text-align:left; background:none; border:none; cursor:pointer; font-family:'Outfit',sans-serif; }
+  .cp-course-name { font-weight:700; font-size:15px; color:var(--text); margin-bottom:3px; }
+  .cp-course-meta { font-size:12px; color:var(--text-dim); }
+  .cp-course-new-badge { display:inline-block; background:var(--gold); color:var(--green-dark); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 6px; border-radius:4px; margin-left:7px; vertical-align:middle; }
+  .cp-icon-btn { background:none; border:none; cursor:pointer; padding:10px 12px; font-size:16px; color:var(--text-dim); transition:color .15s; flex-shrink:0; }
+  .cp-icon-btn:hover { color:var(--text); }
+  .cp-add-btn { width:100%; background:none; border:1.5px dashed var(--border); border-radius:14px; padding:15px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s; text-align:center; }
+  .cp-add-btn:hover { border-color:var(--green-light); color:var(--green); }
+
+  /* ── FLAG MODAL ── */
+  .flag-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:300; display:flex; align-items:flex-end; justify-content:center; }
+  .flag-sheet { background:white; border-radius:20px 20px 0 0; padding:24px 20px 40px; width:100%; max-width:480px; }
+  .flag-sheet-title { font-family:'Playfair Display',serif; font-size:20px; color:var(--text); margin-bottom:4px; }
+  .flag-sheet-sub { font-size:13px; color:var(--text-dim); margin-bottom:16px; line-height:1.5; }
+  .flag-textarea { width:100%; background:var(--bg); border:1.5px solid var(--border); border-radius:11px; padding:12px 14px; font-family:'Outfit',sans-serif; font-size:14px; color:var(--text); resize:none; outline:none; line-height:1.6; margin-bottom:12px; }
+  .flag-textarea:focus { border-color:var(--green); background:white; }
+  .flag-submit-btn { width:100%; background:var(--green); border:none; border-radius:12px; padding:14px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:white; cursor:pointer; margin-bottom:8px; transition:background .2s; }
+  .flag-submit-btn:hover:not(:disabled) { background:var(--green-mid); }
+  .flag-submit-btn:disabled { opacity:0.6; cursor:not-allowed; }
+  .flag-cancel-btn { width:100%; background:none; border:1.5px solid var(--border); border-radius:12px; padding:12px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-mid); cursor:pointer; }
 `;
 
 // ── Known courses (loaded from DB at runtime) ──
@@ -725,7 +750,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onE
   );
 }
 
-export default function StudentLogging({ user, onSignOut, onBackToDashboard, existingRound }) {
+export default function StudentLogging({ user, onSignOut, onBackToDashboard, existingRound, onAddCourse, onEditCourse, pendingCourseId, onClearPendingCourse }) {
   const isEditMode = !!existingRound;
 
   const [cur, setCur]               = useState(0);
@@ -747,6 +772,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [sent, setSent]             = useState(false);
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
+
+  // Multi-course state
+  const [courses, setCourses]             = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(!isEditMode);
+  const [highlightedCourseId, setHighlightedCourseId] = useState(null);
+  const [flagging, setFlagging]           = useState(null); // null or {id, name}
+  const [flagNote, setFlagNote]           = useState("");
+  const [flagSaving, setFlagSaving]       = useState(false);
 
   // Load holes for a chosen course
   async function loadCourse(courseIdArg) {
@@ -778,7 +811,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     async function loadExisting() {
       // Load holes for this round's course
       const cId = existingRound.course_id || "89e2ad4e-8d5a-4244-8568-b2c8a448a77f";
-      const cName = KNOWN_COURSES.find(c => c.id === cId)?.name || "Golf Course";
+      const { data: courseRow } = await supabase.from("courses").select("name").eq("id", cId).single();
+      const cName = courseRow?.name || KNOWN_COURSES.find(c => c.id === cId)?.name || "Golf Course";
       setCourseId(cId);
       setCourseName(cName);
       const { data: holeRows } = await supabase
@@ -832,8 +866,45 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     fetchSettings();
   }, [user.id]);
 
+  // Load course list from DB (only for new rounds)
+  useEffect(() => {
+    if (isEditMode) return;
+    async function loadCourses() {
+      const { data } = await supabase
+        .from("courses")
+        .select("id, name, hole_count, created_by")
+        .order("name", { ascending: true });
+      setCourses(data || []);
+      setCoursesLoading(false);
+      // Highlight newly added course if pendingCourseId was passed in
+      if (pendingCourseId) {
+        setHighlightedCourseId(pendingCourseId);
+        if (onClearPendingCourse) onClearPendingCourse();
+      }
+    }
+    loadCourses();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Course picker screen — must be before all other guards ──
   if (view === "course_picker") {
+    async function handleFlag() {
+      if (!flagging || !flagNote.trim()) return;
+      setFlagSaving(true);
+      await supabase.from("course_flags").insert({
+        course_id: flagging.id,
+        flagged_by: user.id,
+        note: flagNote.trim(),
+        resolved: false,
+      });
+      setFlagSaving(false);
+      setFlagging(null);
+      setFlagNote("");
+    }
+
+    const courseList = courses.length > 0
+      ? courses
+      : KNOWN_COURSES.map(c => ({ id: c.id, name: c.name, hole_count: c.holes, created_by: null }));
+
     return (
       <>
         <style>{css}</style>
@@ -845,24 +916,53 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:24}}>
             Select a course to start logging your round.
           </div>
-          {KNOWN_COURSES.map(course => (
-            <button
-              key={course.id}
-              onClick={() => handleCourseSelect(course)}
-              style={{
-                width:"100%", background:"white", border:"1.5px solid var(--border)",
-                borderRadius:14, padding:"16px 18px", marginBottom:10,
-                textAlign:"left", cursor:"pointer", fontFamily:"'Outfit',sans-serif",
-                transition:"all .15s",
-              }}
-              onMouseOver={e => { e.currentTarget.style.borderColor="var(--green-light)"; e.currentTarget.style.transform="translateY(-1px)"; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.transform="none"; }}
-            >
-              <div style={{fontWeight:700,fontSize:15,color:"var(--text)",marginBottom:3}}>{course.name}</div>
-              <div style={{fontSize:12,color:"var(--text-dim)"}}>{course.holes} holes</div>
-            </button>
-          ))}
-          <div style={{marginTop:16}}>
+
+          {coursesLoading ? (
+            <div style={{display:"flex",justifyContent:"center",padding:"32px 0"}}>
+              <div className="big-spinner" />
+            </div>
+          ) : (
+            <>
+              {courseList.map(course => (
+                <div
+                  key={course.id}
+                  className={"cp-course-row" + (highlightedCourseId === course.id ? " highlighted" : "")}
+                >
+                  <button
+                    className="cp-course-tap"
+                    onClick={() => handleCourseSelect({ id: course.id, name: course.name, holes: course.hole_count })}
+                  >
+                    <div className="cp-course-name">
+                      {course.name}
+                      {highlightedCourseId === course.id && (
+                        <span className="cp-course-new-badge">New</span>
+                      )}
+                    </div>
+                    <div className="cp-course-meta">{course.hole_count} holes</div>
+                  </button>
+                  <button
+                    className="cp-icon-btn"
+                    title="Flag an issue with this course"
+                    onClick={() => { setFlagging({ id: course.id, name: course.name }); setFlagNote(""); }}
+                  >🚩</button>
+                  {course.created_by === user.id && onEditCourse && (
+                    <button
+                      className="cp-icon-btn"
+                      title="Edit this course"
+                      onClick={() => onEditCourse(course.id)}
+                    >✏️</button>
+                  )}
+                </div>
+              ))}
+              {onAddCourse && (
+                <button className="cp-add-btn" onClick={onAddCourse}>
+                  + Add new course
+                </button>
+              )}
+            </>
+          )}
+
+          <div style={{marginTop:20}}>
             <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--text-dim)",marginBottom:7}}>
               Course handicap <span style={{fontWeight:400}}>(optional)</span>
             </div>
@@ -884,6 +984,34 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             Back to my rounds
           </button>
         </div>
+
+        {/* Flag modal */}
+        {flagging && (
+          <div className="flag-backdrop" onClick={() => setFlagging(null)}>
+            <div className="flag-sheet" onClick={e => e.stopPropagation()}>
+              <div className="flag-sheet-title">Flag {flagging.name}</div>
+              <div className="flag-sheet-sub">
+                Describe the issue — e.g. wrong par, incorrect stroke index, or outdated yardage. An admin will review it.
+              </div>
+              <textarea
+                className="flag-textarea"
+                rows={4}
+                placeholder="Describe the issue…"
+                value={flagNote}
+                onChange={e => setFlagNote(e.target.value)}
+                autoFocus
+              />
+              <button
+                className="flag-submit-btn"
+                disabled={flagSaving || !flagNote.trim()}
+                onClick={handleFlag}
+              >
+                {flagSaving ? "Sending…" : "Submit flag"}
+              </button>
+              <button className="flag-cancel-btn" onClick={() => setFlagging(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </>
     );
   }

@@ -8,6 +8,7 @@ import CoachDashboard from './CoachDashboard'
 import AdminDashboard from './AdminDashboard'
 import ProfilePage from './ProfilePage'
 import StudentSettings from './StudentSettings'
+import CourseForm from './CourseForm'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -20,6 +21,8 @@ function App() {
   const [coachScreen, setCoachScreen]     = useState('home')
   const [coachRound, setCoachRound]       = useState(null)
   const [coachStudent, setCoachStudent]   = useState(null)
+  const [editingCourseId, setEditingCourseId] = useState(null)
+  const [pendingCourseId, setPendingCourseId] = useState(null)
 
   function resetScreenState() {
     setStudentScreen('dashboard')
@@ -27,6 +30,8 @@ function App() {
     setCoachScreen('home')
     setCoachRound(null)
     setCoachStudent(null)
+    setEditingCourseId(null)
+    setPendingCourseId(null)
   }
 
   async function fetchAndSetRole(userId) {
@@ -107,12 +112,27 @@ function App() {
           />
         )
       }
+      if (studentScreen === 'course_form') {
+        return (
+          <CourseForm
+            user={user}
+            editCourseId={editingCourseId}
+            onBack={() => { setEditingCourseId(null); setStudentScreen('logging') }}
+            onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen('logging') }}
+            onSignOut={handleSignOut}
+          />
+        )
+      }
       if (studentScreen === 'logging') {
         return (
           <StudentLogging
             user={user}
             onSignOut={handleSignOut}
             onBackToDashboard={() => setStudentScreen('dashboard')}
+            onAddCourse={() => { setEditingCourseId(null); setStudentScreen('course_form') }}
+            onEditCourse={id => { setEditingCourseId(id); setStudentScreen('course_form') }}
+            pendingCourseId={pendingCourseId}
+            onClearPendingCourse={() => setPendingCourseId(null)}
           />
         )
       }
