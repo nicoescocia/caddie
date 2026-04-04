@@ -6,6 +6,7 @@ import StudentLogging from './StudentLogging'
 import CoachHome from './CoachHome'
 import CoachDashboard from './CoachDashboard'
 import AdminDashboard from './AdminDashboard'
+import ProfilePage from './ProfilePage'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -87,6 +88,15 @@ function App() {
   if (!user) return <CaddieAuth onAuthSuccess={handleAuthSuccess} />
   if (role === 'admin') {
     if (adminView === 'student') {
+      if (studentScreen === 'profile') {
+        return (
+          <ProfilePage
+            user={user}
+            onBack={() => setStudentScreen('dashboard')}
+            onSignOut={handleSignOut}
+          />
+        )
+      }
       if (studentScreen === 'logging') {
         return (
           <StudentLogging
@@ -113,12 +123,22 @@ function App() {
           onNewRound={() => setStudentScreen('logging')}
           onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
           onBackToAdmin={() => { resetScreenState(); setAdminView('admin') }}
+          onProfile={() => setStudentScreen('profile')}
         />
       )
     }
     return <AdminDashboard user={user} onSignOut={handleSignOut} onStudentView={() => setAdminView('student')} />
   }
   if (role === 'coach') {
+    if (coachScreen === 'profile') {
+      return (
+        <ProfilePage
+          user={user}
+          onBack={() => setCoachScreen('home')}
+          onSignOut={handleSignOut}
+        />
+      )
+    }
     if (coachScreen === 'round' && coachRound) {
       return (
         <CoachDashboard
@@ -140,6 +160,17 @@ function App() {
           setCoachStudent(student)
           setCoachScreen('round')
         }}
+        onProfile={() => setCoachScreen('profile')}
+        onSignOut={handleSignOut}
+      />
+    )
+  }
+
+  if (studentScreen === 'profile') {
+    return (
+      <ProfilePage
+        user={user}
+        onBack={() => setStudentScreen('dashboard')}
         onSignOut={handleSignOut}
       />
     )
@@ -170,6 +201,7 @@ function App() {
       onSignOut={handleSignOut}
       onNewRound={() => setStudentScreen('logging')}
       onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
+      onProfile={() => setStudentScreen('profile')}
     />
   )
 }

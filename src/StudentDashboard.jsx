@@ -316,7 +316,7 @@ function StudentRoundTrends({ rounds }) {
   );
 }
 
-export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut, onBackToAdmin }) {
+export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut, onBackToAdmin, onProfile }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
   const [coach, setCoach]       = useState(null);
@@ -372,7 +372,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   useEffect(() => {
     async function load() {
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
-        supabase.from("profiles").select("first_name, last_name, official_handicap").eq("id", user.id).single(),
+        supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
@@ -524,13 +524,24 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               ← Admin
             </button>
           )}
+          {onProfile && (
+            <button className="signout-btn" onClick={onProfile} style={{color:"rgba(255,255,255,0.8)"}}>
+              My Profile
+            </button>
+          )}
           <button className="signout-btn" onClick={onSignOut}>Sign out</button>
         </div>
       </div>
 
       <div className="dash-wrap">
         <div className="dash-hero">
-          <div className="dash-hero-label">Welcome back</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <div className="dash-hero-label" style={{margin:0}}>Welcome back</div>
+            {profile?.is_premium
+              ? <span style={{background:"var(--gold)",color:"var(--green-dark)",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:7,textTransform:"uppercase",letterSpacing:".06em"}}>Premium</span>
+              : <span style={{background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:7,textTransform:"uppercase",letterSpacing:".06em"}}>Free</span>
+            }
+          </div>
           <div className="dash-hero-name" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <span>{profile?.first_name} {profile?.last_name}</span>
             {(() => {

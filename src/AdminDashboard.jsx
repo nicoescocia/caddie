@@ -93,6 +93,29 @@ const css = `
 
   .adm-empty { text-align:center; padding:32px 24px; color:var(--text-dim); font-size:13px; }
 
+  /* Premium toggle */
+  .adm-premium-toggle { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:7px; padding:4px 10px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .adm-premium-toggle.is-premium { background:#FFF4CC; color:#7A5A00; border:1px solid #E8D080; }
+  .adm-premium-toggle.is-free { background:#F0F0F0; color:var(--text-dim); border:1px solid var(--border); }
+  .adm-premium-toggle:hover { opacity:.8; }
+  .adm-premium-toggle:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* View profile button */
+  .adm-btn-view { background:none; border:1px solid var(--border); color:var(--text-dim); border-radius:7px; padding:4px 10px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .adm-btn-view:hover { border-color:var(--green); color:var(--green); }
+
+  /* Profile modal */
+  .adm-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:300; display:flex; align-items:flex-end; justify-content:center; }
+  .adm-modal-sheet { background:white; border-radius:20px 20px 0 0; padding:28px 22px 44px; width:100%; max-width:520px; max-height:85vh; overflow-y:auto; }
+  .adm-modal-title { font-family:'Playfair Display',serif; font-size:22px; color:var(--text); margin-bottom:6px; }
+  .adm-modal-role { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:20px; }
+  .adm-modal-row { display:flex; gap:8px; margin-bottom:12px; align-items:flex-start; }
+  .adm-modal-lbl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); min-width:90px; flex-shrink:0; padding-top:1px; }
+  .adm-modal-val { font-size:14px; color:var(--text); line-height:1.5; }
+  .adm-modal-val.dim { color:var(--text-dim); font-style:italic; }
+  .adm-modal-close { width:100%; background:none; border:1.5px solid var(--border); border-radius:12px; padding:12px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:600; color:var(--text-mid); cursor:pointer; margin-top:20px; }
+  .adm-modal-close:hover { border-color:var(--green); color:var(--green); }
+
   @media(max-width:520px) {
     .adm-summary-row { grid-template-columns:1fr 1fr; }
     .adm-table th.adm-hide-sm, .adm-table td.adm-hide-sm { display:none; }
@@ -116,6 +139,9 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [relationships, setRelationships] = useState([]);
   const [deletingId, setDeletingId] = useState(null);
   const [unlinkingKey, setUnlinkingKey] = useState(null);
+  const [togglingPremium, setTogglingPremium] = useState(null);
+  const [viewingProfile, setViewingProfile] = useState(null);
+  const [profileLoadingId, setProfileLoadingId] = useState(null);
 
   // Link form state
   const [linkCoachId, setLinkCoachId] = useState("");
@@ -125,7 +151,7 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
 
   async function load() {
     const [profilesRes, roundsRes, csRes] = await Promise.all([
-      adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, created_at"),
+      adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, phone, home_courses, bio, created_at"),
       adminClient.from("rounds").select("id", { count: "exact", head: true }),
       adminClient.from("coach_students").select("coach_id, student_id"),
     ]);
@@ -214,6 +240,27 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
     setLinking(false);
   }
 
+  async function handleTogglePremium(profile) {
+    const newVal = !profile.is_premium;
+    setTogglingPremium(profile.id);
+    const { error } = await adminClient.from("profiles").update({ is_premium: newVal }).eq("id", profile.id);
+    if (!error) {
+      setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, is_premium: newVal } : p));
+    }
+    setTogglingPremium(null);
+  }
+
+  async function handleViewProfile(profile) {
+    setProfileLoadingId(profile.id);
+    let email = "";
+    try {
+      const { data } = await adminClient.auth.admin.getUserById(profile.id);
+      email = data?.user?.email || "";
+    } catch {}
+    setViewingProfile({ ...profile, email });
+    setProfileLoadingId(null);
+  }
+
   const totalRelationships = relationships.reduce((s, r) => s + r.students.length, 0);
 
   const sortedProfiles = [...profiles].sort((a, b) => {
@@ -281,7 +328,7 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                       <th>Name</th>
                       <th>Role</th>
                       <th className="adm-hide-sm">Handicap</th>
-                      <th>Joined</th>
+                      <th className="adm-hide-sm">Joined</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -297,19 +344,37 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                           </span>
                         </td>
                         <td className="adm-hide-sm">
-                          {p.official_handicap != null ? p.official_handicap : "—"}
+                          {p.official_handicap != null ? Number(p.official_handicap).toFixed(1) : "—"}
                         </td>
-                        <td>{fmtDate(p.created_at)}</td>
+                        <td className="adm-hide-sm">{fmtDate(p.created_at)}</td>
                         <td>
-                          {p.id !== user?.id && (
+                          <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
+                            {p.role === "student" && (
+                              <button
+                                className={"adm-premium-toggle " + (p.is_premium ? "is-premium" : "is-free")}
+                                disabled={togglingPremium === p.id}
+                                onClick={() => handleTogglePremium(p)}
+                              >
+                                {togglingPremium === p.id ? "…" : p.is_premium ? "★ Premium" : "Free"}
+                              </button>
+                            )}
                             <button
-                              className="adm-btn-delete"
-                              disabled={deletingId === p.id}
-                              onClick={() => handleDeleteUser(p)}
+                              className="adm-btn-view"
+                              disabled={profileLoadingId === p.id}
+                              onClick={() => handleViewProfile(p)}
                             >
-                              {deletingId === p.id ? "Deleting…" : "Delete"}
+                              {profileLoadingId === p.id ? "…" : "View"}
                             </button>
-                          )}
+                            {p.id !== user?.id && (
+                              <button
+                                className="adm-btn-delete"
+                                disabled={deletingId === p.id}
+                                onClick={() => handleDeleteUser(p)}
+                              >
+                                {deletingId === p.id ? "Deleting…" : "Delete"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -414,6 +479,75 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
           </>
         )}
       </div>
+
+      {/* Profile detail modal */}
+      {viewingProfile && (
+        <div className="adm-modal-backdrop" onClick={() => setViewingProfile(null)}>
+          <div className="adm-modal-sheet" onClick={e => e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:4}}>
+              <div>
+                <div className="adm-modal-title">{viewingProfile.first_name} {viewingProfile.last_name}</div>
+                <div className="adm-modal-role">
+                  <span className={`adm-role-badge ${viewingProfile.role || "student"}`}>{viewingProfile.role || "student"}</span>
+                  {viewingProfile.role === "student" && (
+                    <span style={{marginLeft:8}} className={"adm-premium-toggle " + (viewingProfile.is_premium ? "is-premium" : "is-free")}>
+                      {viewingProfile.is_premium ? "★ Premium" : "Free"}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{
+                width:48,height:48,borderRadius:"50%",background:"var(--green-dark)",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:"'Playfair Display',serif",fontSize:18,color:"var(--gold)",flexShrink:0,
+              }}>
+                {initials(viewingProfile.first_name, viewingProfile.last_name)}
+              </div>
+            </div>
+
+            <div style={{borderTop:"1.5px solid var(--border)",paddingTop:18,marginTop:8}}>
+              <div className="adm-modal-row">
+                <div className="adm-modal-lbl">Email</div>
+                <div className="adm-modal-val">{viewingProfile.email || <span className="dim">—</span>}</div>
+              </div>
+              <div className="adm-modal-row">
+                <div className="adm-modal-lbl">Phone</div>
+                <div className={"adm-modal-val" + (viewingProfile.phone ? "" : " dim")}>
+                  {viewingProfile.phone || "Not provided"}
+                </div>
+              </div>
+              {viewingProfile.official_handicap != null && (
+                <div className="adm-modal-row">
+                  <div className="adm-modal-lbl">Handicap</div>
+                  <div className="adm-modal-val">{Number(viewingProfile.official_handicap).toFixed(1)}</div>
+                </div>
+              )}
+              <div className="adm-modal-row">
+                <div className="adm-modal-lbl">Joined</div>
+                <div className="adm-modal-val">{fmtDate(viewingProfile.created_at)}</div>
+              </div>
+              <div className="adm-modal-row">
+                <div className="adm-modal-lbl">Courses</div>
+                <div className={"adm-modal-val" + (!viewingProfile.home_courses?.length ? " dim" : "")}>
+                  {viewingProfile.home_courses?.length
+                    ? viewingProfile.home_courses.join(", ")
+                    : "Not provided"}
+                </div>
+              </div>
+              <div className="adm-modal-row">
+                <div className="adm-modal-lbl">Bio</div>
+                <div className={"adm-modal-val" + (viewingProfile.bio ? "" : " dim")}>
+                  {viewingProfile.bio || "Not provided"}
+                </div>
+              </div>
+            </div>
+
+            <button className="adm-modal-close" onClick={() => setViewingProfile(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

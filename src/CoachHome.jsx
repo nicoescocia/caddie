@@ -164,7 +164,7 @@ function parDiff(score, round) {
 }
 
 // ── STUDENT LIST (coach home) ──
-function StudentList({ coachProfile, user, students, studentStats, onSelectStudent, onSignOut }) {
+function StudentList({ coachProfile, user, students, studentStats, onSelectStudent, onSignOut, onProfile }) {
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -198,6 +198,11 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
       <div className="mode-bar">
         <div className="mode-logo">⛳ Caddie</div>
         <div className="mode-bar-right">
+          {onProfile && (
+            <button className="signout-btn" onClick={onProfile} style={{color:"rgba(255,255,255,0.8)"}}>
+              My Profile
+            </button>
+          )}
           <button className="signout-btn" onClick={onSignOut}>Sign out</button>
         </div>
       </div>
@@ -626,7 +631,7 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
 }
 
 // ── ROOT COMPONENT ──
-export default function CoachHome({ user, onSelectRound, onSignOut, initialScreen, initialStudent }) {
+export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, initialScreen, initialStudent }) {
   const [screen, setScreen]           = useState(initialScreen || "students");
   const [coachProfile, setCoachProfile] = useState(null);
   const [students, setStudents]       = useState([]);
@@ -822,6 +827,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, initialScree
       studentStats={studentStats}
       onSelectStudent={handleSelectStudent}
       onSignOut={onSignOut}
+      onProfile={onProfile}
     />
   );
 }
