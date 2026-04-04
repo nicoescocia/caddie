@@ -237,6 +237,29 @@ const css = `
   .ov-finish-btn:disabled { background:#C8C4BB; cursor:not-allowed; transform:none; }
   .ov-loading { display:flex; align-items:center; justify-content:center; padding:60px; }
   .big-spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
+
+  /* ── TIERED OVERVIEW ── */
+  .ov-card { background:white; border:1.5px solid var(--border); border-radius:16px; padding:18px; margin-bottom:14px; }
+  .ov-card-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); margin-bottom:14px; }
+  .ov-sc-table { width:100%; border-collapse:collapse; }
+  .ov-sc-table th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); padding:5px 4px; text-align:center; border-bottom:1.5px solid var(--border); }
+  .ov-sc-table td { padding:8px 4px; text-align:center; border-top:1px solid var(--border); font-size:13px; }
+  .ov-sc-table tr:hover td { background:var(--bg); cursor:pointer; }
+  .ov-sn-eagle { color:var(--gold); font-weight:700; }
+  .ov-sn-birdie { color:var(--green-mid); font-weight:700; }
+  .ov-sn-par { color:var(--text-mid); }
+  .ov-sn-bogey { color:var(--orange); font-weight:700; }
+  .ov-sn-double { color:var(--red); font-weight:700; }
+  .ov-sn-worse { color:#8B1A1A; font-weight:700; }
+  .ov-appr-table { width:100%; border-collapse:collapse; }
+  .ov-appr-table th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); padding:5px 4px; text-align:center; border-bottom:1.5px solid var(--border); }
+  .ov-appr-table td { padding:8px 4px; text-align:center; border-top:1px solid var(--border); font-size:13px; }
+  .ov-premium-gate { background:linear-gradient(135deg,#FFF8E6,#FFF3D4); border:2px solid var(--gold); border-radius:16px; padding:22px 20px; margin-bottom:14px; text-align:center; }
+  .ov-ai-box { background:#F8F5EC; border:1.5px solid #E8D080; border-radius:14px; padding:16px; }
+  .ov-ai-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:#9A7A20; margin-bottom:8px; }
+  .ov-ai-text { font-size:13px; color:var(--text); line-height:1.75; white-space:pre-wrap; }
+  .ov-ai-loading { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-dim); }
+  .ov-ai-spinner { width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--gold); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
 `;
 
 // ── Known courses (loaded from DB at runtime) ──
@@ -297,6 +320,26 @@ function diffLabel(score, par) {
   if (d < 0)  return { text: d.toString(), cls: "under" };
   return { text: "+" + d, cls: "over" };
 }
+function parseFt(v) {
+  if (!v) return null;
+  if (v === "<3") return 2.5;
+  if (v === "<1") return 0.5;
+  if (v.endsWith("+")) return parseFloat(v) + 2;
+  return parseFloat(v);
+}
+async function callAI(prompt) {
+  const r = await fetch("/api/ai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 800,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const d = await r.json();
+  return d.content?.map(c => c.text || "").join("") || "Analysis unavailable.";
+}
 
 // ── TOP BAR ──
 function TopBar({ onSignOut, rightBtn, onHome }) {
@@ -312,25 +355,78 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isEditMode, onEditHole, onFinish, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, studentNote }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium }) {
   const [showHoles, setShowHoles] = useState(false);
-  const loggedHoles = holes.filter(h => savedHoles.has(h.n));
-  const attempted   = loggedHoles.filter((h,i) => !holeData[holes.indexOf(h)].dna);
-  const totalScore  = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].score || 0), 0);
-  const attemptedPar = attempted.reduce((s,h) => s + h.par, 0);
-  const allLogged   = savedHoles.size === holes.length;
-  const girCount    = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par)).length;
-  const fwHoles     = attempted.filter(h => h.par >= 4);
-  const fwHit       = fwHoles.filter(h => holeData[holes.indexOf(h)].fairway === "yes").length;
-  const totalPutts  = attempted.reduce((s,h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
-  const avgPutts    = attempted.length ? (totalPutts / attempted.length).toFixed(1) : null;
-  const tpCount     = attempted.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
-  const penalties   = loggedHoles.filter(h => { const p = holeData[holes.indexOf(h)].penalty; return p && p !== "None"; }).length;
-  const missedGIR   = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
-  const upAndDown   = missedGIR.filter(h => holeData[holes.indexOf(h)].putts <= 1 && holeData[holes.indexOf(h)].score !== null).length;
-  const scramblePct = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
+  const [aiText, setAiText]       = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
-  const diff = totalScore - attemptedPar;
+  const loggedHoles  = holes.filter(h => savedHoles.has(h.n));
+  const attempted    = loggedHoles.filter(h => !holeData[holes.indexOf(h)].dna);
+  const totalScore   = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].score || 0), 0);
+  const attemptedPar = attempted.reduce((s, h) => s + h.par, 0);
+  const allLogged    = savedHoles.size === holes.length;
+  const girCount     = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par)).length;
+  const fwHoles      = attempted.filter(h => h.par >= 4);
+  const fwHit        = fwHoles.filter(h => holeData[holes.indexOf(h)].fairway === "yes").length;
+  const totalPutts   = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
+  const avgPutts     = attempted.length ? (totalPutts / attempted.length).toFixed(1) : null;
+  const tpCount      = attempted.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
+  const penalties    = loggedHoles.filter(h => { const p = holeData[holes.indexOf(h)].penalty; return p && p !== "None"; }).length;
+  const missedGIR    = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
+  const upAndDown    = missedGIR.filter(h => holeData[holes.indexOf(h)].putts <= 1 && holeData[holes.indexOf(h)].score !== null).length;
+  const scramblePct  = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
+  const diff         = totalScore - attemptedPar;
+
+  // Premium computed stats
+  const girHoles      = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
+  const nonGirHoles   = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
+  const puttsPerGIR    = girHoles.length ? (girHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / girHoles.length).toFixed(2) : null;
+  const puttsPerNonGIR = nonGirHoles.length ? (nonGirHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / nonGirHoles.length).toFixed(2) : null;
+  const putt1Vals      = attempted.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
+  const avgPutt1       = putt1Vals.length ? (putt1Vals.reduce((a, b) => a + b, 0) / putt1Vals.length).toFixed(1) : null;
+  const tpPct          = attempted.length ? Math.round(tpCount / attempted.length * 100) : 0;
+
+  const BAND_KEYS   = ["Under 50","50-75","75-100","100-125","125-150","150+"];
+  const BAND_LABELS = {"Under 50":"Under 50","50-75":"50–75","75-100":"75–100","100-125":"100–125","125-150":"125–150","150+":"150+"};
+  const bandData = BAND_KEYS.map(key => {
+    const bh = attempted.filter(h => holeData[holes.indexOf(h)].approach === key);
+    if (!bh.length) return null;
+    const bGIR = bh.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
+    const bP1  = bh.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
+    return {
+      label:    BAND_LABELS[key],
+      count:    bh.length,
+      girPct:   Math.round(bGIR.length / bh.length * 100),
+      avgPutts: (bh.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / bh.length).toFixed(2),
+      avgPutt1: bP1.length ? (bP1.reduce((a, b) => a + b, 0) / bP1.length).toFixed(1) : "—",
+    };
+  }).filter(Boolean);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isPremium || attempted.length < 3 || aiText !== null || aiLoading) return;
+    setAiLoading(true);
+    const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
+    const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
+    let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be encouraging, specific, and constructive. 3–4 sentences, no preamble.\n\n`;
+    prompt += `Course: ${courseName}\nScore: ${totalScore} (${diff >= 0 ? "+" : ""}${diff} vs par)\n`;
+    prompt += `GIR: ${girCount}/${attempted.length} (${girPct}%)\n`;
+    if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
+    prompt += `Total putts: ${totalPutts} (avg ${avgPutts}/hole)\n`;
+    prompt += `3-putts: ${tpCount} (${tpPct}%)\n`;
+    if (scramblePct !== null) prompt += `Scrambling: ${scramblePct}% (${upAndDown}/${missedGIR.length} up & down)\n`;
+    prompt += `Penalties: ${penalties}\n`;
+    if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
+    if (puttsPerGIR) prompt += `Putts per GIR hole: ${puttsPerGIR}\n`;
+    if (puttsPerNonGIR) prompt += `Putts per missed-GIR hole: ${puttsPerNonGIR}\n`;
+    if (bandData.length) {
+      prompt += `\nApproach breakdown:\n`;
+      bandData.forEach(b => { prompt += `  ${b.label} yds: ${b.count} hole${b.count !== 1 ? "s" : ""}, ${b.girPct}% GIR, avg ${b.avgPutts} putts\n`; });
+    }
+    callAI(prompt)
+      .then(t => { setAiText(t); setAiLoading(false); })
+      .catch(() => { setAiText("Analysis unavailable."); setAiLoading(false); });
+  }, [isPremium]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -357,7 +453,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
           </div>
         </div>
 
-        {/* Stats grid */}
+        {/* Headline stats */}
         {attempted.length > 0 && (
           <div className="stats-grid">
             <div className="stat-card">
@@ -371,7 +467,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
             <div className="stat-card">
               <div className="stat-card-val">{totalPutts}</div>
               <div className="stat-card-lbl">Total putts</div>
-              <div className="stat-card-sub">avg {avgPutts} per hole</div>
+              <div className="stat-card-sub">avg {avgPutts}/hole</div>
             </div>
             <div className="stat-card">
               <div className={"stat-card-val " + (tpCount === 0 ? "ok" : tpCount <= 1 ? "warn" : "bad")}>{tpCount}</div>
@@ -389,7 +485,51 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
           </div>
         )}
 
-        {/* Holes toggle */}
+        {/* Scorecard */}
+        {attempted.length > 0 && (
+          <div className="ov-card">
+            <div className="ov-card-title">Scorecard</div>
+            <table className="ov-sc-table">
+              <thead>
+                <tr><th>Hole</th><th>Par</th><th>Score</th><th>Putts</th><th>GIR</th><th>FW</th></tr>
+              </thead>
+              <tbody>
+                {holes.map((hole, i) => {
+                  const hd = holeData[i];
+                  if (!savedHoles.has(hole.n)) return null;
+                  const gir = calcGIR(hd.score, hd.putts, hole.par);
+                  const sLbl = hd.dna || hd.pickedUp ? "" : scoreLabel(hd.score, hole.par);
+                  return (
+                    <tr key={hole.n} onClick={() => onEditHole(i)}>
+                      <td style={{fontWeight:700}}>{hole.n}</td>
+                      <td style={{color:"var(--text-dim)"}}>{hole.par}</td>
+                      <td>
+                        {hd.dna ? <span style={{color:"#999",fontSize:11}}>DNA</span>
+                          : hd.pickedUp ? <span style={{color:"var(--orange)",fontSize:11}}>PU</span>
+                          : <span className={"ov-sn-" + sLbl}>{hd.score}</span>}
+                      </td>
+                      <td>{hd.dna || hd.pickedUp ? "—" : hd.putts}</td>
+                      <td>
+                        {hd.dna || hd.pickedUp ? "—"
+                          : gir ? <span style={{color:"var(--green-mid)",fontWeight:700}}>✓</span>
+                          : <span style={{color:"var(--text-dim)"}}>✗</span>}
+                      </td>
+                      <td style={{fontSize:11}}>
+                        {hole.par < 4 ? "—"
+                          : hd.fairway === "yes" ? <span style={{color:"var(--green-mid)"}}>Hit</span>
+                          : hd.fairway === "left" ? <span style={{color:"var(--sky)"}}>L</span>
+                          : hd.fairway === "right" ? <span style={{color:"var(--orange)"}}>R</span>
+                          : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* View / edit holes */}
         <button className="edit-holes-btn" onClick={() => setShowHoles(s => !s)}>
           <span>🏌️ {showHoles ? "Hide holes" : "View / edit holes"}</span>
           <span style={{fontSize:16}}>{showHoles ? "▲" : "▼"}</span>
@@ -398,73 +538,145 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, isE
         {showHoles && <div style={{marginBottom:0}}>
           <div className="ov-section-label" style={{marginTop:4,marginBottom:10}}>Tap any hole to log or edit</div>
           {holes.map((hole, i) => {
-          const hd = holeData[i];
-          const logged = savedHoles.has(hole.n);
-          const gir = calcGIR(hd.score, hd.putts, hole.par);
-          const diff = diffLabel(hd.score, hole.par);
-          const sLabel = scoreLabel(hd.score, hole.par);
-          const is3putt = hd.putts >= 3;
-
-          return (
-            <div
-              key={hole.n}
-              className={"ov-hole-card" + (!logged ? " not-logged" : "")}
-              style={{cursor:"pointer"}}
-              onClick={() => onEditHole(i)}
-            >
-              <div className={"ov-hole-num" + (is3putt && logged ? " tp" : !logged ? " unlogged" : "")}>
-                {hole.n}
-              </div>
-
-              <div className="ov-hole-details">
-                <div className="ov-hole-top">
-                  <span className="ov-hole-name">Hole {hole.n}</span>
-                  <span className="ov-hole-par-badge">Par {hole.par} · {hole.yds}y</span>
+            const hd = holeData[i];
+            const logged = savedHoles.has(hole.n);
+            const gir = calcGIR(hd.score, hd.putts, hole.par);
+            const holeDiff = diffLabel(hd.score, hole.par);
+            const sLabel = scoreLabel(hd.score, hole.par);
+            const is3putt = hd.putts >= 3;
+            return (
+              <div
+                key={hole.n}
+                className={"ov-hole-card" + (!logged ? " not-logged" : "")}
+                style={{cursor:"pointer"}}
+                onClick={() => onEditHole(i)}
+              >
+                <div className={"ov-hole-num" + (is3putt && logged ? " tp" : !logged ? " unlogged" : "")}>{hole.n}</div>
+                <div className="ov-hole-details">
+                  <div className="ov-hole-top">
+                    <span className="ov-hole-name">Hole {hole.n}</span>
+                    <span className="ov-hole-par-badge">Par {hole.par} · {hole.yds}y</span>
+                  </div>
+                  {logged ? (
+                    <div className="ov-hole-chips">
+                      {hd.dna
+                        ? <span className="chip" style={{background:"#F0F0F0",color:"#555"}}>Did not play</span>
+                        : hd.pickedUp
+                          ? <span className="chip" style={{background:"#FEF3E8",color:"var(--orange)"}}>Picked up</span>
+                          : <>
+                              {gir ? <span className="chip gir-yes">GIR</span> : <span className="chip gir-no">Missed GIR</span>}
+                              {hole.par >= 4 && hd.fairway === "yes" && <span className="chip fw-yes">FW hit</span>}
+                              {hole.par >= 4 && hd.fairway === "left" && <span className="chip fw-miss">Miss left</span>}
+                              {hole.par >= 4 && hd.fairway === "right" && <span className="chip fw-miss-r">Miss right</span>}
+                              {is3putt
+                                ? <span className="chip tp">3-putt</span>
+                                : <span className="chip putts">{hd.putts === 0 ? "Chip-in" : hd.putts + " putt" + (hd.putts !== 1 ? "s" : "")}</span>}
+                              {hd.penalty && hd.penalty !== "None" && <span className="chip pen">{hd.penalty}</span>}
+                            </>
+                      }
+                    </div>
+                  ) : (
+                    <div style={{fontSize:11,color:"var(--text-dim)"}}>Not logged yet</div>
+                  )}
                 </div>
                 {logged ? (
-                  <div className="ov-hole-chips">
-                    {hd.dna
-                      ? <span className="chip" style={{background:"#F0F0F0",color:"#555"}}>Did not play</span>
-                      : hd.pickedUp
-                        ? <span className="chip" style={{background:"#FEF3E8",color:"var(--orange)"}}>Picked up</span>
-                        : <>
-                            {gir
-                              ? <span className="chip gir-yes">GIR</span>
-                              : <span className="chip gir-no">Missed GIR</span>}
-                            {hole.par >= 4 && hd.fairway === "yes" && <span className="chip fw-yes">FW hit</span>}
-                            {hole.par >= 4 && hd.fairway === "left" && <span className="chip fw-miss">Miss left</span>}
-                            {hole.par >= 4 && hd.fairway === "right" && <span className="chip fw-miss-r">Miss right</span>}
-                            {is3putt
-                              ? <span className="chip tp">3-putt</span>
-                              : <span className="chip putts">{hd.putts === 0 ? "Chip-in" : hd.putts + " putt" + (hd.putts !== 1 ? "s" : "")}</span>}
-                            {hd.penalty && hd.penalty !== "None" && <span className="chip pen">{hd.penalty}</span>}
-                          </>
-                    }
-                  </div>
-                ) : (
-                  <div style={{fontSize:11,color:"var(--text-dim)"}}>Not logged yet</div>
-                )}
-              </div>
-
-              {logged ? (
-                <>
                   <div style={{textAlign:"right"}}>
                     {hd.dna || hd.pickedUp
                       ? <div className="ov-score-num" style={{fontSize:18,color:"#999"}}>—</div>
                       : <>
                           <div className={"ov-score-num " + sLabel}>{hd.score}</div>
-                          <div className={"ov-score-diff " + diff.cls}>{diff.text}</div>
+                          <div className={"ov-score-diff " + holeDiff.cls}>{holeDiff.text}</div>
                         </>
                     }
                   </div>
-                </>
-              ) : (
-                <div className="ov-score-num par" style={{color:"var(--border)"}}>-</div>
-              )}
-            </div>
-          );
+                ) : (
+                  <div className="ov-score-num par" style={{color:"var(--border)"}}>-</div>
+                )}
+              </div>
+            );
           })}
         </div>}
+
+        {/* Premium: approach & putting breakdown */}
+        {isPremium && attempted.length > 0 && bandData.length > 0 && (
+          <div className="ov-card">
+            <div className="ov-card-title">Approach & putting breakdown</div>
+            <table className="ov-appr-table">
+              <thead>
+                <tr>
+                  <th style={{textAlign:"left"}}>Distance</th>
+                  <th>Holes</th>
+                  <th>GIR%</th>
+                  <th>Avg putts</th>
+                  <th>Avg 1st</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bandData.map(b => (
+                  <tr key={b.label}>
+                    <td style={{textAlign:"left",fontWeight:600,fontSize:12}}>{b.label}</td>
+                    <td>{b.count}</td>
+                    <td>{b.girPct}%</td>
+                    <td>{b.avgPutts}</td>
+                    <td>{b.avgPutt1 !== "—" ? b.avgPutt1 + " ft" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Premium: short game & putting + AI */}
+        {isPremium && attempted.length > 0 && (
+          <div className="ov-card">
+            <div className="ov-card-title">Short game & putting</div>
+            <div className="stats-grid" style={{marginBottom:0}}>
+              <div className="stat-card">
+                <div className="stat-card-val">{puttsPerGIR ?? "—"}</div>
+                <div className="stat-card-lbl">Putts / GIR</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-card-val">{puttsPerNonGIR ?? "—"}</div>
+                <div className="stat-card-lbl">Putts / non-GIR</div>
+              </div>
+              <div className="stat-card">
+                <div className={"stat-card-val " + (scramblePct != null ? (scramblePct >= 50 ? "ok" : scramblePct >= 30 ? "warn" : "bad") : "")}>{scramblePct != null ? scramblePct + "%" : "—"}</div>
+                <div className="stat-card-lbl">Up & down %</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-card-val">{avgPutt1 ? avgPutt1 + " ft" : "—"}</div>
+                <div className="stat-card-lbl">Avg 1st putt</div>
+              </div>
+              <div className="stat-card">
+                <div className={"stat-card-val " + (tpPct === 0 ? "ok" : tpPct <= 10 ? "warn" : "bad")}>{tpPct}%</div>
+                <div className="stat-card-lbl">3-putt %</div>
+              </div>
+            </div>
+            <div className="ov-ai-box" style={{marginTop:14}}>
+              <div className="ov-ai-label">AI Analysis</div>
+              {aiLoading
+                ? <div className="ov-ai-loading"><div className="ov-ai-spinner" /><span>Analysing your round…</span></div>
+                : <div className="ov-ai-text">{aiText || (attempted.length < 3 ? "Log at least 3 holes for AI analysis." : "—")}</div>
+              }
+            </div>
+          </div>
+        )}
+
+        {/* Free tier: premium gate */}
+        {!isPremium && (
+          <div className="ov-premium-gate">
+            <div style={{fontSize:24,marginBottom:10}}>📊</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:17,color:"var(--text)",marginBottom:6}}>Detailed analysis</div>
+            <div style={{fontSize:13,color:"var(--text-mid)",lineHeight:1.6,marginBottom:16}}>
+              Approach breakdowns, putting stats, and AI-powered round analysis are available on Premium.
+            </div>
+            <div style={{
+              display:"inline-block",background:"var(--gold)",color:"var(--green-dark)",
+              fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,
+              padding:"9px 20px",borderRadius:10,letterSpacing:".02em",
+            }}>Upgrade to Premium</div>
+          </div>
+        )}
 
         {!allLogged && savedHoles.size > 0 && (
           <button className="ov-finish-btn" style={{background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}} onClick={() => onEditHole(savedHoles.size)}>
@@ -523,7 +735,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [handicap, setHandicap]       = useState("");
   const [courseName, setCourseName] = useState("");
   const [roundId, setRoundId]       = useState(null);
-  const [fullPuttMode, setFullPuttMode] = useState(false);
+  const [puttMode, setPuttMode]   = useState("standard");
+  const [isPremium, setIsPremium] = useState(false);
   // view: "course_picker" | "overview" | "logging" | "summary" | "sent" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [saving, setSaving]         = useState(false);
@@ -613,9 +826,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         .select("settings, is_premium")
         .eq("id", user.id)
         .single();
-      if (data?.is_premium && data?.settings?.putt_tracking === "full") {
-        setFullPuttMode(true);
-      }
+      setIsPremium(!!data?.is_premium);
+      setPuttMode(data?.settings?.putt_tracking || "standard");
     }
     fetchSettings();
   }, [user.id]);
@@ -820,12 +1032,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     const par3GIR = h.par === 3 && gir === true;
     if (d.putts !== 0 && !par3GIR && !d.approach) return false;
     if (d.putts > 0 && !d.putt1) return false;
-    if (fullPuttMode) {
+    if (puttMode === "full") {
       if (d.putts >= 2 && !d.putt2) return false;
       if (d.putts >= 3 && !d.putt3) return false;
-    } else {
+    } else if (puttMode === "standard") {
       if (d.putts >= 3 && !d.putt2) return false;
     }
+    // first_only: never require putt2 or putt3
     return true;
   }
 
@@ -944,10 +1157,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         savedHoles={savedHoles}
         holes={holes}
         courseName={courseName}
-        isEditMode={isEditMode}
         onEditHole={editHole}
         handicap={handicap}
-        onFinish={sendToCoach}
         onOpenSummary={() => { setView("summary"); window.scrollTo(0,0); }}
         onSignOut={onSignOut}
         sent={sent}
@@ -956,7 +1167,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         wind={wind}
         conditions={conditions}
         temperature={temperature}
-        studentNote={studentNote}
+        isPremium={isPremium}
       />
     );
   }
@@ -1107,8 +1318,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                   onClick={() => update({
                     putts: p.n,
                     putt1: p.n < 1 ? null : d.putt1,
-                    putt2: fullPuttMode ? (p.n < 2 ? null : d.putt2) : (p.n < 3 ? null : d.putt2),
-                    putt3: p.n < 3 ? null : d.putt3,
+                    putt2: puttMode === "full" ? (p.n < 2 ? null : d.putt2) : puttMode === "first_only" ? null : (p.n < 3 ? null : d.putt2),
+                    putt3: puttMode === "full" && p.n >= 3 ? d.putt3 : null,
                   })}
                 >
                   <span className="pv">{p.n === 3 ? "3+" : p.n}</span>
@@ -1189,11 +1400,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {!d.pickedUp && !d.dna && (fullPuttMode ? d.putts >= 2 : show3putt) && (
+        {!d.pickedUp && !d.dna && puttMode !== "first_only" && (puttMode === "full" ? d.putts >= 2 : show3putt) && (
           <div className="sec">
             <div className="sec-label">
               Second putt distance
-              {!fullPuttMode && <span className="badge conditional">3-putt</span>}
+              {puttMode === "standard" && <span className="badge conditional">3-putt</span>}
             </div>
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
               {PUTT2_DIST.map(p => (
@@ -1203,7 +1414,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {!d.pickedUp && !d.dna && fullPuttMode && show3putt && (
+        {!d.pickedUp && !d.dna && puttMode === "full" && show3putt && (
           <div className="sec">
             <div className="sec-label">Third putt distance <span className="badge conditional">3-putt</span></div>
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
