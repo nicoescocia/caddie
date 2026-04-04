@@ -138,7 +138,7 @@ function getCoursePar(round) {
 
 // ── TREND HELPERS ──
 // When data18 is empty, data9 is rendered as a single solid line (combined / no split).
-function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 }) {
+function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90, lineColor }) {
   const all9  = data9.filter(r => r[metric] != null);
   const all18 = data18.filter(r => r[metric] != null);
   if (!all9.length && !all18.length) return null;
@@ -199,7 +199,7 @@ function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 
             </g>
           );
         })}
-        {sparkline(all9,  "#1A6B4A", hasBoth)}
+        {sparkline(all9,  lineColor || "#1A6B4A", hasBoth)}
         {sparkline(all18, "#C9A84C")}
       </svg>
       {hasBoth && (
@@ -249,13 +249,16 @@ function StudentRoundTrends({ rounds }) {
   function enrich(rs) {
     return rs.map(r => ({
       ...r,
-      vsPar:        r.total_score - getCoursePar(r),
-      netVsPar:     r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
-      girPct:       r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
-      puttsPerHole: r.total_putts != null && r.holes_played
-                      ? Math.round((r.total_putts / r.holes_played) * 10) / 10
-                      : null,
-      fwPct:        r.fw_holes ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
+      vsPar:             r.total_score - getCoursePar(r),
+      netVsPar:          r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
+      girPct:            r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+      puttsPerHole:      r.total_putts != null && r.holes_played
+                           ? Math.round((r.total_putts / r.holes_played) * 10) / 10
+                           : null,
+      fwPct:             r.fw_holes ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
+      stablefordPerHole: r.stableford_holes
+                           ? Math.round((r.stableford_total / r.stableford_holes) * 10) / 10
+                           : null,
     }));
   }
   const e9  = enrich(r9);
@@ -294,9 +297,9 @@ function StudentRoundTrends({ rounds }) {
       </div>
 
       <div className="trends-tabs">
-        {["score","gir","putts","fairways"].map(t => (
+        {["score","gir","putts","fairways","stableford"].map(t => (
           <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "gir" ? "GIR %" : t === "putts" ? "Putts" : "Fairways"}
+            {t === "score" ? "Score" : t === "gir" ? "GIR %" : t === "putts" ? "Putts" : t === "fairways" ? "Fairways" : "Stableford"}
           </button>
         ))}
       </div>
@@ -307,9 +310,10 @@ function StudentRoundTrends({ rounds }) {
           <TrendLine data9={e9} data18={e18} metric="netVsPar" label="Net vs Par"   formatY={fmtPar} />
         </div>
       )}
-      {tab === "gir"      && <TrendLine data9={e10} data18={[]} metric="girPct"      label="GIR %"           yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
-      {tab === "putts"    && <TrendLine data9={e10} data18={[]} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
-      {tab === "fairways" && <TrendLine data9={e10} data18={[]} metric="fwPct"       label="Fairways %"      yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
+      {tab === "gir"        && <TrendLine data9={e10} data18={[]} metric="girPct"            label="GIR %"              yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
+      {tab === "putts"      && <TrendLine data9={e10} data18={[]} metric="puttsPerHole"       label="Avg Putts / Hole"   yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
+      {tab === "fairways"   && <TrendLine data9={e10} data18={[]} metric="fwPct"              label="Fairways %"         yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
+      {tab === "stableford" && <TrendLine data9={e10} data18={[]} metric="stablefordPerHole"  label="Stableford pts / hole" formatY={v => v.toFixed(1)} height={80} lineColor="#C9A84C" />}
     </div>
   );
 }
@@ -378,22 +382,42 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
       ]);
       setProfile(prof);
       setRounds(rds || []);
-      // Fetch per-hole stats for GIR and fairway charts
+      // Fetch per-hole stats for GIR, fairway, and Stableford charts
       const roundIds = (rds || []).map(r => r.id);
       if (roundIds.length > 0) {
         const { data: holeRows } = await supabase
           .from("round_holes")
-          .select("round_id, gir, dna, fairway, par")
+          .select("round_id, gir, dna, fairway, par, score, picked_up, stroke_index")
           .in("round_id", roundIds);
+        const roundsById = Object.fromEntries((rds || []).map(r => [r.id, r]));
         const statsMap = {};
         for (const h of (holeRows || [])) {
-          if (!statsMap[h.round_id]) statsMap[h.round_id] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0 };
+          if (!statsMap[h.round_id]) {
+            statsMap[h.round_id] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0, stableford_total: 0, stableford_holes: 0 };
+          }
           if (!h.dna) {
             statsMap[h.round_id].attempted_holes++;
             if (h.gir) statsMap[h.round_id].gir_count++;
             if (h.par >= 4) {
               statsMap[h.round_id].fw_holes++;
               if (h.fairway === "yes") statsMap[h.round_id].fw_hit++;
+            }
+            // Stableford
+            const round = roundsById[h.round_id];
+            if (round) {
+              const hcp = round.handicap || 0;
+              const hp  = round.holes_played || 9;
+              const si  = h.stroke_index || 0;
+              statsMap[h.round_id].stableford_holes++;
+              if (!h.picked_up && h.score !== null && si > 0) {
+                let shots = 0;
+                if (hcp >= si)            shots = 1;
+                if (hcp >= si + hp)       shots = 2;
+                if (hcp >= si + hp * 2)   shots = 3;
+                const pts = Math.max(0, 2 + h.par - (h.score - shots));
+                statsMap[h.round_id].stableford_total += pts;
+              }
+              // picked_up: hole counted (stableford_holes++), 0 pts added
             }
           }
         }
@@ -539,10 +563,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
     : null;
   const enrichedForTrends = completedRounds.map(r => ({
     ...r,
-    gir_count:       roundHoleStats[r.id]?.gir_count       ?? null,
-    attempted_holes: roundHoleStats[r.id]?.attempted_holes ?? null,
-    fw_hit:          roundHoleStats[r.id]?.fw_hit           ?? null,
-    fw_holes:        roundHoleStats[r.id]?.fw_holes         ?? null,
+    gir_count:        roundHoleStats[r.id]?.gir_count        ?? null,
+    attempted_holes:  roundHoleStats[r.id]?.attempted_holes  ?? null,
+    fw_hit:           roundHoleStats[r.id]?.fw_hit            ?? null,
+    fw_holes:         roundHoleStats[r.id]?.fw_holes          ?? null,
+    stableford_total: roundHoleStats[r.id]?.stableford_total  ?? null,
+    stableford_holes: roundHoleStats[r.id]?.stableford_holes  ?? null,
   }));
 
   return (

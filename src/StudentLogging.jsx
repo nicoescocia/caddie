@@ -402,6 +402,23 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onE
   const scramblePct  = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
   const diff         = totalScore - attemptedPar;
 
+  // Stableford (all tiers)
+  const hcpVal      = parseInt(handicap, 10) || 0;
+  const holesPlayed = attempted.length;
+  let stablefordTotal = 0;
+  for (const h of attempted) {
+    const hd = holeData[holes.indexOf(h)];
+    if (!hd.pickedUp && hd.score !== null && h.idx > 0) {
+      let shots = 0;
+      if (hcpVal >= h.idx)                shots = 1;
+      if (hcpVal >= h.idx + holesPlayed)  shots = 2;
+      if (hcpVal >= h.idx + holesPlayed * 2) shots = 3;
+      stablefordTotal += Math.max(0, 2 + h.par - (hd.score - shots));
+    }
+    // pickedUp = 0 pts, already excluded by condition above
+  }
+  const stablefordPerHole = attempted.length ? (stablefordTotal / attempted.length).toFixed(1) : null;
+
   // Premium computed stats
   const girHoles      = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
   const nonGirHoles   = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
@@ -506,6 +523,15 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onE
             <div className="stat-card">
               <div className={"stat-card-val " + (penalties === 0 ? "ok" : penalties <= 1 ? "warn" : "bad")}>{penalties}</div>
               <div className="stat-card-lbl">Penalties</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-val" style={{color:"var(--gold)"}}>{stablefordTotal}</div>
+              <div className="stat-card-lbl">Stableford</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-val" style={{color:"var(--gold)"}}>{stablefordPerHole ?? "—"}</div>
+              <div className="stat-card-lbl">Per hole</div>
+              {stablefordPerHole && <div className="stat-card-sub">pts/hole</div>}
             </div>
           </div>
         )}
