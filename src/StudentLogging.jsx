@@ -908,7 +908,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     return (
       <>
         <style>{css}</style>
-        <TopBar onSignOut={onSignOut} rightBtn={null} />
+        <TopBar onSignOut={onSignOut} rightBtn={
+          <button className="bar-btn" onClick={onBackToDashboard}>← My rounds</button>
+        } />
         <div className="log-wrap" style={{paddingTop:32}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,marginBottom:6}}>
             Where are you playing?

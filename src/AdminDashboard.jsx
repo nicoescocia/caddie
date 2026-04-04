@@ -116,6 +116,25 @@ const css = `
   .adm-btn-resolve:hover { border-color:var(--green); color:var(--green); }
   .adm-btn-resolve:disabled { opacity:0.4; cursor:not-allowed; }
 
+  /* Course edit sheet */
+  .adm-ce-par-group { display:inline-flex; gap:3px; }
+  .adm-ce-par-btn { width:28px; height:28px; border:1.5px solid var(--border); border-radius:6px; background:white; font-family:'Outfit',sans-serif; font-size:12px; font-weight:700; color:var(--text-mid); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .1s; }
+  .adm-ce-par-btn:hover { border-color:var(--green-light); }
+  .adm-ce-par-btn.sel { background:var(--green-dark); border-color:var(--green-dark); color:white; }
+  .adm-ce-num { width:48px; padding:4px 3px; border:1.5px solid var(--border); border-radius:7px; font-family:'Outfit',sans-serif; font-size:12px; text-align:center; color:var(--text); background:white; outline:none; }
+  .adm-ce-num:focus { border-color:var(--green); }
+  .adm-ce-num.err { border-color:var(--red); background:#FFF8F8; }
+  .adm-ce-table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+  .adm-ce-table th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); padding:8px 4px; text-align:center; border-bottom:1.5px solid var(--border); }
+  .adm-ce-table th:first-child { text-align:left; }
+  .adm-ce-table td { padding:7px 4px; text-align:center; border-top:1px solid var(--border); vertical-align:middle; }
+  .adm-ce-table td:first-child { text-align:left; font-weight:700; font-size:13px; }
+  .adm-ce-save-btn { width:100%; background:var(--green); border:none; border-radius:12px; padding:14px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:white; cursor:pointer; margin-bottom:8px; transition:background .2s; }
+  .adm-ce-save-btn:hover:not(:disabled) { background:var(--green-mid); }
+  .adm-ce-save-btn:disabled { background:#C8C4BB; cursor:not-allowed; }
+  .adm-btn-edit-course { background:none; border:1px solid var(--border); color:var(--text-dim); border-radius:7px; padding:4px 10px; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; flex-shrink:0; }
+  .adm-btn-edit-course:hover { border-color:var(--sky); color:var(--sky); }
+
   /* Profile modal */
   .adm-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:300; display:flex; align-items:flex-end; justify-content:center; }
   .adm-modal-sheet { background:white; border-radius:20px 20px 0 0; padding:28px 22px 44px; width:100%; max-width:520px; max-height:85vh; overflow-y:auto; }
@@ -156,6 +175,11 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [profileLoadingId, setProfileLoadingId] = useState(null);
   const [flaggedCourses, setFlaggedCourses] = useState([]);
   const [resolvingFlagId, setResolvingFlagId] = useState(null);
+  const [editingCourse, setEditingCourse] = useState(null); // null or {id, name}
+  const [editCourseHoles, setEditCourseHoles] = useState([]);
+  const [editCourseLoading, setEditCourseLoading] = useState(false);
+  const [editCourseSaving, setEditCourseSaving] = useState(false);
+  const [editCourseSiErr, setEditCourseSiErr] = useState("");
 
   // Link form state
   const [linkCoachId, setLinkCoachId] = useState("");
@@ -168,7 +192,7 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
       adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, phone, home_courses, bio, created_at"),
       adminClient.from("rounds").select("id", { count: "exact", head: true }),
       adminClient.from("coach_students").select("coach_id, student_id"),
-      adminClient.from("course_flags").select("id, note, created_at, courses(name), profiles!flagged_by(first_name, last_name)").eq("resolved", false).order("created_at", { ascending: false }),
+      adminClient.from("course_flags").select("id, course_id, note, created_at, courses(id, name), profiles!flagged_by(first_name, last_name)").eq("resolved", false).order("created_at", { ascending: false }),
     ]);
 
     const allProfiles = profilesRes.data || [];
@@ -203,6 +227,46 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
     const { error } = await adminClient.from("course_flags").update({ resolved: true }).eq("id", flagId);
     if (!error) setFlaggedCourses(prev => prev.filter(f => f.id !== flagId));
     setResolvingFlagId(null);
+  }
+
+  async function handleOpenEditCourse(courseId, courseName) {
+    setEditingCourse({ id: courseId, name: courseName });
+    setEditCourseSiErr("");
+    setEditCourseLoading(true);
+    const { data } = await adminClient
+      .from("course_holes")
+      .select("hole_number, par, yardage, stroke_index")
+      .eq("course_id", courseId)
+      .order("hole_number", { ascending: true });
+    setEditCourseHoles(
+      (data || []).map(h => ({
+        hole_number: h.hole_number,
+        par: h.par || 4,
+        yardage: h.yardage != null ? String(h.yardage) : "",
+        si: h.stroke_index != null ? String(h.stroke_index) : "",
+      }))
+    );
+    setEditCourseLoading(false);
+  }
+
+  async function handleSaveCourseEdit() {
+    const holeCount = editCourseHoles.length;
+    const nums = editCourseHoles.map(h => parseInt(h.si, 10));
+    const anyInvalid = nums.some(n => isNaN(n) || n < 1 || n > holeCount);
+    if (anyInvalid) { setEditCourseSiErr(`All stroke indexes must be between 1 and ${holeCount}.`); return; }
+    if (new Set(nums).size !== holeCount) { setEditCourseSiErr("Stroke indexes must all be unique."); return; }
+    setEditCourseSiErr("");
+    setEditCourseSaving(true);
+    const rows = editCourseHoles.map(h => ({
+      course_id: editingCourse.id,
+      hole_number: h.hole_number,
+      par: h.par,
+      yardage: h.yardage !== "" ? parseInt(h.yardage, 10) : null,
+      stroke_index: parseInt(h.si, 10),
+    }));
+    await adminClient.from("course_holes").upsert(rows, { onConflict: "course_id,hole_number" });
+    setEditCourseSaving(false);
+    setEditingCourse(null);
   }
 
   async function handleDeleteUser(profile) {
@@ -511,13 +575,21 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                         Flagged by {flag.profiles ? `${flag.profiles.first_name} ${flag.profiles.last_name}` : "unknown"} · {fmtDate(flag.created_at)}
                       </div>
                     </div>
-                    <button
-                      className="adm-btn-resolve"
-                      disabled={resolvingFlagId === flag.id}
-                      onClick={() => handleResolveFlag(flag.id)}
-                    >
-                      {resolvingFlagId === flag.id ? "…" : "Resolve"}
-                    </button>
+                    <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+                      <button
+                        className="adm-btn-edit-course"
+                        onClick={() => handleOpenEditCourse(flag.courses?.id || flag.course_id, flag.courses?.name || "Course")}
+                      >
+                        Edit course
+                      </button>
+                      <button
+                        className="adm-btn-resolve"
+                        disabled={resolvingFlagId === flag.id}
+                        onClick={() => handleResolveFlag(flag.id)}
+                      >
+                        {resolvingFlagId === flag.id ? "…" : "Resolve"}
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -529,6 +601,89 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
           </>
         )}
       </div>
+
+      {/* Course edit modal */}
+      {editingCourse && (
+        <div className="adm-modal-backdrop" onClick={() => { setEditingCourse(null); setEditCourseSiErr(""); }}>
+          <div className="adm-modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="adm-modal-title">{editingCourse.name}</div>
+            <div className="adm-modal-role" style={{marginBottom:16}}>Edit hole data</div>
+
+            {editCourseLoading ? (
+              <div style={{display:"flex",justifyContent:"center",padding:"32px 0"}}>
+                <div className="adm-spinner" />
+              </div>
+            ) : (
+              <>
+                {editCourseSiErr && (
+                  <div style={{fontSize:12,color:"var(--red)",marginBottom:10}}>{editCourseSiErr}</div>
+                )}
+                <table className="adm-ce-table">
+                  <thead>
+                    <tr>
+                      <th>Hole</th>
+                      <th>Par</th>
+                      <th>Yds</th>
+                      <th>SI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editCourseHoles.map((h, i) => (
+                      <tr key={h.hole_number}>
+                        <td>{h.hole_number}</td>
+                        <td>
+                          <div className="adm-ce-par-group">
+                            {[3, 4, 5].map(p => (
+                              <button
+                                key={p}
+                                className={"adm-ce-par-btn" + (h.par === p ? " sel" : "")}
+                                onClick={() => setEditCourseHoles(prev => prev.map((r, idx) => idx === i ? { ...r, par: p } : r))}
+                              >{p}</button>
+                            ))}
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            className="adm-ce-num"
+                            type="number"
+                            min="1"
+                            max="700"
+                            placeholder="—"
+                            value={h.yardage}
+                            onChange={e => setEditCourseHoles(prev => prev.map((r, idx) => idx === i ? { ...r, yardage: e.target.value } : r))}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className={"adm-ce-num" + (editCourseSiErr && (isNaN(parseInt(h.si, 10)) || parseInt(h.si, 10) < 1 || parseInt(h.si, 10) > editCourseHoles.length) ? " err" : "")}
+                            type="number"
+                            min="1"
+                            max={editCourseHoles.length}
+                            placeholder={String(h.hole_number)}
+                            value={h.si}
+                            onChange={e => { setEditCourseSiErr(""); setEditCourseHoles(prev => prev.map((r, idx) => idx === i ? { ...r, si: e.target.value } : r)); }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <button
+                  className="adm-ce-save-btn"
+                  disabled={editCourseSaving}
+                  onClick={handleSaveCourseEdit}
+                >
+                  {editCourseSaving ? "Saving…" : "Save changes"}
+                </button>
+                <button className="adm-modal-close" onClick={() => { setEditingCourse(null); setEditCourseSiErr(""); }}>
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Profile detail modal */}
       {viewingProfile && (
