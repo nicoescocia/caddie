@@ -390,6 +390,19 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           .select("round_id, gir, dna, fairway, par, score, picked_up, stroke_index")
           .in("round_id", roundIds);
         const roundsById = Object.fromEntries((rds || []).map(r => [r.id, r]));
+        // Build SI map from course_holes — round_holes.stroke_index may be null for older rounds
+        const uniqueCourseIds = [...new Set((rds || []).map(r => r.course_id).filter(Boolean))];
+        const siMap = {};
+        if (uniqueCourseIds.length > 0) {
+          const { data: chRows } = await supabase
+            .from("course_holes")
+            .select("course_id, hole_number, stroke_index")
+            .in("course_id", uniqueCourseIds);
+          for (const ch of (chRows || [])) {
+            if (!siMap[ch.course_id]) siMap[ch.course_id] = {};
+            if (ch.stroke_index) siMap[ch.course_id][ch.hole_number] = ch.stroke_index;
+          }
+        }
         const statsMap = {};
         for (const h of (holeRows || [])) {
           if (!statsMap[h.round_id]) {
@@ -402,22 +415,24 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               statsMap[h.round_id].fw_holes++;
               if (h.fairway === "yes") statsMap[h.round_id].fw_hit++;
             }
-            // Stableford
+            // Stableford — use stored SI first, fall back to course_holes
             const round = roundsById[h.round_id];
             if (round) {
-              const hcp = round.handicap || 0;
-              const hp  = round.holes_played || 9;
-              const si  = h.stroke_index || 0;
-              statsMap[h.round_id].stableford_holes++;
-              if (!h.picked_up && h.score !== null && si > 0) {
+              const si = h.stroke_index || siMap[round.course_id]?.[h.hole_number] || 0;
+              if (h.picked_up) {
+                statsMap[h.round_id].stableford_holes++;
+                // 0 pts, hole counted
+              } else if (h.score !== null && si > 0) {
+                statsMap[h.round_id].stableford_holes++;
+                const hcp = round.handicap || 0;
+                const hp  = round.holes_played || 9;
                 let shots = 0;
-                if (hcp >= si)            shots = 1;
-                if (hcp >= si + hp)       shots = 2;
-                if (hcp >= si + hp * 2)   shots = 3;
-                const pts = Math.max(0, 2 + h.par - (h.score - shots));
-                statsMap[h.round_id].stableford_total += pts;
+                if (hcp >= si)          shots = 1;
+                if (hcp >= si + hp)     shots = 2;
+                if (hcp >= si + hp * 2) shots = 3;
+                statsMap[h.round_id].stableford_total += Math.max(0, 2 + h.par - (h.score - shots));
               }
-              // picked_up: hole counted (stableford_holes++), 0 pts added
+              // si === 0 (unknown): hole not counted toward stableford_holes → round excluded from chart
             }
           }
         }

@@ -380,10 +380,12 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium }) {
   const [showHoles, setShowHoles] = useState(false);
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [hcpEditing, setHcpEditing] = useState(false);
+  const [hcpInput, setHcpInput]     = useState("");
 
   const loggedHoles  = holes.filter(h => savedHoles.has(h.n));
   const attempted    = loggedHoles.filter(h => !holeData[holes.indexOf(h)].dna);
@@ -488,8 +490,41 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onE
             </div>
             {handicap !== "" && attempted.length > 0 && (
               <div className="ov-stat">
-                <div className="ov-stat-val">{totalScore - parseInt(handicap)}</div>
+                <div className="ov-stat-val">{totalScore - parseInt(handicap, 10)}</div>
                 <div className="ov-stat-lbl">net score</div>
+              </div>
+            )}
+          </div>
+          {/* Editable course handicap */}
+          <div style={{marginTop:10,borderTop:"1px solid rgba(255,255,255,0.1)",paddingTop:10}}>
+            {hcpEditing ? (
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input
+                  type="number" min="0" max="54" value={hcpInput}
+                  onChange={e => setHcpInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") { onHandicapUpdate(hcpInput); setHcpEditing(false); }
+                    if (e.key === "Escape") setHcpEditing(false);
+                  }}
+                  autoFocus
+                  style={{width:60,padding:"4px 8px",borderRadius:7,border:"1px solid rgba(255,255,255,0.35)",background:"rgba(255,255,255,0.12)",color:"white",fontFamily:"'Outfit',sans-serif",fontSize:14,textAlign:"center",outline:"none"}}
+                />
+                <button
+                  onClick={() => { onHandicapUpdate(hcpInput); setHcpEditing(false); }}
+                  style={{background:"var(--gold)",border:"none",borderRadius:7,padding:"4px 12px",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:700,color:"var(--green-dark)",cursor:"pointer"}}
+                >Save</button>
+                <button
+                  onClick={() => setHcpEditing(false)}
+                  style={{background:"none",border:"none",color:"rgba(255,255,255,0.45)",fontSize:16,cursor:"pointer",padding:"0 4px",lineHeight:1}}
+                >✕</button>
+              </div>
+            ) : (
+              <div
+                onClick={() => { setHcpInput(handicap !== "" ? handicap : ""); setHcpEditing(true); }}
+                style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,color:"rgba(255,255,255,0.5)",cursor:"pointer",userSelect:"none"}}
+              >
+                {handicap !== "" ? `Course hcp: ${parseInt(handicap, 10)}` : "Set course handicap"}
+                <span style={{fontSize:10,opacity:.7}}>✏️</span>
               </div>
             )}
           </div>
@@ -799,6 +834,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
 
+  const [officialHandicap, setOfficialHandicap] = useState(null);
+
   // Multi-course state
   const [courses, setCourses]             = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(!isEditMode);
@@ -883,11 +920,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     async function fetchSettings() {
       const { data } = await supabase
         .from("profiles")
-        .select("settings, is_premium")
+        .select("settings, is_premium, official_handicap")
         .eq("id", user.id)
         .single();
       setIsPremium(!!data?.is_premium);
       setPuttMode(data?.settings?.putt_tracking || "standard");
+      if (data?.official_handicap != null) setOfficialHandicap(data.official_handicap);
     }
     fetchSettings();
   }, [user.id]);
@@ -1202,7 +1240,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     const hole = holeData[idx];
     const hi   = holes[idx];
     const payload = {
-      round_id: rid, hole_number: hi.n, par: hi.par,
+      round_id: rid, hole_number: hi.n, par: hi.par, stroke_index: hi.idx || null,
       score: hole.dna ? null : hole.pickedUp ? null : hole.score,
       putts: hole.dna ? null : hole.pickedUp ? null : hole.putts,
       gir: hole.dna || hole.pickedUp ? false : calcGIR(hole.score, hole.putts, hi.par),
@@ -1230,8 +1268,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     setSaving(true);
     let rid = roundId;
     if (!rid) {
+      // Use entered handicap; if none, default to ceil(official_handicap)
+      const hcpToUse = handicap !== "" ? parseInt(handicap, 10)
+        : (officialHandicap != null ? Math.ceil(officialHandicap) : null);
+      if (handicap === "" && hcpToUse != null) setHandicap(String(hcpToUse));
       const { data: row, error } = await supabase
-        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: handicap !== "" ? parseInt(handicap) : null }])
+        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse }])
         .select().single();
       if (error) { console.error(error.message); setSaving(false); return; }
       rid = row.id;
@@ -1257,6 +1299,15 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     setCur(idx);
     setView("logging");
     window.scrollTo(0, 0);
+  }
+
+  async function handleHandicapUpdate(val) {
+    const parsed = parseInt(val, 10);
+    const newHcp = isNaN(parsed) ? "" : String(parsed);
+    setHandicap(newHcp);
+    if (roundId && newHcp !== "") {
+      await supabase.from("rounds").update({ handicap: parsed }).eq("id", roundId);
+    }
   }
 
   function goBackInLogging() {
@@ -1315,6 +1366,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         courseName={courseName}
         onEditHole={editHole}
         handicap={handicap}
+        onHandicapUpdate={handleHandicapUpdate}
         onOpenSummary={() => { setView("summary"); window.scrollTo(0,0); }}
         onSignOut={onSignOut}
         sent={sent}
