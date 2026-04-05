@@ -225,7 +225,7 @@ function trendDirection(vals) {
   if (!olderVals.length) return null;
   const older = olderVals.reduce((a,b) => a+b, 0) / olderVals.length;
   const delta = recent - older;
-  return Math.abs(delta) < 0.5 ? "stable" : delta < 0 ? "improving" : "worsening";
+  return Math.abs(delta) < 0.1 ? "stable" : delta < 0 ? "improving" : "worsening";
 }
 
 function trendLabel(dir, lowerIsBetter = true) {
@@ -266,11 +266,12 @@ function StudentRoundTrends({ rounds }) {
   const e10 = enrich(r10);
 
   const allScored  = [...e9, ...e18];
-  const scoreDiffs = allScored.map(r => r.vsPar);
+  const scoreDiffs = allScored.map(r => r.vsPar / (r.holes_played || 9));
   const dir = trendDirection(scoreDiffs);
   const tl  = trendLabel(dir, true);
-  const avgVsPar  = scoreDiffs.length ? Math.round(scoreDiffs.reduce((a,b)=>a+b,0)/scoreDiffs.length) : null;
-  const bestVsPar = scoreDiffs.length ? Math.min(...scoreDiffs) : null;
+  const rawVsPars = allScored.map(r => r.vsPar);
+  const avgVsPar  = rawVsPars.length ? Math.round(rawVsPars.reduce((a,b)=>a+b,0)/rawVsPars.length) : null;
+  const bestVsPar = rawVsPars.length ? Math.min(...rawVsPars) : null;
 
   const fmtPar = v => v > 0 ? "+"+v : v === 0 ? "E" : String(v);
 
