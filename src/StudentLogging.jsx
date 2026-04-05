@@ -268,7 +268,8 @@ const css = `
   .cp-course-tap { flex:1; padding:16px 18px; text-align:left; background:none; border:none; cursor:pointer; font-family:'Outfit',sans-serif; }
   .cp-course-name { font-weight:700; font-size:15px; color:var(--text); margin-bottom:3px; }
   .cp-course-meta { font-size:12px; color:var(--text-dim); }
-  .cp-course-new-badge { display:inline-block; background:var(--gold); color:var(--green-dark); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 6px; border-radius:4px; margin-left:7px; vertical-align:middle; }
+  .cp-course-new-badge { display:inline-block; background:var(--green-mid); color:white; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 6px; border-radius:4px; margin-left:7px; vertical-align:middle; }
+  .cp-course-home-badge { display:inline-block; background:var(--gold); color:var(--green-dark); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 6px; border-radius:4px; margin-left:7px; vertical-align:middle; }
   .cp-icon-btn { background:none; border:none; cursor:pointer; padding:10px 12px; font-size:16px; color:var(--text-dim); transition:color .15s; flex-shrink:0; }
   .cp-icon-btn:hover { color:var(--text); }
   .cp-add-btn { width:100%; background:none; border:1.5px dashed var(--border); border-radius:14px; padding:15px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s; text-align:center; }
@@ -840,6 +841,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [courses, setCourses]             = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(!isEditMode);
   const [highlightedCourseId, setHighlightedCourseId] = useState(null);
+  const [homeCourseIds, setHomeCourseIds] = useState(new Set());
+  const [courseStats, setCourseStats]     = useState({}); // courseId -> {totalPar, totalYardage, hasYardage}
   const [flagging, setFlagging]           = useState(null); // null or {id, name}
   const [flagNote, setFlagNote]           = useState("");
   const [flagSaving, setFlagSaving]       = useState(false);
@@ -934,11 +937,49 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   useEffect(() => {
     if (isEditMode) return;
     async function loadCourses() {
-      const { data } = await supabase
-        .from("courses")
-        .select("id, name, hole_count, created_by")
-        .order("name", { ascending: true });
-      setCourses(data || []);
+      const [{ data: coursesData }, { data: profileData }] = await Promise.all([
+        supabase.from("courses").select("id, name, hole_count, created_by").order("name", { ascending: true }),
+        supabase.from("profiles").select("home_courses").eq("id", user.id).single(),
+      ]);
+      const allCourses = coursesData || [];
+      const userHomeCourses = profileData?.home_courses || [];
+
+      // Fetch par + yardage totals for all courses in one query
+      const stats = {};
+      if (allCourses.length > 0) {
+        const { data: holesData } = await supabase
+          .from("course_holes")
+          .select("course_id, par, yardage")
+          .in("course_id", allCourses.map(c => c.id));
+        if (holesData) {
+          for (const h of holesData) {
+            if (!stats[h.course_id]) stats[h.course_id] = { totalPar: 0, totalYardage: 0, hasYardage: false };
+            stats[h.course_id].totalPar += h.par || 0;
+            if (h.yardage) { stats[h.course_id].totalYardage += h.yardage; stats[h.course_id].hasYardage = true; }
+          }
+        }
+      }
+
+      // Determine home course IDs (match by name, case-insensitive)
+      const homeIdSet = new Set();
+      const homeOrder = {};
+      allCourses.forEach(c => {
+        const idx = userHomeCourses.findIndex(n => n && n.toLowerCase().trim() === c.name.toLowerCase().trim());
+        if (idx !== -1) { homeIdSet.add(c.id); homeOrder[c.id] = idx; }
+      });
+
+      // Sort: home courses first (in profile order), then remainder alphabetically
+      const sorted = [...allCourses].sort((a, b) => {
+        const aH = homeIdSet.has(a.id), bH = homeIdSet.has(b.id);
+        if (aH && bH) return homeOrder[a.id] - homeOrder[b.id];
+        if (aH) return -1;
+        if (bH) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      setCourses(sorted);
+      setCourseStats(stats);
+      setHomeCourseIds(homeIdSet);
       setCoursesLoading(false);
       // Highlight newly added course if pendingCourseId was passed in
       if (pendingCourseId) {
@@ -1000,11 +1041,18 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                   >
                     <div className="cp-course-name">
                       {course.name}
-                      {highlightedCourseId === course.id && (
+                      {homeCourseIds.has(course.id) && (
+                        <span className="cp-course-home-badge">Home</span>
+                      )}
+                      {highlightedCourseId === course.id && !homeCourseIds.has(course.id) && (
                         <span className="cp-course-new-badge">New</span>
                       )}
                     </div>
-                    <div className="cp-course-meta">{course.hole_count} holes</div>
+                    <div className="cp-course-meta">
+                      {course.hole_count} holes
+                      {courseStats[course.id] && ` · Par ${courseStats[course.id].totalPar}`}
+                      {courseStats[course.id]?.hasYardage && ` · ${courseStats[course.id].totalYardage.toLocaleString()} yds`}
+                    </div>
                   </button>
                   <button
                     className="cp-icon-btn"

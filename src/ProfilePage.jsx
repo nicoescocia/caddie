@@ -46,6 +46,11 @@ const css = `
 
   .prof-add-link { background:none; border:none; padding:0; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:var(--green); cursor:pointer; margin-top:8px; display:inline-flex; align-items:center; gap:4px; }
   .prof-add-link:hover { color:var(--green-mid); }
+  .prof-toggle-link { background:none; border:none; padding:0; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; color:var(--text-dim); cursor:pointer; margin-top:5px; display:inline-flex; align-items:center; gap:3px; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+  .prof-toggle-link:hover { color:var(--text-mid); }
+  .prof-select { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px; font-family:'Outfit',sans-serif; font-size:15px; color:var(--text); background:white; outline:none; transition:border-color .15s; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:36px; }
+  .prof-select:focus { border-color:var(--green); }
+  .prof-select option[value="__add__"] { color:var(--green); font-weight:600; }
 
   .prof-save-btn { width:100%; background:var(--green); border:none; border-radius:14px; padding:16px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:white; cursor:pointer; transition:all .2s; }
   .prof-save-btn:hover { background:var(--green-mid); }
@@ -57,13 +62,15 @@ const css = `
   @keyframes spin { to{transform:rotate(360deg)} }
 `;
 
-export default function ProfilePage({ user, onBack, onSignOut }) {
+export default function ProfilePage({ user, onBack, onSignOut, onAddCourse }) {
   const [profile, setProfile] = useState(null);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [visibleCourses, setVisibleCourses] = useState(1);
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [courseMode, setCourseMode] = useState(["select", "select", "select"]); // 'select' | 'text'
   const [form, setForm] = useState({
     first_name: "", last_name: "", phone: "", bio: "",
     home_courses: ["", "", ""],
@@ -71,23 +78,30 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
 
   useEffect(() => {
     async function load() {
-      const [profRes, authRes] = await Promise.all([
+      const [profRes, authRes, coursesRes] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, phone, home_courses, bio, is_premium, role").eq("id", user.id).single(),
         supabase.auth.getUser(),
+        supabase.from("courses").select("id, name").order("name", { ascending: true }),
       ]);
       const prof = profRes.data;
       setProfile(prof);
       setEmail(authRes.data?.user?.email || user.email || "");
+      const avail = coursesRes.data || [];
+      setAvailableCourses(avail);
       const courses = prof?.home_courses || [];
       // Show as many fields as there are saved values, minimum 1
       setVisibleCourses(Math.max(1, courses.filter(c => c).length));
+      const savedCourses = [courses[0] || "", courses[1] || "", courses[2] || ""];
       setForm({
         first_name:   prof?.first_name || "",
         last_name:    prof?.last_name  || "",
         phone:        prof?.phone      || "",
         bio:          prof?.bio        || "",
-        home_courses: [courses[0] || "", courses[1] || "", courses[2] || ""],
+        home_courses: savedCourses,
       });
+      // Default to 'select' mode; use 'text' if saved value doesn't match any known course
+      const availNames = new Set(avail.map(c => c.name));
+      setCourseMode(savedCourses.map(c => (!c || availNames.has(c)) ? "select" : "text"));
       setLoading(false);
     }
     load();
@@ -105,6 +119,19 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
       return { ...f, home_courses: hc };
     });
     setSaved(false);
+  }
+
+  function toggleCourseMode(i) {
+    setCourseMode(prev => {
+      const next = [...prev];
+      next[i] = prev[i] === "select" ? "text" : "select";
+      return next;
+    });
+    // Clear value when switching to select if it won't match any option
+    if (courseMode[i] === "text") {
+      const availNames = new Set(availableCourses.map(c => c.name));
+      if (!availNames.has(form.home_courses[i])) setCourse(i, "");
+    }
   }
 
   async function handleSave() {
@@ -197,12 +224,32 @@ export default function ProfilePage({ user, onBack, onSignOut }) {
               <label className="prof-label">
                 Course {i + 1} <span className="prof-label-opt">— optional</span>
               </label>
-              <input
-                className="prof-input"
-                value={form.home_courses[i]}
-                onChange={e => setCourse(i, e.target.value)}
-                placeholder="e.g. Greenock Golf Club"
-              />
+              {courseMode[i] === "select" ? (
+                <select
+                  className="prof-select"
+                  value={form.home_courses[i]}
+                  onChange={e => {
+                    if (e.target.value === "__add__") { if (onAddCourse) onAddCourse(); }
+                    else setCourse(i, e.target.value);
+                  }}
+                >
+                  <option value="">— None —</option>
+                  {availableCourses.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                  {onAddCourse && <option value="__add__">+ Add a new course</option>}
+                </select>
+              ) : (
+                <input
+                  className="prof-input"
+                  value={form.home_courses[i]}
+                  onChange={e => setCourse(i, e.target.value)}
+                  placeholder="e.g. Greenock Golf Club"
+                />
+              )}
+              <button className="prof-toggle-link" onClick={() => toggleCourseMode(i)}>
+                {courseMode[i] === "select" ? "Type a name instead" : "Choose from list instead"}
+              </button>
             </div>
           ))}
           {canAddCourse && (

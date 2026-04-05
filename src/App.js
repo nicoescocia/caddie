@@ -23,6 +23,7 @@ function App() {
   const [coachStudent, setCoachStudent]   = useState(null)
   const [editingCourseId, setEditingCourseId] = useState(null)
   const [pendingCourseId, setPendingCourseId] = useState(null)
+  const [courseFormReturn, setCourseFormReturn] = useState('logging')
 
   function resetScreenState() {
     setStudentScreen('dashboard')
@@ -32,6 +33,7 @@ function App() {
     setCoachStudent(null)
     setEditingCourseId(null)
     setPendingCourseId(null)
+    setCourseFormReturn('logging')
   }
 
   async function fetchAndSetRole(userId) {
@@ -100,6 +102,7 @@ function App() {
             user={user}
             onBack={() => setStudentScreen('dashboard')}
             onSignOut={handleSignOut}
+            onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('profile'); setStudentScreen('course_form') }}
           />
         )
       }
@@ -117,8 +120,8 @@ function App() {
           <CourseForm
             user={user}
             editCourseId={editingCourseId}
-            onBack={() => { setEditingCourseId(null); setStudentScreen('logging') }}
-            onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen('logging') }}
+            onBack={() => { setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
+            onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
             onSignOut={handleSignOut}
           />
         )
@@ -129,8 +132,8 @@ function App() {
             user={user}
             onSignOut={handleSignOut}
             onBackToDashboard={() => setStudentScreen('dashboard')}
-            onAddCourse={() => { setEditingCourseId(null); setStudentScreen('course_form') }}
-            onEditCourse={id => { setEditingCourseId(id); setStudentScreen('course_form') }}
+            onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('logging'); setStudentScreen('course_form') }}
+            onEditCourse={id => { setEditingCourseId(id); setCourseFormReturn('logging'); setStudentScreen('course_form') }}
             pendingCourseId={pendingCourseId}
             onClearPendingCourse={() => setPendingCourseId(null)}
           />
@@ -203,6 +206,7 @@ function App() {
         user={user}
         onBack={() => setStudentScreen('dashboard')}
         onSignOut={handleSignOut}
+        onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('profile'); setStudentScreen('course_form') }}
       />
     )
   }
@@ -213,6 +217,17 @@ function App() {
         user={user}
         onBack={() => setStudentScreen('dashboard')}
         onSignOut={handleSignOut}
+      />
+    )
+  }
+
+  if (studentScreen === 'course_form') {
+    return (
+      <CourseForm
+        user={user}
+        editCourseId={editingCourseId}
+        onBack={() => { setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
+        onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
       />
     )
   }
