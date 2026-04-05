@@ -601,7 +601,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {onBackToAdmin && (
             <button className="signout-btn" onClick={onBackToAdmin} style={{color:"rgba(255,255,255,0.8)"}}>
-              ← Admin
+              Admin
             </button>
           )}
           {onSettings && (
@@ -611,7 +611,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
           )}
           {onProfile && (
             <button className="signout-btn" onClick={onProfile} style={{color:"rgba(255,255,255,0.8)"}}>
-              My Profile
+              Profile
             </button>
           )}
           <button className="signout-btn" onClick={onSignOut}>Sign out</button>
