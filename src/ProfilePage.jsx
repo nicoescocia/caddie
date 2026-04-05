@@ -280,6 +280,19 @@ export default function ProfilePage({ user, onBack, onSignOut, onAddCourse }) {
         >
           {saving ? "Saving…" : saved ? "✓ Saved" : "Save profile"}
         </button>
+        <button
+          onClick={onSignOut}
+          style={{
+            width:"100%", marginTop:12, background:"white",
+            border:"1.5px solid var(--red)", borderRadius:14, padding:16,
+            fontFamily:"'Outfit',sans-serif", fontSize:16, fontWeight:700,
+            color:"var(--red)", cursor:"pointer", transition:"all .2s",
+          }}
+          onMouseEnter={e => e.currentTarget.style.background="#FFF5F5"}
+          onMouseLeave={e => e.currentTarget.style.background="white"}
+        >
+          Sign out
+        </button>
       </div>
     </>
   );

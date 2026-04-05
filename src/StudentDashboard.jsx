@@ -318,7 +318,7 @@ function StudentRoundTrends({ rounds }) {
   );
 }
 
-export default function StudentDashboard({ user, onNewRound, onEditRound, onSignOut, onBackToAdmin, onProfile, onSettings }) {
+export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
   const [coach, setCoach]       = useState(null);
@@ -566,7 +566,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
   if (loading) return (
     <>
       <style>{css}</style>
-      <div className="mode-bar"><div className="mode-logo">⛳ Caddie</div><button className="signout-btn" onClick={onSignOut}>Sign out</button></div>
+      <div className="mode-bar"><div className="mode-logo">⛳ Caddie</div></div>
 
       <div className="loading-wrap"><div className="big-spinner" /></div>
     </>
@@ -614,7 +614,6 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onSign
               Profile
             </button>
           )}
-          <button className="signout-btn" onClick={onSignOut}>Sign out</button>
         </div>
       </div>
 
