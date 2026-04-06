@@ -35,7 +35,8 @@ const css = `
   /* ── TRENDS ── */
   .trends-wrap { margin-bottom:16px; }
   .trends-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
-  .trends-tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .trends-tabs { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; flex-wrap:nowrap; }
+  .trend-tabs::-webkit-scrollbar { display:none; }
   .trend-tab { background:white; border:1.5px solid var(--border); border-radius:8px; padding:5px 12px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s; }
   .trend-tab.active { background:var(--green-dark); border-color:var(--green-dark); color:white; }
   .trend-chart { background:white; border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; }
@@ -301,7 +302,7 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
 // ── ROUND HISTORY ──
 // ── TREND CHART (SVG) ──
 // When data18 is empty, data9 is rendered as a single solid line (combined / no split).
-function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 }) {
+function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90, lineColor }) {
   const all9  = data9.filter(r => r[metric] != null);
   const all18 = data18.filter(r => r[metric] != null);
   if (!all9.length && !all18.length) return null;
@@ -362,7 +363,7 @@ function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90 
             </g>
           );
         })}
-        {sparkline(all9,  "#1A6B4A", hasBoth)}
+        {sparkline(all9,  hasBoth ? "#1A6B4A" : (lineColor || "#1A6B4A"), hasBoth)}
         {sparkline(all18, "#C9A84C")}
       </svg>
       {hasBoth && (
@@ -388,7 +389,7 @@ function trendDirection(vals) {
   if (!olderVals.length) return null;
   const older = olderVals.reduce((a,b) => a+b, 0) / olderVals.length;
   const delta = recent - older;
-  return Math.abs(delta) < 0.5 ? "stable" : delta < 0 ? "improving" : "worsening";
+  return Math.abs(delta) < 0.1 ? "stable" : delta < 0 ? "improving" : "worsening";
 }
 
 function trendLabel(dir, lowerIsBetter = true) {
@@ -400,43 +401,61 @@ function trendLabel(dir, lowerIsBetter = true) {
     : { text: "↓ Worsening", cls: "worsening" };
 }
 
-function RoundTrends({ rounds }) {
+function RoundTrends({ rounds, activeTab, setActiveTab }) {
   const [tab, setTab] = useState("score");
   const scored = rounds.filter(r => r.total_score && r.sent_to_coach);
-  // rounds are newest-first; take the 10 most recent of each type, then reverse for chart display (oldest→newest)
+  // newest-first; take 10 most recent of each type, reverse for chart (oldest→newest)
   const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(0, 10).reverse();
   const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(0, 10).reverse();
   if (scored.length < 2) return null;
 
-  // Enrich with computed metrics
   function enrich(rs) {
     return rs.map(r => ({
       ...r,
-      vsPar:        r.total_score - getCoursePar(r),
-      netVsPar:     r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
-      girPct:       r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
-      puttsPerHole: r.total_putts != null && r.holes_played
-                      ? Math.round((r.total_putts / r.holes_played) * 10) / 10
-                      : null,
+      vsPar:             r.total_score - getCoursePar(r),
+      netVsPar:          r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
+      girPct:            r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+      puttsPerHole:      r.total_putts != null && r.holes_played
+                           ? Math.round((r.total_putts / r.holes_played) * 10) / 10
+                           : null,
+      fwPct:             r.fw_holes ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
+      stablefordPerHole: r.stableford_holes
+                           ? Math.round((r.stableford_total / r.stableford_holes) * 10) / 10
+                           : null,
     }));
   }
   const e9  = enrich(r9);
   const e18 = enrich(r18);
+  // last 10 combined, oldest→newest for single-line charts
+  const e10 = enrich(scored.slice(0, 10).reverse());
+  // handicap: all rounds with whs_index, up to 10 most recent, reversed
+  const whsRounds = scored.filter(r => r.whs_index != null).slice(0, 10).reverse();
 
-  const allScored = [...e9, ...e18];
-  const scoreDiffs = allScored.map(r => r.vsPar);
+  // Summary stats respect activeTab
+  const activeEnriched   = activeTab === 9 ? e9 : e18;
+  const activeRoundsCount = activeTab === 9 ? r9.length : r18.length;
+  const rawVsPars  = activeEnriched.map(r => r.vsPar);
+  const scoreDiffs = activeEnriched.map(r => r.vsPar / (r.holes_played || 9));
   const dir = trendDirection(scoreDiffs);
   const tl  = trendLabel(dir, true);
-  const avgVsPar = scoreDiffs.length ? Math.round(scoreDiffs.reduce((a,b)=>a+b,0)/scoreDiffs.length) : null;
-  const bestVsPar = scoreDiffs.length ? Math.min(...scoreDiffs) : null;
-
-  const fmtPar = v => v > 0 ? "+"+v : v === 0 ? "E" : String(v);
+  const avgVsPar  = rawVsPars.length ? Math.round(rawVsPars.reduce((a, b) => a + b, 0) / rawVsPars.length) : null;
+  const bestVsPar = rawVsPars.length ? Math.min(...rawVsPars) : null;
+  const fmtPar = v => v > 0 ? "+" + v : v === 0 ? "E" : String(v);
 
   return (
     <div className="trends-wrap">
       <div className="trends-title">
-        Trends — last {Math.min(scored.length, 10)} rounds
+        Trends — last {Math.min(activeRoundsCount, 10)} rounds
         {tl && <span className={"trend-direction " + tl.cls}>{tl.text}</span>}
+      </div>
+
+      {/* 9/18 toggle */}
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
+        {[18, 9].map(n => (
+          <button key={n} className={"trend-tab" + (activeTab === n ? " active" : "")} onClick={() => setActiveTab(n)}>
+            {n} holes
+          </button>
+        ))}
       </div>
 
       <div className="trend-summary">
@@ -449,15 +468,22 @@ function RoundTrends({ rounds }) {
           <div className="trend-stat-lbl">Best</div>
         </div>
         <div className="trend-stat">
-          <div className="trend-stat-val">{scored.length}</div>
+          <div className="trend-stat-val">{activeRoundsCount}</div>
           <div className="trend-stat-lbl">Rounds</div>
         </div>
       </div>
 
       <div className="trends-tabs">
-        {["score","gir","putts"].map(t => (
-          <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "gir" ? "GIR %" : "Putts"}
+        {[
+          { key: "score",      label: "Score"      },
+          { key: "gir",        label: "GIR"        },
+          { key: "putts",      label: "Putts"      },
+          { key: "fairways",   label: "Fairways"   },
+          { key: "stableford", label: "Stableford" },
+          { key: "handicap",   label: "Handicap"   },
+        ].map(t => (
+          <button key={t.key} className={"trend-tab" + (tab === t.key ? " active" : "")} onClick={() => setTab(t.key)} style={{whiteSpace:"nowrap"}}>
+            {t.label}
           </button>
         ))}
       </div>
@@ -468,16 +494,86 @@ function RoundTrends({ rounds }) {
           <TrendLine data9={e9} data18={e18} metric="netVsPar" label="Net vs Par"   formatY={fmtPar} />
         </div>
       )}
-      {tab === "gir"   && (() => {
-        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
-        return <TrendLine data9={combined} data18={[]} metric="girPct" label="GIR %" yTicks={[0,25,50,75,100]} formatY={v => v+"%"} height={80} />;
-      })()}
-      {tab === "putts" && (() => {
-        const combined = [...e9, ...e18].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
-        return <TrendLine data9={combined} data18={[]} metric="puttsPerHole" label="Avg Putts / Hole" yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />;
-      })()}
+      {tab === "gir"        && <TrendLine data9={e10} data18={[]} metric="girPct"            label="GIR %"                 yTicks={[0,25,50,75,100]} formatY={v => v+"%"}         height={80} />}
+      {tab === "putts"      && <TrendLine data9={e10} data18={[]} metric="puttsPerHole"       label="Avg Putts / Hole"      yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
+      {tab === "fairways"   && <TrendLine data9={e10} data18={[]} metric="fwPct"              label="Fairways %"            yTicks={[0,25,50,75,100]} formatY={v => v+"%"}         height={80} />}
+      {tab === "stableford" && <TrendLine data9={e10} data18={[]} metric="stablefordPerHole"  label="Stableford pts / hole" formatY={v => v.toFixed(1)} height={80} lineColor="#C9A84C" />}
+      {tab === "handicap" && (
+        whsRounds.length < 2
+          ? <div style={{background:"white",border:"1px solid var(--border)",borderRadius:14,padding:"24px 16px",textAlign:"center",fontSize:13,color:"var(--text-dim)"}}>Log more rounds to see handicap trend</div>
+          : <TrendLine data9={whsRounds} data18={[]} metric="whs_index" label="WHS Index" formatY={v => v.toFixed(1)} height={80} lineColor="#4A90D9" />
+      )}
     </div>
   );
+}
+
+async function enrichRounds(rounds) {
+  if (!rounds || rounds.length === 0) return rounds;
+  const roundIds = rounds.map(r => r.id);
+  const uniqueCourseIds = [...new Set(rounds.map(r => r.course_id).filter(Boolean))];
+
+  const [holesRes, chRes] = await Promise.all([
+    supabase.from("round_holes")
+      .select("round_id, hole_number, gir, dna, fairway, par, score, putts, picked_up, stroke_index, approach, shots_inside_50")
+      .in("round_id", roundIds),
+    uniqueCourseIds.length > 0
+      ? supabase.from("course_holes").select("course_id, hole_number, stroke_index").in("course_id", uniqueCourseIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  // Build siMap[courseId][holeNumber] = strokeIndex
+  const siMap = {};
+  for (const ch of (chRes.data || [])) {
+    if (!siMap[ch.course_id]) siMap[ch.course_id] = {};
+    if (ch.stroke_index) siMap[ch.course_id][ch.hole_number] = ch.stroke_index;
+  }
+
+  const roundsById = Object.fromEntries(rounds.map(r => [r.id, r]));
+  const statsMap = {};
+  for (const rid of roundIds) {
+    statsMap[rid] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0, miss_left: 0, miss_right: 0, three_putt_count: 0, total_putts: 0, stableford_total: 0, stableford_holes: 0, scrambling_made: 0, scrambling_opps: 0 };
+  }
+
+  for (const h of (holesRes.data || [])) {
+    const sm = statsMap[h.round_id];
+    if (!sm) continue;
+    if (!h.dna) {
+      sm.attempted_holes++;
+      sm.total_putts += (h.putts || 0);
+      if (h.gir) sm.gir_count++;
+      if (h.putts >= 3) sm.three_putt_count++;
+      if (h.par >= 4) {
+        sm.fw_holes++;
+        if (h.fairway === "yes")   sm.fw_hit++;
+        if (h.fairway === "left")  sm.miss_left++;
+        if (h.fairway === "right") sm.miss_right++;
+      }
+      // Scrambling (up-and-down from under 50 on missed GIR)
+      if (!h.gir && !h.picked_up && h.approach === "Under 50") {
+        sm.scrambling_opps++;
+        if (h.shots_inside_50 === 1 && h.putts === 1) sm.scrambling_made++;
+      }
+      // Stableford — use stored SI first, fall back to course_holes siMap
+      const round = roundsById[h.round_id];
+      if (round) {
+        const si = h.stroke_index || siMap[round.course_id]?.[h.hole_number] || 0;
+        if (h.picked_up && round.handicap != null) {
+          sm.stableford_holes++; // 0 pts, hole counted
+        } else if (round.handicap != null && h.score !== null && si > 0) {
+          sm.stableford_holes++;
+          const hcp = round.handicap;
+          const hp  = round.holes_played || 9;
+          let shots = 0;
+          if (hcp >= si)          shots = 1;
+          if (hcp >= si + hp)     shots = 2;
+          if (hcp >= si + hp * 2) shots = 3;
+          sm.stableford_total += Math.max(0, 2 + h.par - (h.score - shots));
+        }
+      }
+    }
+  }
+
+  return rounds.map(r => ({ ...r, ...statsMap[r.id] }));
 }
 
 async function callAI(prompt) {
@@ -495,20 +591,28 @@ async function callAI(prompt) {
 }
 
 function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHome }) {
-  const [aiPatterns, setAiPatterns] = useState(null);
-
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
-  const diffs      = scored.map(r => r.total_score - getCoursePar(r));
-  const avgDiff    = diffs.length ? Math.round(diffs.reduce((a, b) => a + b) / diffs.length) : null;
-  const bestDiff   = diffs.length ? Math.min(...diffs) : null;
+  const rounds9Count  = scored.filter(r => (r.holes_played || 9) <= 9).length;
+  const rounds18Count = scored.filter(r => (r.holes_played || 9) > 9).length;
+  const [activeStatTab, setActiveStatTab] = useState(() => rounds9Count > rounds18Count ? 9 : 18);
+  const [aiPatterns, setAiPatterns] = useState(null);
+
+  const diffs   = scored.map(r => r.total_score - getCoursePar(r));
+  const avgDiff = diffs.length ? Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length) : null;
+  const bestDiff = diffs.length ? Math.min(...diffs) : null;
   function fmtDiff(d) { return d == null ? "—" : d === 0 ? "E" : d > 0 ? "+" + d : String(d); }
 
+  // AI: filter to active tab length, use last 5
+  const tabFiltered = scored.filter(r => activeStatTab === 9 ? (r.holes_played || 9) <= 9 : (r.holes_played || 9) > 9);
+  const aiRoundsCount = Math.min(tabFiltered.length, 5);
+
   useEffect(() => {
-    const scoredRounds = sentRounds.filter(r => r.total_score);
-    if (scoredRounds.length < 3) return;
+    if (scored.length < 3) return;
+    const filtered = scored.filter(r => activeStatTab === 9 ? (r.holes_played || 9) <= 9 : (r.holes_played || 9) > 9);
+    const last5 = filtered.slice(0, 5).reverse(); // oldest → newest
+    if (last5.length < 3) return;
     setAiPatterns(null);
-    const last5 = scoredRounds.slice(0, 5).reverse(); // oldest → newest
     const roundSummaries = last5.map((r, i) => {
       const vsPar        = r.total_score - getCoursePar(r);
       const girPct       = r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : 0;
@@ -525,7 +629,7 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
     callAI(
       `You are an expert golf coach. Analyse these ${last5.length} rounds from ${student.first_name} ${student.last_name} and identify exactly 3 specific patterns detected across multiple rounds. Look for trends in: scoring, GIR%, fairway accuracy/miss direction, 3-putt frequency, and scrambling (up-and-down = 1 chip + 1 putt from inside 50 yds on a missed GIR). Be specific with numbers. Write in third person — 'the student', 'they'. No preamble.\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}\n\nList exactly 3 numbered patterns, each 1-2 sentences.`
     ).then(setAiPatterns).catch(() => setAiPatterns("Pattern analysis unavailable."));
-  }, [rounds]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rounds, activeStatTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -574,10 +678,10 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
           </div>
         ) : (
           <>
-            <RoundTrends rounds={sentRounds} />
-            {scored.length >= 3 && (
+            <RoundTrends rounds={sentRounds} activeTab={activeStatTab} setActiveTab={setActiveStatTab} />
+            {scored.length >= 3 && aiRoundsCount >= 3 && (
               <div className="ai-box">
-                <div className="ai-label">✦ Multi-round pattern analysis — last {Math.min(scored.length, 5)} rounds</div>
+                <div className="ai-label">✦ Multi-round pattern analysis — last {aiRoundsCount} {activeStatTab}-hole rounds</div>
                 {aiPatterns
                   ? <div className="ai-text">{aiPatterns}</div>
                   : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns across rounds…</div>}
@@ -712,27 +816,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
           .eq("student_id", initialStudent.id)
           .eq("sent_to_coach", true)
           .order("created_at", { ascending: false });
-        const enriched = await Promise.all((rounds || []).map(async r => {
-          const { data: holes } = await supabase
-            .from("round_holes").select("gir, fairway, putts, par, dna, picked_up, approach, shots_inside_50").eq("round_id", r.id);
-          if (!holes || holes.length === 0) return r;
-          const attempted      = holes.filter(h => !h.dna);
-          const fwHoles        = attempted.filter(h => h.par >= 4);
-          const under50Misses  = attempted.filter(h => !h.gir && !h.picked_up && h.approach === "Under 50");
-          return {
-            ...r,
-            attempted_holes:  attempted.length,
-            gir_count:        attempted.filter(h => h.gir).length,
-            fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
-            fw_holes:         fwHoles.length,
-            miss_left:        fwHoles.filter(h => h.fairway === "left").length,
-            miss_right:       fwHoles.filter(h => h.fairway === "right").length,
-            three_putt_count: attempted.filter(h => h.putts >= 3).length,
-            total_putts:      attempted.reduce((s, h) => s + (h.putts || 0), 0),
-            scrambling_made:  under50Misses.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length,
-            scrambling_opps:  under50Misses.length,
-          };
-        }));
+        const enriched = await enrichRounds(rounds || []);
         setStudentRounds(enriched);
         setLoadingRounds(false);
       }
@@ -751,32 +835,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       .eq("sent_to_coach", true)
       .order("created_at", { ascending: false });
 
-    const rounds = data || [];
-
-    // Always compute stats fresh from round_holes
-    const enriched = await Promise.all(rounds.map(async r => {
-      const { data: holes } = await supabase
-        .from("round_holes").select("gir, fairway, putts, par, dna, picked_up, approach, shots_inside_50")
-        .eq("round_id", r.id);
-      if (!holes || holes.length === 0) return r;
-      const attempted      = holes.filter(h => !h.dna);
-      const fwHoles        = attempted.filter(h => h.par >= 4);
-      const under50Misses  = attempted.filter(h => !h.gir && !h.picked_up && h.approach === "Under 50");
-      return {
-        ...r,
-        attempted_holes:  attempted.length,
-        gir_count:        attempted.filter(h => h.gir).length,
-        fw_hit:           fwHoles.filter(h => h.fairway === "yes").length,
-        fw_holes:         fwHoles.length,
-        miss_left:        fwHoles.filter(h => h.fairway === "left").length,
-        miss_right:       fwHoles.filter(h => h.fairway === "right").length,
-        three_putt_count: attempted.filter(h => h.putts >= 3).length,
-        total_putts:      attempted.reduce((s, h) => s + (h.putts || 0), 0),
-        scrambling_made:  under50Misses.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length,
-        scrambling_opps:  under50Misses.length,
-      };
-    }));
-
+    const enriched = await enrichRounds(data || []);
     setStudentRounds(enriched);
     setLoadingRounds(false);
   }
