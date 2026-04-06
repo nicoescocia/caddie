@@ -65,6 +65,7 @@ export default function StudentSettings({ user, onBack, onSignOut }) {
   const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
   const [puttTracking, setPuttTracking] = useState("standard");
+  const [approachLogging, setApproachLogging] = useState("enabled");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function StudentSettings({ user, onBack, onSignOut }) {
         .single();
       setIsPremium(!!data?.is_premium);
       setPuttTracking(data?.settings?.putt_tracking || "standard");
+      setApproachLogging(data?.settings?.approach_logging || "enabled");
       setLoading(false);
     }
     load();
@@ -87,9 +89,19 @@ export default function StudentSettings({ user, onBack, onSignOut }) {
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
-      .update({ settings: { putt_tracking: val } })
+      .update({ settings: { putt_tracking: val, approach_logging: approachLogging } })
       .eq("id", user.id);
     if (!error) setPuttTracking(val);
+    setSaving(false);
+  }
+
+  async function handleApproachSelect(val) {
+    setSaving(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ settings: { putt_tracking: puttTracking, approach_logging: val } })
+      .eq("id", user.id);
+    if (!error) setApproachLogging(val);
     setSaving(false);
   }
 
@@ -194,6 +206,52 @@ export default function StudentSettings({ user, onBack, onSignOut }) {
             {saving && (
               <div style={{fontSize:12,color:"var(--text-dim)",marginTop:10,textAlign:"center"}}>Saving…</div>
             )}
+          </div>
+        </div>
+
+        <div className="set-card">
+          <div className="set-section-label">Approach distance logging</div>
+          <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:14,lineHeight:1.55}}>
+            Controls whether approach distance is recorded for each hole.
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {[
+              { value: "enabled",  label: "Enabled",  desc: "Record approach distance (e.g. 75–100 yds) for each hole." },
+              { value: "disabled", label: "Disabled", desc: "Skip the approach distance input entirely. Approach is saved as blank." },
+            ].map(opt => {
+              const isActive = approachLogging === opt.value;
+              return (
+                <div
+                  key={opt.value}
+                  onClick={() => handleApproachSelect(opt.value)}
+                  style={{
+                    background: isActive ? "var(--green-dark)" : "white",
+                    border: "1.5px solid " + (isActive ? "var(--green-dark)" : "var(--border)"),
+                    borderRadius: 12, padding: "14px 16px",
+                    cursor: "pointer", transition: "all .18s",
+                  }}
+                >
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:700,marginBottom:3,color:isActive?"white":"var(--text)"}}>
+                        {opt.label}
+                      </div>
+                      <div style={{fontSize:12,lineHeight:1.5,color:isActive?"rgba(255,255,255,0.6)":"var(--text-dim)"}}>
+                        {opt.desc}
+                      </div>
+                    </div>
+                    {isActive && (
+                      <div style={{
+                        width:20,height:20,borderRadius:"50%",background:"var(--gold)",
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        flexShrink:0,marginLeft:12,fontSize:12,
+                        color:"var(--green-dark)",fontWeight:700,
+                      }}>✓</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

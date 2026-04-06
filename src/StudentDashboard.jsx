@@ -237,7 +237,7 @@ function trendLabel(dir, lowerIsBetter = true) {
     : { text: "↓ Worsening", cls: "worsening" };
 }
 
-function StudentRoundTrends({ rounds }) {
+function StudentRoundTrends({ rounds, activeTab }) {
   const [tab, setTab] = useState("score");
   const scored = rounds.filter(r => r.total_score);
   // rounds are newest-first; take the 10 most recent of each type, then reverse for chart display (oldest→newest)
@@ -265,11 +265,13 @@ function StudentRoundTrends({ rounds }) {
   const e18 = enrich(r18);
   const e10 = enrich(r10);
 
-  const allScored  = [...e9, ...e18];
-  const scoreDiffs = allScored.map(r => r.vsPar / (r.holes_played || 9));
+  // Summary stats and trend direction respect the active 9/18 tab
+  const activeEnriched = activeTab === 9 ? e9 : e18;
+  const activeRoundsCount = activeTab === 9 ? r9.length : r18.length;
+  const scoreDiffs = activeEnriched.map(r => r.vsPar / (r.holes_played || 9));
   const dir = trendDirection(scoreDiffs);
   const tl  = trendLabel(dir, true);
-  const rawVsPars = allScored.map(r => r.vsPar);
+  const rawVsPars = activeEnriched.map(r => r.vsPar);
   const avgVsPar  = rawVsPars.length ? Math.round(rawVsPars.reduce((a,b)=>a+b,0)/rawVsPars.length) : null;
   const bestVsPar = rawVsPars.length ? Math.min(...rawVsPars) : null;
 
@@ -285,7 +287,7 @@ function StudentRoundTrends({ rounds }) {
   return (
     <div className="trends-wrap">
       <div className="trends-title">
-        Trends — last {Math.min(scored.length, 10)} rounds
+        Trends — last {Math.min(activeRoundsCount, 10)} rounds
         {activeTl && <span className={"trend-direction " + activeTl.cls}>{activeTl.text}</span>}
       </div>
 
@@ -299,7 +301,7 @@ function StudentRoundTrends({ rounds }) {
           <div className="trend-stat-lbl">Best</div>
         </div>
         <div className="trend-stat">
-          <div className="trend-stat-val">{scored.length}</div>
+          <div className="trend-stat-val">{activeRoundsCount}</div>
           <div className="trend-stat-lbl">Rounds</div>
         </div>
       </div>
@@ -594,7 +596,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
   const completedRounds = rounds.filter(r => r.total_score);
   const rounds9  = completedRounds.filter(r => r.holes_played === 9);
   const rounds18 = completedRounds.filter(r => r.holes_played === 18);
-  const activeStatTab = statTab ?? (rounds18.length >= rounds9.length ? 18 : 9);
+  const activeStatTab = statTab ?? (rounds9.length > rounds18.length ? 9 : 18);
   const activeRounds  = activeStatTab === 9 ? rounds9 : rounds18;
   const avgDiff = activeRounds.length
     ? Math.round(activeRounds.reduce((s, r) => s + ((r.total_score || 0) - getCoursePar(r)), 0) / activeRounds.length)
@@ -676,7 +678,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           </div>
           {completedRounds.length > 0 && (rounds9.length > 0 || rounds18.length > 0) && (
             <div style={{display:"flex",gap:6,marginBottom:10}}>
-              {[9, 18].map(n => {
+              {[18, 9].map(n => {
                 const hasRounds = n === 9 ? rounds9.length > 0 : rounds18.length > 0;
                 return (
                   <button
@@ -713,7 +715,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           </div>
         </div>
 
-        <StudentRoundTrends rounds={enrichedForTrends} />
+        <StudentRoundTrends rounds={enrichedForTrends} activeTab={activeStatTab} />
 
         {/* Coach card */}
         {coach ? (
@@ -784,12 +786,6 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           ⛳ Start new round
         </button>
 
-        {rounds.filter(r => r.historical).length < 5 && (
-          <button className="hist-btn" onClick={() => openHistModal(null)}>
-            📅 Add a historical round
-          </button>
-        )}
-
         {rounds.length > 0 && (
           <>
             <div className="section-title">Past rounds</div>
@@ -853,6 +849,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
               );
             })}
           </>
+        )}
+
+        {rounds.filter(r => r.historical).length < 5 && (
+          <button className="hist-btn" onClick={() => openHistModal(null)}>
+            📅 Add a historical round
+          </button>
         )}
 
         {rounds.length === 0 && (

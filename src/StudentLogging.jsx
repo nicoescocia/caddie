@@ -885,7 +885,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [handicap, setHandicap]       = useState("");
   const [courseName, setCourseName] = useState("");
   const [roundId, setRoundId]       = useState(null);
-  const [puttMode, setPuttMode]   = useState("standard");
+  const [puttMode, setPuttMode]         = useState("standard");
+  const [approachLogging, setApproachLogging] = useState("enabled");
   const [isPremium, setIsPremium] = useState(false);
   // view: "course_picker" | "overview" | "logging" | "summary" | "sent" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
@@ -991,6 +992,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         .single();
       setIsPremium(!!data?.is_premium);
       setPuttMode(data?.settings?.putt_tracking || "standard");
+      setApproachLogging(data?.settings?.approach_logging || "enabled");
       if (data?.official_handicap != null) setOfficialHandicap(data.official_handicap);
     }
     fetchSettings();
@@ -1335,7 +1337,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     if (d.score === null || d.putts === null) return false;
     if (h.par >= 4 && !d.fairway) return false;
     const par3GIR = h.par === 3 && gir === true;
-    if (d.putts !== 0 && !par3GIR && !d.approach) return false;
+    if (d.putts !== 0 && !par3GIR && !d.approach && approachLogging !== "disabled") return false;
     if (d.putts > 0 && !d.putt1) return false;
     if (puttMode === "full") {
       if (d.putts >= 2 && !d.putt2) return false;
@@ -1673,7 +1675,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </div>
         )}
 
-        {!d.pickedUp && !d.dna && showAppr && (
+        {!d.pickedUp && !d.dna && showAppr && approachLogging !== "disabled" && (
           <div className="sec">
             <div className="sec-label">Approach distance</div>
             <div className="appr-grid">
