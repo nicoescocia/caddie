@@ -26,7 +26,7 @@ const css = `
   }
   body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 
-  .ob-page { min-height:100dvh; display:flex; flex-direction:column; }
+  .ob-page { min-height:100dvh; }
   .ob-header { background:white; position:sticky; top:0; z-index:100; border-bottom:1px solid var(--border); }
   .ob-header-inner { padding:14px 20px 11px; display:flex; align-items:center; justify-content:space-between; }
   .ob-logo { font-family:'Playfair Display',serif; font-size:20px; color:var(--green-dark); }
@@ -34,10 +34,10 @@ const css = `
   .ob-progress-track { height:6px; background:var(--border); }
   .ob-progress-fill { height:6px; background:var(--green); transition:width .4s cubic-bezier(.4,0,.2,1); }
 
-  .ob-wrap { flex:1; display:flex; flex-direction:column; max-width:480px; margin:0 auto; padding:0 20px; width:100%; }
-  .ob-step { display:flex; flex-direction:column; flex:1; }
-  .ob-step-content { flex:1; display:flex; flex-direction:column; justify-content:center; padding:32px 0 16px; }
-  .ob-step-actions { padding-top:8px; padding-bottom:max(24px,env(safe-area-inset-bottom)); }
+  .ob-wrap { max-width:480px; margin:0 auto; padding:0 20px; width:100%; }
+  .ob-step { padding:32px 0; }
+  .ob-step-content { }
+  .ob-step-actions { margin-top:24px; }
   .ob-emoji { font-size:64px; display:block; text-align:center; margin-bottom:16px; line-height:1; }
 
   .ob-heading { font-family:'Playfair Display',serif; font-size:26px; color:var(--text); margin-bottom:12px; line-height:1.25; }
