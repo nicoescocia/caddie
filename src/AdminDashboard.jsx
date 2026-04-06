@@ -147,6 +147,19 @@ const css = `
   .adm-modal-close { width:100%; background:none; border:1.5px solid var(--border); border-radius:12px; padding:12px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:600; color:var(--text-mid); cursor:pointer; margin-top:20px; }
   .adm-modal-close:hover { border-color:var(--green); color:var(--green); }
 
+  /* Feedback */
+  .adm-fb-row { padding:14px 0; border-bottom:1px solid var(--border); }
+  .adm-fb-row:last-child { border-bottom:none; }
+  .adm-fb-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .adm-fb-name { font-size:13px; font-weight:700; color:var(--text); }
+  .adm-fb-page { font-size:11px; color:var(--text-dim); }
+  .adm-fb-date { font-size:11px; color:var(--text-dim); margin-left:auto; }
+  .adm-fb-cat { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:5px; }
+  .adm-fb-cat.Bug { background:#FEE; color:var(--red); }
+  .adm-fb-cat.Suggestion { background:#EAF5EF; color:var(--green-mid); }
+  .adm-fb-cat.General { background:#F0F0F0; color:var(--text-mid); }
+  .adm-fb-message { font-size:13px; color:var(--text-mid); line-height:1.55; }
+
   @media(max-width:520px) {
     .adm-summary-row { grid-template-columns:1fr 1fr; }
     .adm-table th.adm-hide-sm, .adm-table td.adm-hide-sm { display:none; }
@@ -176,6 +189,7 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [flaggedCourses, setFlaggedCourses] = useState([]);
   const [resolvingFlagId, setResolvingFlagId] = useState(null);
   const [editingCourse, setEditingCourse] = useState(null); // null or {id, name}
+  const [feedbackItems, setFeedbackItems] = useState([]);
   const [editCourseHoles, setEditCourseHoles] = useState([]);
   const [editCourseLoading, setEditCourseLoading] = useState(false);
   const [editCourseSaving, setEditCourseSaving] = useState(false);
@@ -188,11 +202,12 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [linkError, setLinkError] = useState("");
 
   async function load() {
-    const [profilesRes, roundsRes, csRes, flagsRes] = await Promise.all([
+    const [profilesRes, roundsRes, csRes, flagsRes, feedbackRes] = await Promise.all([
       adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, phone, home_courses, bio, created_at"),
       adminClient.from("rounds").select("id", { count: "exact", head: true }),
       adminClient.from("coach_students").select("coach_id, student_id"),
       adminClient.from("course_flags").select("id, course_id, note, created_at, courses(id, name), profiles!flagged_by(first_name, last_name)").eq("resolved", false).order("created_at", { ascending: false }),
+      adminClient.from("feedback").select("id, user_id, category, message, page, created_at, profiles(first_name, last_name)").order("created_at", { ascending: false }).limit(100),
     ]);
 
     const allProfiles = profilesRes.data || [];
@@ -216,6 +231,7 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
     }
 
     if (flagsRes.data) setFlaggedCourses(flagsRes.data);
+    if (feedbackRes.data) setFeedbackItems(feedbackRes.data);
 
     setLoading(false);
   }
@@ -590,6 +606,28 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                         {resolvingFlagId === flag.id ? "…" : "Resolve"}
                       </button>
                     </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* ── Feedback ── */}
+            <div className="adm-card">
+              <div className="adm-card-title">Beta feedback</div>
+              {feedbackItems.length === 0 ? (
+                <div className="adm-empty">No feedback submitted yet.</div>
+              ) : (
+                feedbackItems.map(fb => (
+                  <div className="adm-fb-row" key={fb.id}>
+                    <div className="adm-fb-header">
+                      <span className="adm-fb-name">
+                        {fb.profiles ? `${fb.profiles.first_name} ${fb.profiles.last_name}` : "Unknown"}
+                      </span>
+                      <span className={"adm-fb-cat " + (fb.category || "General")}>{fb.category || "General"}</span>
+                      {fb.page && <span className="adm-fb-page">· {fb.page}</span>}
+                      <span className="adm-fb-date">{fmtDate(fb.created_at)}</span>
+                    </div>
+                    <div className="adm-fb-message">{fb.message}</div>
                   </div>
                 ))
               )}

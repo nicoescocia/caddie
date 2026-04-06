@@ -65,7 +65,8 @@ const css = `
 
   .trends-wrap { margin-bottom:16px; }
   .trends-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
-  .trends-tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .trends-tabs { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; flex-wrap:nowrap; }
+  .trends-tabs::-webkit-scrollbar { display:none; }
   .trend-tab { background:white; border:1.5px solid var(--border); border-radius:8px; padding:5px 12px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s; }
   .trend-tab.active { background:var(--green-dark); border-color:var(--green-dark); color:white; }
   .trend-chart { background:white; border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; }

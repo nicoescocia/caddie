@@ -9,6 +9,7 @@ import AdminDashboard from './AdminDashboard'
 import ProfilePage from './ProfilePage'
 import StudentSettings from './StudentSettings'
 import CourseForm from './CourseForm'
+import FeedbackButton from './FeedbackButton'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -98,67 +99,85 @@ function App() {
     if (adminView === 'student') {
       if (studentScreen === 'profile') {
         return (
-          <ProfilePage
-            user={user}
-            onBack={() => setStudentScreen('dashboard')}
-            onSignOut={handleSignOut}
-            onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('profile'); setStudentScreen('course_form') }}
-          />
+          <>
+            <ProfilePage
+              user={user}
+              onBack={() => setStudentScreen('dashboard')}
+              onSignOut={handleSignOut}
+              onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('profile'); setStudentScreen('course_form') }}
+            />
+            <FeedbackButton userId={user.id} page="profile" />
+          </>
         )
       }
       if (studentScreen === 'settings') {
         return (
-          <StudentSettings
-            user={user}
-            onBack={() => setStudentScreen('dashboard')}
-            onSignOut={handleSignOut}
-          />
+          <>
+            <StudentSettings
+              user={user}
+              onBack={() => setStudentScreen('dashboard')}
+              onSignOut={handleSignOut}
+            />
+            <FeedbackButton userId={user.id} page="settings" />
+          </>
         )
       }
       if (studentScreen === 'course_form') {
         return (
-          <CourseForm
-            user={user}
-            editCourseId={editingCourseId}
-            onBack={() => { setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
-            onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
-            onSignOut={handleSignOut}
-          />
+          <>
+            <CourseForm
+              user={user}
+              editCourseId={editingCourseId}
+              onBack={() => { setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
+              onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
+              onSignOut={handleSignOut}
+            />
+            <FeedbackButton userId={user.id} page="course_form" />
+          </>
         )
       }
       if (studentScreen === 'logging') {
         return (
-          <StudentLogging
-            user={user}
-            onSignOut={handleSignOut}
-            onBackToDashboard={() => setStudentScreen('dashboard')}
-            onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('logging'); setStudentScreen('course_form') }}
-            onEditCourse={id => { setEditingCourseId(id); setCourseFormReturn('logging'); setStudentScreen('course_form') }}
-            pendingCourseId={pendingCourseId}
-            onClearPendingCourse={() => setPendingCourseId(null)}
-          />
+          <>
+            <StudentLogging
+              user={user}
+              onSignOut={handleSignOut}
+              onBackToDashboard={() => setStudentScreen('dashboard')}
+              onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('logging'); setStudentScreen('course_form') }}
+              onEditCourse={id => { setEditingCourseId(id); setCourseFormReturn('logging'); setStudentScreen('course_form') }}
+              pendingCourseId={pendingCourseId}
+              onClearPendingCourse={() => setPendingCourseId(null)}
+            />
+            <FeedbackButton userId={user.id} page="logging" />
+          </>
         )
       }
       if (studentScreen === 'editing') {
         return (
-          <StudentLogging
-            user={user}
-            onSignOut={handleSignOut}
-            onBackToDashboard={() => { setEditRound(null); setStudentScreen('dashboard') }}
-            existingRound={editRound}
-          />
+          <>
+            <StudentLogging
+              user={user}
+              onSignOut={handleSignOut}
+              onBackToDashboard={() => { setEditRound(null); setStudentScreen('dashboard') }}
+              existingRound={editRound}
+            />
+            <FeedbackButton userId={user.id} page="editing" />
+          </>
         )
       }
       return (
-        <StudentDashboard
-          user={user}
-          onSignOut={handleSignOut}
-          onNewRound={() => setStudentScreen('logging')}
-          onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
-          onBackToAdmin={() => { resetScreenState(); setAdminView('admin') }}
-          onProfile={() => setStudentScreen('profile')}
-          onSettings={() => setStudentScreen('settings')}
-        />
+        <>
+          <StudentDashboard
+            user={user}
+            onSignOut={handleSignOut}
+            onNewRound={() => setStudentScreen('logging')}
+            onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
+            onBackToAdmin={() => { resetScreenState(); setAdminView('admin') }}
+            onProfile={() => setStudentScreen('profile')}
+            onSettings={() => setStudentScreen('settings')}
+          />
+          <FeedbackButton userId={user.id} page="dashboard" />
+        </>
       )
     }
     return <AdminDashboard user={user} onSignOut={handleSignOut} onStudentView={() => setAdminView('student')} />
@@ -202,64 +221,82 @@ function App() {
 
   if (studentScreen === 'profile') {
     return (
-      <ProfilePage
-        user={user}
-        onBack={() => setStudentScreen('dashboard')}
-        onSignOut={handleSignOut}
-        onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('profile'); setStudentScreen('course_form') }}
-      />
+      <>
+        <ProfilePage
+          user={user}
+          onBack={() => setStudentScreen('dashboard')}
+          onSignOut={handleSignOut}
+          onAddCourse={() => { setEditingCourseId(null); setCourseFormReturn('profile'); setStudentScreen('course_form') }}
+        />
+        <FeedbackButton userId={user.id} page="profile" />
+      </>
     )
   }
 
   if (studentScreen === 'settings') {
     return (
-      <StudentSettings
-        user={user}
-        onBack={() => setStudentScreen('dashboard')}
-        onSignOut={handleSignOut}
-      />
+      <>
+        <StudentSettings
+          user={user}
+          onBack={() => setStudentScreen('dashboard')}
+          onSignOut={handleSignOut}
+        />
+        <FeedbackButton userId={user.id} page="settings" />
+      </>
     )
   }
 
   if (studentScreen === 'course_form') {
     return (
-      <CourseForm
-        user={user}
-        editCourseId={editingCourseId}
-        onBack={() => { setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
-        onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
-      />
+      <>
+        <CourseForm
+          user={user}
+          editCourseId={editingCourseId}
+          onBack={() => { setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
+          onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen(courseFormReturn) }}
+        />
+        <FeedbackButton userId={user.id} page="course_form" />
+      </>
     )
   }
 
   if (studentScreen === 'logging') {
     return (
-      <StudentLogging
-        user={user}
-        onSignOut={handleSignOut}
-        onBackToDashboard={() => setStudentScreen('dashboard')}
-      />
+      <>
+        <StudentLogging
+          user={user}
+          onSignOut={handleSignOut}
+          onBackToDashboard={() => setStudentScreen('dashboard')}
+        />
+        <FeedbackButton userId={user.id} page="logging" />
+      </>
     )
   }
   if (studentScreen === 'editing') {
     return (
-      <StudentLogging
-        user={user}
-        onSignOut={handleSignOut}
-        onBackToDashboard={() => { setEditRound(null); setStudentScreen('dashboard') }}
-        existingRound={editRound}
-      />
+      <>
+        <StudentLogging
+          user={user}
+          onSignOut={handleSignOut}
+          onBackToDashboard={() => { setEditRound(null); setStudentScreen('dashboard') }}
+          existingRound={editRound}
+        />
+        <FeedbackButton userId={user.id} page="editing" />
+      </>
     )
   }
   return (
-    <StudentDashboard
-      user={user}
-      onSignOut={handleSignOut}
-      onNewRound={() => setStudentScreen('logging')}
-      onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
-      onProfile={() => setStudentScreen('profile')}
-      onSettings={() => setStudentScreen('settings')}
-    />
+    <>
+      <StudentDashboard
+        user={user}
+        onSignOut={handleSignOut}
+        onNewRound={() => setStudentScreen('logging')}
+        onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
+        onProfile={() => setStudentScreen('profile')}
+        onSettings={() => setStudentScreen('settings')}
+      />
+      <FeedbackButton userId={user.id} page="dashboard" />
+    </>
   )
 }
 
