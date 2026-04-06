@@ -10,11 +10,13 @@ import ProfilePage from './ProfilePage'
 import StudentSettings from './StudentSettings'
 import CourseForm from './CourseForm'
 import FeedbackButton from './FeedbackButton'
+import StudentOnboarding from './StudentOnboarding'
 
 function App() {
   const [user, setUser]     = useState(null)
   const [role, setRole]     = useState(null)
   const [loading, setLoading] = useState(true)
+  const [onboardingComplete, setOnboardingComplete] = useState(null)
 
   const [adminView, setAdminView]         = useState('admin')
   const [studentScreen, setStudentScreen] = useState('dashboard')
@@ -39,8 +41,9 @@ function App() {
 
   async function fetchAndSetRole(userId) {
     const { data } = await supabase
-      .from('profiles').select('role, first_name, last_name, official_handicap').eq('id', userId).single()
+      .from('profiles').select('role, first_name, last_name, official_handicap, onboarding_complete').eq('id', userId).single()
     setRole(data?.role ?? null)
+    setOnboardingComplete(data?.onboarding_complete ?? false)
     return data?.role ?? null
   }
 
@@ -69,14 +72,10 @@ function App() {
     await supabase.auth.signOut()
   }
 
-  // Called by CaddieAuth — roleArg comes straight from the profiles fetch
-  async function handleAuthSuccess(userObj, roleArg) {
+  // Called by CaddieAuth — always fetch profile to get onboarding_complete
+  async function handleAuthSuccess(userObj) {
     setUser(userObj)
-    if (roleArg) {
-      setRole(roleArg)
-    } else {
-      await fetchAndSetRole(userObj.id)
-    }
+    await fetchAndSetRole(userObj.id)
     resetScreenState()
   }
 
@@ -215,6 +214,28 @@ function App() {
         }}
         onProfile={() => setCoachScreen('profile')}
         onSignOut={handleSignOut}
+      />
+    )
+  }
+
+  if (role === 'student' && onboardingComplete === false) {
+    if (studentScreen === 'course_form') {
+      return (
+        <CourseForm
+          user={user}
+          editCourseId={editingCourseId}
+          onBack={() => { setEditingCourseId(null); setStudentScreen('dashboard') }}
+          onDone={(course) => { setPendingCourseId(course.id); setEditingCourseId(null); setStudentScreen('dashboard') }}
+        />
+      )
+    }
+    return (
+      <StudentOnboarding
+        user={user}
+        onComplete={() => setOnboardingComplete(true)}
+        onAddCourse={() => { setEditingCourseId(null); setStudentScreen('course_form') }}
+        pendingCourseId={pendingCourseId}
+        onClearPendingCourse={() => setPendingCourseId(null)}
       />
     )
   }
