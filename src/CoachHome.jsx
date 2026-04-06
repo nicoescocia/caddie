@@ -603,33 +603,68 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
   const bestDiff = diffs.length ? Math.min(...diffs) : null;
   function fmtDiff(d) { return d == null ? "—" : d === 0 ? "E" : d > 0 ? "+" + d : String(d); }
 
-  // AI: filter to active tab length, use last 5
-  const tabFiltered = scored.filter(r => activeStatTab === 9 ? (r.holes_played || 9) <= 9 : (r.holes_played || 9) > 9);
-  const aiRoundsCount = Math.min(tabFiltered.length, 5);
+  const aiRoundsCount = Math.min(scored.length, 5);
 
   useEffect(() => {
     if (scored.length < 3) return;
-    const filtered = scored.filter(r => activeStatTab === 9 ? (r.holes_played || 9) <= 9 : (r.holes_played || 9) > 9);
-    const last5 = filtered.slice(0, 5).reverse(); // oldest → newest
-    if (last5.length < 3) return;
+    const last5 = scored.slice(0, 5).reverse(); // last 5 regardless of length, oldest → newest
     setAiPatterns(null);
     const roundSummaries = last5.map((r, i) => {
+      const hp           = r.holes_played || 9;
       const vsPar        = r.total_score - getCoursePar(r);
-      const girPct       = r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : 0;
+      const vsParPerHole = (vsPar / hp).toFixed(2);
+      const girPct       = r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null;
       const fwPct        = r.fw_holes ? Math.round(r.fw_hit / r.fw_holes * 100) : null;
-      const puttsPerHole = r.holes_played ? (r.total_putts / r.holes_played).toFixed(1) : null;
+      const puttsPerHole = r.total_putts != null ? (r.total_putts / hp).toFixed(2) : null;
+      const stableford   = r.stableford_holes ? (r.stableford_total / r.stableford_holes).toFixed(2) : null;
+      const scrPct       = r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null;
       const fmtDate      = new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-      return `Round ${i + 1} (${fmtDate}): ${vsPar >= 0 ? "+" : ""}${vsPar} vs par` +
-        `, GIR ${girPct}%` +
-        (fwPct != null ? `, fairways ${fwPct}% (${r.miss_left ?? 0}L ${r.miss_right ?? 0}R miss)` : "") +
-        `, 3-putts ${r.three_putt_count ?? 0}` +
-        (puttsPerHole ? `, ${puttsPerHole} putts/hole` : "") +
-        (r.scrambling_opps > 0 ? `, scrambling ${r.scrambling_made}/${r.scrambling_opps}` : "");
+      const courseName   = r.courses?.name || "Golf Course";
+      return `Round ${i + 1} (${fmtDate}, ${courseName}, ${hp} holes):` +
+        ` vs par/hole ${vsParPerHole >= 0 ? "+" : ""}${vsParPerHole}` +
+        (stableford   != null ? `, stableford/hole ${stableford}` : "") +
+        (girPct       != null ? `, GIR ${girPct}%` : "") +
+        (fwPct        != null ? `, fairways ${fwPct}% (${r.miss_left ?? 0}L ${r.miss_right ?? 0}R miss)` : "") +
+        (puttsPerHole != null ? `, putts/hole ${puttsPerHole}` : "") +
+        (scrPct       != null ? `, scrambling ${scrPct}%` : "") +
+        (r.handicap   != null ? `, course hcp ${r.handicap}` : "") +
+        (r.whs_index  != null ? `, WHS index ${r.whs_index}` : "");
     }).join("\n");
+
+    const SYSTEM_PROMPT = `You are an expert golf coach analysing a student's recent rounds to identify performance patterns. All stats have been normalised per hole so rounds of different lengths (9 or 18 holes) are directly comparable.
+
+When identifying patterns, follow these rules:
+
+COMPARING ROUNDS OF DIFFERENT LENGTHS
+- All stats provided are already per-hole or percentage-based, so 9 and 18 hole rounds can be compared directly
+- Do not treat round length as a significant variable — focus on the normalised stats
+- Stableford points per hole is the most reliable scoring metric across round lengths
+
+HANDICAP CONTEXT
+- If WHS index is available across rounds, factor in handicap changes when interpreting Stableford trends
+- If Stableford per hole is stable but WHS index is decreasing, this means the student is genuinely improving — they are scoring the same points against a tougher standard
+- If Stableford per hole is improving and WHS index is also decreasing, this is strong improvement
+- Always contextualise scoring stats against the student's handicap at the time of each round
+
+WHAT TO LOOK FOR
+- Trends in scoring, GIR %, fairways %, and putting across the rounds provided
+- Consistency or inconsistency in specific areas
+- Whether short game (scrambling, putts per hole on non-GIR holes) is compensating for or compounding ball striking issues
+- Directional patterns in fairway misses if data shows a consistent left or right tendency
+- Relationships between stats e.g. better fairways leading to better GIR, or worse GIR leading to more putts
+
+OUTPUT FORMAT
+- Identify exactly 3 patterns, numbered 1 to 3, ordered by significance
+- Each pattern should be 2-3 sentences: what the pattern is, what the data shows, and what it means for the student's development
+- Use third person ("the student", "they", "their")
+- Be specific — reference actual numbers from the data
+- Be constructive — frame patterns as development opportunities, not criticisms
+- Do not mention round length or the normalisation process in the output`;
+
     callAI(
-      `You are an expert golf coach. Analyse these ${last5.length} rounds from ${student.first_name} ${student.last_name} and identify exactly 3 specific patterns detected across multiple rounds. Look for trends in: scoring, GIR%, fairway accuracy/miss direction, 3-putt frequency, and scrambling (up-and-down = 1 chip + 1 putt from inside 50 yds on a missed GIR). Be specific with numbers. Write in third person — 'the student', 'they'. No preamble.\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}\n\nList exactly 3 numbered patterns, each 1-2 sentences.`
+      `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}`
     ).then(setAiPatterns).catch(() => setAiPatterns("Pattern analysis unavailable."));
-  }, [rounds, activeStatTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rounds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -679,9 +714,9 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
         ) : (
           <>
             <RoundTrends rounds={sentRounds} activeTab={activeStatTab} setActiveTab={setActiveStatTab} />
-            {scored.length >= 3 && aiRoundsCount >= 3 && (
+            {scored.length >= 3 && (
               <div className="ai-box">
-                <div className="ai-label">✦ Multi-round pattern analysis — last {aiRoundsCount} {activeStatTab}-hole rounds</div>
+                <div className="ai-label">✦ Multi-round pattern analysis — last {aiRoundsCount} rounds</div>
                 {aiPatterns
                   ? <div className="ai-text">{aiPatterns}</div>
                   : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns across rounds…</div>}
