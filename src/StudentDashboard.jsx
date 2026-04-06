@@ -310,7 +310,7 @@ function StudentRoundTrends({ rounds, activeTab }) {
       <div className="trends-tabs">
         {["score","gir","putts","fairways","stableford","handicap"].map(t => (
           <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "gir" ? "GIR %" : t === "putts" ? "Putts" : t === "fairways" ? "Fairways" : t === "stableford" ? "Stableford" : "Handicap"}
+            {t === "score" ? "Score" : t === "gir" ? "GIR" : t === "putts" ? "Putts" : t === "fairways" ? "Fairways" : t === "stableford" ? "Stableford" : "Handicap"}
           </button>
         ))}
       </div>
