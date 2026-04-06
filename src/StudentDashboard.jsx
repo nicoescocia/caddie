@@ -273,13 +273,20 @@ function StudentRoundTrends({ rounds }) {
   const avgVsPar  = rawVsPars.length ? Math.round(rawVsPars.reduce((a,b)=>a+b,0)/rawVsPars.length) : null;
   const bestVsPar = rawVsPars.length ? Math.min(...rawVsPars) : null;
 
+  // Handicap progression — all completed rounds with whs_index, up to 10 most recent
+  const whsRounds = e10.filter(r => r.whs_index != null);
+  const whsDiffs  = whsRounds.map(r => r.whs_index);
+  const whsDir    = trendDirection(whsDiffs);
+  const whsTl     = trendLabel(whsDir, true);
+  const activeTl  = tab === "handicap" ? whsTl : tl;
+
   const fmtPar = v => v > 0 ? "+"+v : v === 0 ? "E" : String(v);
 
   return (
     <div className="trends-wrap">
       <div className="trends-title">
         Trends — last {Math.min(scored.length, 10)} rounds
-        {tl && <span className={"trend-direction " + tl.cls}>{tl.text}</span>}
+        {activeTl && <span className={"trend-direction " + activeTl.cls}>{activeTl.text}</span>}
       </div>
 
       <div className="trend-summary">
@@ -298,9 +305,9 @@ function StudentRoundTrends({ rounds }) {
       </div>
 
       <div className="trends-tabs">
-        {["score","gir","putts","fairways","stableford"].map(t => (
+        {["score","gir","putts","fairways","stableford","handicap"].map(t => (
           <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "gir" ? "GIR %" : t === "putts" ? "Putts" : t === "fairways" ? "Fairways" : "Stableford"}
+            {t === "score" ? "Score" : t === "gir" ? "GIR %" : t === "putts" ? "Putts" : t === "fairways" ? "Fairways" : t === "stableford" ? "Stableford" : "Handicap"}
           </button>
         ))}
       </div>
@@ -315,6 +322,11 @@ function StudentRoundTrends({ rounds }) {
       {tab === "putts"      && <TrendLine data9={e10} data18={[]} metric="puttsPerHole"       label="Avg Putts / Hole"   yTicks={[1.5,2.0,2.5,3.0]} formatY={v => v.toFixed(1)} height={80} />}
       {tab === "fairways"   && <TrendLine data9={e10} data18={[]} metric="fwPct"              label="Fairways %"         yTicks={[0,25,50,75,100]} formatY={v => v+"%"}        height={80} />}
       {tab === "stableford" && <TrendLine data9={e10} data18={[]} metric="stablefordPerHole"  label="Stableford pts / hole" formatY={v => v.toFixed(1)} height={80} lineColor="#C9A84C" />}
+      {tab === "handicap" && (
+        whsRounds.length < 2
+          ? <div style={{background:"white",border:"1px solid var(--border)",borderRadius:14,padding:"24px 16px",textAlign:"center",fontSize:13,color:"var(--text-dim)"}}>Log more rounds to see your handicap trend</div>
+          : <TrendLine data9={whsRounds} data18={[]} metric="whs_index" label="WHS Index" formatY={v => v.toFixed(1)} height={80} lineColor="#4A90D9" />
+      )}
     </div>
   );
 }
@@ -330,7 +342,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
   const [hcpEditing, setHcpEditing] = useState(false);
   const [hcpInput, setHcpInput]     = useState("");
   const [showHistModal, setShowHistModal] = useState(false);
-  const [histForm, setHistForm] = useState({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", note: "" });
+  const [histForm, setHistForm] = useState({ course_id: "89e2ad4e-8d5a-4244-8568-b2c8a448a77f", date: "", note: "", course_handicap: "", whs_index: "" });
   const [histHoles, setHistHoles] = useState(() => initHistHoles("89e2ad4e-8d5a-4244-8568-b2c8a448a77f"));
   const [histSaving, setHistSaving] = useState(false);
   const [histEditId, setHistEditId] = useState(null);
@@ -346,13 +358,13 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
     const def = "89e2ad4e-8d5a-4244-8568-b2c8a448a77f";
     setShowHistModal(false);
     setHistEditId(null);
-    setHistForm({ course_id: def, date: "", note: "" });
+    setHistForm({ course_id: def, date: "", note: "", course_handicap: "", whs_index: "" });
     setHistHoles(initHistHoles(def));
   }
   async function openHistModal(round) {
     if (round) {
       setHistEditId(round.id);
-      setHistForm({ course_id: round.course_id, date: round.created_at.split("T")[0], note: round.student_note || "" });
+      setHistForm({ course_id: round.course_id, date: round.created_at.split("T")[0], note: round.student_note || "", course_handicap: round.handicap != null ? String(round.handicap) : "", whs_index: round.whs_index != null ? String(round.whs_index) : "" });
       setHistHoles(initHistHoles(round.course_id));
       setHistEditLoading(true);
       setShowHistModal(true);
@@ -370,7 +382,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
     } else {
       const def = "89e2ad4e-8d5a-4244-8568-b2c8a448a77f";
       setHistEditId(null);
-      setHistForm({ course_id: def, date: "", note: "" });
+      setHistForm({ course_id: def, date: "", note: "", course_handicap: "", whs_index: "" });
       setHistHoles(initHistHoles(def));
       setShowHistModal(true);
     }
@@ -380,7 +392,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
     async function load() {
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
-        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
       setProfile(prof);
@@ -426,12 +438,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
             const round = roundsById[h.round_id];
             if (round) {
               const si = h.stroke_index || siMap[round.course_id]?.[h.hole_number] || 0;
-              if (h.picked_up) {
+              if (h.picked_up && round.handicap != null) {
                 statsMap[h.round_id].stableford_holes++;
                 // 0 pts, hole counted
-              } else if (h.score !== null && si > 0) {
+              } else if (round.handicap != null && h.score !== null && si > 0) {
                 statsMap[h.round_id].stableford_holes++;
-                const hcp = round.handicap || 0;
+                const hcp = round.handicap;
                 const hp  = round.holes_played || 9;
                 let shots = 0;
                 if (hcp >= si)          shots = 1;
@@ -529,17 +541,21 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
       dna:         false,
       picked_up:   false,
     }));
+    const histHandicap = histForm.course_handicap !== "" ? parseFloat(histForm.course_handicap) : null;
+    const histWhsIndex = histForm.whs_index !== "" ? parseFloat(histForm.whs_index) : null;
     if (histEditId) {
       const { error: updateError } = await supabase.from("rounds").update({
         total_score,
         total_putts,
         student_note: histForm.note || null,
+        handicap: histHandicap,
+        whs_index: histWhsIndex,
       }).eq("id", histEditId);
       if (!updateError) {
         await supabase.from("round_holes").delete().eq("round_id", histEditId);
         await supabase.from("round_holes").insert(holeRows.map(h => ({ ...h, round_id: histEditId })));
         setRounds(prev => prev.map(r => r.id === histEditId
-          ? { ...r, total_score, total_putts, student_note: histForm.note || null }
+          ? { ...r, total_score, total_putts, student_note: histForm.note || null, handicap: histHandicap, whs_index: histWhsIndex }
           : r
         ));
       }
@@ -554,7 +570,9 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         historical:    true,
         sent_to_coach: false,
         created_at:    new Date(histForm.date).toISOString(),
-      }]).select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").single();
+        handicap:      histHandicap,
+        whs_index:     histWhsIndex,
+      }]).select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").single();
       if (!roundError && roundData) {
         await supabase.from("round_holes").insert(holeRows.map(h => ({ ...h, round_id: roundData.id })));
         setRounds(prev => [roundData, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
@@ -800,9 +818,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                       <div className={`round-score-par ${diff < 0 ? "under" : diff > 0 ? "over" : ""}`}>
                         {r.total_score ? (diff === 0 ? "Level par" : (diff > 0 ? "+" : "") + diff + " vs par") : "In progress"}
                       </div>
-                      {r.handicap != null && (
+                      {r.total_score && (
                         <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                          {r.handicap != null
+                            ? `Course Hcp ${Number(r.handicap).toFixed(1)} · Net ${r.total_score - r.handicap}`
+                            : "Net –"
+                          }
                         </div>
                       )}
                     </div>
@@ -874,7 +895,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                     <option value="b1a2c3d4-e5f6-7890-abcd-ef1234567890">Big Course — 18 holes</option>
                   </select>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
                   <div>
                     <label className="modal-label">Date played</label>
                     <input className="modal-input" type="date"
@@ -889,15 +910,45 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                       onChange={e => setHistForm(f=>({...f,note:e.target.value}))} />
                   </div>
                 </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                  <div>
+                    <label className="modal-label">Course handicap <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                    <input className="modal-input" type="number" min="0" max="54" step="1" placeholder="e.g. 18"
+                      value={histForm.course_handicap}
+                      onChange={e => setHistForm(f=>({...f,course_handicap:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="modal-label">WHS index <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                    <input className="modal-input" type="number" min="0" max="54" step="0.1" placeholder="e.g. 14.2"
+                      value={histForm.whs_index}
+                      onChange={e => setHistForm(f=>({...f,whs_index:e.target.value}))} />
+                  </div>
+                </div>
               </>
             )}
             {histEditId && (
-              <div className="modal-field">
-                <label className="modal-label">Note <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
-                <input className="modal-input" type="text" placeholder="e.g. played well"
-                  value={histForm.note}
-                  onChange={e => setHistForm(f=>({...f,note:e.target.value}))} />
-              </div>
+              <>
+                <div className="modal-field">
+                  <label className="modal-label">Note <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                  <input className="modal-input" type="text" placeholder="e.g. played well"
+                    value={histForm.note}
+                    onChange={e => setHistForm(f=>({...f,note:e.target.value}))} />
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                  <div>
+                    <label className="modal-label">Course handicap <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                    <input className="modal-input" type="number" min="0" max="54" step="1" placeholder="e.g. 18"
+                      value={histForm.course_handicap}
+                      onChange={e => setHistForm(f=>({...f,course_handicap:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="modal-label">WHS index <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+                    <input className="modal-input" type="number" min="0" max="54" step="0.1" placeholder="e.g. 14.2"
+                      value={histForm.whs_index}
+                      onChange={e => setHistForm(f=>({...f,whs_index:e.target.value}))} />
+                  </div>
+                </div>
+              </>
             )}
 
             {/* ── Section 2: Hole by hole ── */}

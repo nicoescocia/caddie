@@ -571,7 +571,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
                 onClick={() => { setHcpInput(handicap !== "" ? handicap : ""); setHcpEditing(true); }}
                 style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,color:"rgba(255,255,255,0.5)",cursor:"pointer",userSelect:"none"}}
               >
-                {handicap !== "" ? `Course hcp: ${parseInt(handicap, 10)}` : "Set course handicap"}
+                {handicap !== "" ? `Course hcp: ${parseInt(handicap, 10)}` : "Not set"}
                 <span style={{fontSize:10,opacity:.7}}>✏️</span>
               </div>
             )}
@@ -607,15 +607,31 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
               <div className={"stat-card-val " + (penalties === 0 ? "ok" : penalties <= 1 ? "warn" : "bad")}>{penalties}</div>
               <div className="stat-card-lbl">Penalties</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-card-val" style={{color:"var(--gold)"}}>{stablefordTotal}</div>
-              <div className="stat-card-lbl">Stableford</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-card-val" style={{color:"var(--gold)"}}>{stablefordPerHole ?? "—"}</div>
-              <div className="stat-card-lbl">Per hole</div>
-              {stablefordPerHole && <div className="stat-card-sub">pts/hole</div>}
-            </div>
+            {handicap !== "" ? (
+              <>
+                <div className="stat-card">
+                  <div className="stat-card-val" style={{color:"var(--gold)"}}>{stablefordTotal}</div>
+                  <div className="stat-card-lbl">Stableford</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-card-val" style={{color:"var(--gold)"}}>{stablefordPerHole ?? "—"}</div>
+                  <div className="stat-card-lbl">Per hole</div>
+                  {stablefordPerHole && <div className="stat-card-sub">pts/hole</div>}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="stat-card">
+                  <div className="stat-card-val" style={{color:"var(--text-dim)"}}>—</div>
+                  <div className="stat-card-lbl">Stableford</div>
+                  <div className="stat-card-sub">set hcp below</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-card-val" style={{color:"var(--text-dim)"}}>—</div>
+                  <div className="stat-card-lbl">Per hole</div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1371,7 +1387,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             : null);
       if (handicap === "" && hcpToUse != null) setHandicap(String(hcpToUse));
       const { data: row, error } = await supabase
-        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse }])
+        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse, whs_index: officialHandicap != null ? officialHandicap : null }])
         .select().single();
       if (error) { console.error(error.message); setSaving(false); return; }
       rid = row.id;
