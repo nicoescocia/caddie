@@ -26,6 +26,7 @@ const css = `
   }
   body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 
+  .ob-page { min-height:100dvh; display:flex; flex-direction:column; }
   .ob-header { background:white; position:sticky; top:0; z-index:100; border-bottom:1px solid var(--border); }
   .ob-header-inner { padding:14px 20px 11px; display:flex; align-items:center; justify-content:space-between; }
   .ob-logo { font-family:'Playfair Display',serif; font-size:20px; color:var(--green-dark); }
@@ -33,7 +34,12 @@ const css = `
   .ob-progress-track { height:6px; background:var(--border); }
   .ob-progress-fill { height:6px; background:var(--green); transition:width .4s cubic-bezier(.4,0,.2,1); }
 
-  .ob-wrap { max-width:480px; margin:0 auto; padding:36px 20px 80px; }
+  .ob-wrap { flex:1; display:flex; flex-direction:column; max-width:480px; margin:0 auto; padding:0 20px; width:100%; }
+  .ob-step { display:flex; flex-direction:column; flex:1; }
+  .ob-step-content { flex:1; display:flex; flex-direction:column; justify-content:center; padding:32px 0 16px; }
+  .ob-step-actions { padding-top:8px; padding-bottom:max(24px,env(safe-area-inset-bottom)); }
+  .ob-emoji { font-size:64px; display:block; text-align:center; margin-bottom:16px; line-height:1; }
+
   .ob-heading { font-family:'Playfair Display',serif; font-size:26px; color:var(--text); margin-bottom:12px; line-height:1.25; }
   .ob-body { font-size:14px; color:var(--text-mid); line-height:1.75; margin-bottom:28px; }
 
@@ -299,14 +305,16 @@ export default function StudentOnboarding({ user, onComplete, onAddCourse, pendi
   if (loading) return (
     <>
       <style>{css}</style>
-      <div className="ob-header">
-        <div className="ob-header-inner">
-          <div className="ob-logo">Caddie</div>
+      <div className="ob-page">
+        <div className="ob-header">
+          <div className="ob-header-inner">
+            <div className="ob-logo">Caddie</div>
+          </div>
+          <div className="ob-progress-track"><div className="ob-progress-fill" style={{ width: "0%" }} /></div>
         </div>
-        <div className="ob-progress-track"><div className="ob-progress-fill" style={{ width: "0%" }} /></div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0" }}>
-        <div className="ob-spinner" />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="ob-spinner" />
+        </div>
       </div>
     </>
   );
@@ -316,281 +324,321 @@ export default function StudentOnboarding({ user, onComplete, onAddCourse, pendi
     <>
       <style>{css}</style>
 
-      {/* Header */}
-      <div className="ob-header">
-        <div className="ob-header-inner">
-          <div className="ob-logo">Caddie</div>
-          {step < 8 && (
-            <div className="ob-step-label">{step} of 7</div>
+      <div className="ob-page">
+        {/* Header */}
+        <div className="ob-header">
+          <div className="ob-header-inner">
+            <div className="ob-logo">Caddie</div>
+            {step < 8 && (
+              <div className="ob-step-label">{step} of 7</div>
+            )}
+          </div>
+          <div className="ob-progress-track">
+            <div className="ob-progress-fill" style={{ width: progressPct + "%" }} />
+          </div>
+        </div>
+
+        <div className="ob-wrap">
+
+          {/* ── Step 1: Welcome ── */}
+          {step === 1 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">🏌️</span>
+                <div className="ob-heading">Welcome to Caddie</div>
+                <div className="ob-body">
+                  Caddie is your golf data companion. Log your rounds hole by hole, track your stats over time, and give your coach everything they need to make your lessons count.
+                </div>
+              </div>
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleNext} disabled={saving}>
+                  Get started
+                </button>
+              </div>
+            </div>
           )}
-        </div>
-        <div className="ob-progress-track">
-          <div className="ob-progress-fill" style={{ width: progressPct + "%" }} />
-        </div>
-      </div>
 
-      <div className="ob-wrap">
+          {/* ── Step 2: Beta ── */}
+          {step === 2 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">🧪</span>
+                <div className="ob-heading">You're one of our first users</div>
+                <div className="ob-body">
+                  Caddie is in beta, which means you're helping us shape the product. We'd love your honest feedback — good and bad. You'll see a 💬 Feedback button on every screen. Tap it any time to report a bug, suggest an improvement, or just tell us what you think. Your input directly influences what we build next.
+                </div>
+              </div>
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleNext} disabled={saving}>
+                  Got it
+                </button>
+              </div>
+            </div>
+          )}
 
-        {/* ── Step 1: Welcome ── */}
-        {step === 1 && (
-          <>
-            <div className="ob-heading">Welcome to Caddie</div>
-            <div className="ob-body">
-              Caddie is your golf data companion. Log your rounds hole by hole, track your stats over time, and give your coach everything they need to make your lessons count.
+          {/* ── Step 3: Handicap ── */}
+          {step === 3 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">🏅</span>
+                <div className="ob-heading">What's your handicap?</div>
+                <div className="ob-body">
+                  We use your WHS index to calculate net scores and Stableford points.
+                </div>
+                <div className="ob-field">
+                  <label className="ob-label">WHS Index</label>
+                  <input
+                    className="ob-input"
+                    type="number"
+                    min="0"
+                    max="54"
+                    step="0.1"
+                    placeholder="e.g. 18.4"
+                    value={hcpInput}
+                    onChange={e => setHcpInput(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleNext} disabled={saving}>
+                  {saving ? "Saving…" : "Next"}
+                </button>
+                <button className="ob-skip" onClick={skip}>Skip for now</button>
+              </div>
             </div>
-            <button className="ob-primary" onClick={handleNext} disabled={saving}>
-              Get started
-            </button>
-          </>
-        )}
+          )}
 
-        {/* ── Step 2: Beta ── */}
-        {step === 2 && (
-          <>
-            <div className="ob-heading">You're one of our first users</div>
-            <div className="ob-body">
-              Caddie is in beta, which means you're helping us shape the product. We'd love your honest feedback — good and bad. You'll see a 💬 Feedback button on every screen. Tap it any time to report a bug, suggest an improvement, or just tell us what you think. Your input directly influences what we build next.
+          {/* ── Step 4: Home course ── */}
+          {step === 4 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">📍</span>
+                <div className="ob-heading">Where do you usually play?</div>
+                <div className="ob-body">
+                  We'll show your home course at the top of the course list when you log a round.
+                </div>
+                <div className="ob-field">
+                  <label className="ob-label">Home course</label>
+                  {courseMode === "select" ? (
+                    <>
+                      <select
+                        className="ob-select"
+                        value={homeCourse}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === "__add__") { onAddCourse(); }
+                          else setHomeCourse(val);
+                        }}
+                      >
+                        <option value="">Select a course…</option>
+                        {availableCourses.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                        <option value="__add__">＋ Add a new course</option>
+                      </select>
+                      <button className="ob-toggle-link" onClick={() => { setHomeCourse(""); setCourseMode("text"); }}>
+                        Type a name instead ↓
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        className="ob-input"
+                        type="text"
+                        placeholder="e.g. Greenock Golf Club"
+                        value={homeCourse}
+                        onChange={e => setHomeCourse(e.target.value)}
+                      />
+                      <button className="ob-toggle-link" onClick={() => { setHomeCourse(""); setCourseMode("select"); }}>
+                        Choose from list instead ↑
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleNext} disabled={saving}>
+                  {saving ? "Saving…" : "Next"}
+                </button>
+                <button className="ob-skip" onClick={skip}>Skip for now</button>
+              </div>
             </div>
-            <button className="ob-primary" onClick={handleNext} disabled={saving}>
-              Got it
-            </button>
-          </>
-        )}
+          )}
 
-        {/* ── Step 3: Handicap ── */}
-        {step === 3 && (
-          <>
-            <div className="ob-heading">What's your handicap?</div>
-            <div className="ob-body">
-              We use your WHS index to calculate net scores and Stableford points.
-            </div>
-            <div className="ob-field">
-              <label className="ob-label">WHS Index</label>
-              <input
-                className="ob-input"
-                type="number"
-                min="0"
-                max="54"
-                step="0.1"
-                placeholder="e.g. 18.4"
-                value={hcpInput}
-                onChange={e => setHcpInput(e.target.value)}
-              />
-            </div>
-            <button className="ob-primary" onClick={handleNext} disabled={saving}>
-              {saving ? "Saving…" : "Next"}
-            </button>
-            <button className="ob-skip" onClick={skip}>Skip for now</button>
-          </>
-        )}
+          {/* ── Step 5: Preferences ── */}
+          {step === 5 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">⚙️</span>
+                <div className="ob-heading">How do you want to log your rounds?</div>
+                <div className="ob-body">You can change these any time in Settings.</div>
 
-        {/* ── Step 4: Home course ── */}
-        {step === 4 && (
-          <>
-            <div className="ob-heading">Where do you usually play?</div>
-            <div className="ob-body">
-              We'll show your home course at the top of the course list when you log a round.
+                <div className="ob-pref-section">
+                  <div className="ob-pref-section-lbl">Putt tracking</div>
+                  <div className="ob-pill-group">
+                    {PUTT_OPTIONS.map(opt => {
+                      const isActive = puttTracking === opt.value;
+                      const isLocked = opt.premiumOnly && !isPremium;
+                      return (
+                        <div
+                          key={opt.value}
+                          className={"ob-pill" + (isActive ? " active" : "") + (isLocked ? " locked" : "")}
+                          onClick={() => { if (!isLocked) setPuttTracking(opt.value); }}
+                        >
+                          <div className="ob-pill-left">
+                            <div className="ob-pill-name">
+                              {opt.label}
+                              {opt.premiumOnly && !isPremium && (
+                                <span className="ob-premium-badge">Premium</span>
+                              )}
+                            </div>
+                            <div className="ob-pill-desc">{opt.desc}</div>
+                          </div>
+                          {isActive && <div className="ob-pill-check">✓</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="ob-pref-section">
+                  <div className="ob-pref-section-lbl">Approach distance</div>
+                  <div className="ob-pill-group">
+                    {[
+                      { value: "enabled",  label: "Enabled",  desc: "Record approach distance for each hole." },
+                      { value: "disabled", label: "Disabled", desc: "Skip approach distance entirely." },
+                    ].map(opt => {
+                      const isActive = approachLogging === opt.value;
+                      return (
+                        <div
+                          key={opt.value}
+                          className={"ob-pill" + (isActive ? " active" : "")}
+                          onClick={() => setApproachLogging(opt.value)}
+                        >
+                          <div className="ob-pill-left">
+                            <div className="ob-pill-name">{opt.label}</div>
+                            <div className="ob-pill-desc">{opt.desc}</div>
+                          </div>
+                          {isActive && <div className="ob-pill-check">✓</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleNext} disabled={saving}>
+                  {saving ? "Saving…" : "Next"}
+                </button>
+                <button className="ob-skip" onClick={skip}>Skip for now</button>
+              </div>
             </div>
-            <div className="ob-field">
-              <label className="ob-label">Home course</label>
-              {courseMode === "select" ? (
-                <>
-                  <select
-                    className="ob-select"
-                    value={homeCourse}
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (val === "__add__") { onAddCourse(); }
-                      else setHomeCourse(val);
-                    }}
-                  >
-                    <option value="">Select a course…</option>
-                    {availableCourses.map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                    <option value="__add__">＋ Add a new course</option>
-                  </select>
-                  <button className="ob-toggle-link" onClick={() => { setHomeCourse(""); setCourseMode("text"); }}>
-                    Type a name instead ↓
-                  </button>
-                </>
-              ) : (
-                <>
+          )}
+
+          {/* ── Step 6: Link coach ── */}
+          {step === 6 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">🤝</span>
+                <div className="ob-heading">Do you have a coach on Caddie?</div>
+                <div className="ob-body">
+                  If your coach has given you an invite code, enter it here to link your accounts.
+                </div>
+                <div className="ob-field">
+                  <label className="ob-label">Invite code</label>
                   <input
                     className="ob-input"
                     type="text"
-                    placeholder="e.g. Greenock Golf Club"
-                    value={homeCourse}
-                    onChange={e => setHomeCourse(e.target.value)}
+                    placeholder="Enter invite code"
+                    value={inviteCode}
+                    onChange={e => { setInviteCode(e.target.value.toUpperCase()); setInviteError(""); }}
+                    style={{ textTransform: "uppercase", letterSpacing: ".05em" }}
                   />
-                  <button className="ob-toggle-link" onClick={() => { setHomeCourse(""); setCourseMode("select"); }}>
-                    Choose from list instead ↑
-                  </button>
-                </>
-              )}
+                  {inviteError && <div className="ob-error">{inviteError}</div>}
+                </div>
+              </div>
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleNext} disabled={saving}>
+                  {saving ? "Checking…" : "Next"}
+                </button>
+                <button className="ob-skip" onClick={skip}>Skip for now</button>
+              </div>
             </div>
-            <button className="ob-primary" onClick={handleNext} disabled={saving}>
-              {saving ? "Saving…" : "Next"}
-            </button>
-            <button className="ob-skip" onClick={skip}>Skip for now</button>
-          </>
-        )}
+          )}
 
-        {/* ── Step 5: Preferences ── */}
-        {step === 5 && (
-          <>
-            <div className="ob-heading">How do you want to log your rounds?</div>
-            <div className="ob-body">You can change these any time in Settings.</div>
+          {/* ── Step 7: Historical rounds ── */}
+          {step === 7 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">📊</span>
+                <div className="ob-heading">Want to add a past round?</div>
+                <div className="ob-body">
+                  Adding historical rounds gives you more data to work with from day one. You can add up to 5 historical rounds — or come back to this later from your dashboard.
+                </div>
 
-            <div className="ob-pref-section">
-              <div className="ob-pref-section-lbl">Putt tracking</div>
-              <div className="ob-pill-group">
-                {PUTT_OPTIONS.map(opt => {
-                  const isActive = puttTracking === opt.value;
-                  const isLocked = opt.premiumOnly && !isPremium;
-                  return (
-                    <div
-                      key={opt.value}
-                      className={"ob-pill" + (isActive ? " active" : "") + (isLocked ? " locked" : "")}
-                      onClick={() => { if (!isLocked) setPuttTracking(opt.value); }}
-                    >
-                      <div className="ob-pill-left">
-                        <div className="ob-pill-name">
-                          {opt.label}
-                          {opt.premiumOnly && !isPremium && (
-                            <span className="ob-premium-badge">Premium</span>
-                          )}
-                        </div>
-                        <div className="ob-pill-desc">{opt.desc}</div>
-                      </div>
-                      {isActive && <div className="ob-pill-check">✓</div>}
+                <div className="ob-hist-count-box">
+                  <div className="ob-hist-num">{histCount}</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                      {histCount === 1 ? "Historical round" : "Historical rounds"} added
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="ob-pref-section">
-              <div className="ob-pref-section-lbl">Approach distance</div>
-              <div className="ob-pill-group">
-                {[
-                  { value: "enabled",  label: "Enabled",  desc: "Record approach distance for each hole." },
-                  { value: "disabled", label: "Disabled", desc: "Skip approach distance entirely." },
-                ].map(opt => {
-                  const isActive = approachLogging === opt.value;
-                  return (
-                    <div
-                      key={opt.value}
-                      className={"ob-pill" + (isActive ? " active" : "")}
-                      onClick={() => setApproachLogging(opt.value)}
-                    >
-                      <div className="ob-pill-left">
-                        <div className="ob-pill-name">{opt.label}</div>
-                        <div className="ob-pill-desc">{opt.desc}</div>
-                      </div>
-                      {isActive && <div className="ob-pill-check">✓</div>}
+                    <div className="ob-hist-sub">
+                      {histCount >= 5 ? "Maximum reached" : `${5 - histCount} more available`}
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+                {lastAdded && <div className="ob-added">Round added ✓</div>}
+              </div>
+              <div className="ob-step-actions">
+                {histCount >= 5 ? (
+                  <>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center", marginBottom: 16 }}>
+                      You've added the maximum of 5 historical rounds.
+                    </div>
+                    <button className="ob-primary" onClick={() => setStep(8)}>Continue</button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="ob-primary"
+                      onClick={openHistModal}
+                      disabled={histSaving}
+                    >
+                      Add a historical round
+                    </button>
+                    <button className="ob-secondary" onClick={() => setStep(8)}>
+                      I'll do this later
+                    </button>
+                  </>
+                )}
               </div>
             </div>
+          )}
 
-            <button className="ob-primary" onClick={handleNext} disabled={saving}>
-              {saving ? "Saving…" : "Next"}
-            </button>
-            <button className="ob-skip" onClick={skip}>Skip for now</button>
-          </>
-        )}
-
-        {/* ── Step 6: Link coach ── */}
-        {step === 6 && (
-          <>
-            <div className="ob-heading">Do you have a coach on Caddie?</div>
-            <div className="ob-body">
-              If your coach has given you an invite code, enter it here to link your accounts.
-            </div>
-            <div className="ob-field">
-              <label className="ob-label">Invite code</label>
-              <input
-                className="ob-input"
-                type="text"
-                placeholder="Enter invite code"
-                value={inviteCode}
-                onChange={e => { setInviteCode(e.target.value.toUpperCase()); setInviteError(""); }}
-                style={{ textTransform: "uppercase", letterSpacing: ".05em" }}
-              />
-              {inviteError && <div className="ob-error">{inviteError}</div>}
-            </div>
-            <button className="ob-primary" onClick={handleNext} disabled={saving}>
-              {saving ? "Checking…" : "Next"}
-            </button>
-            <button className="ob-skip" onClick={skip}>Skip for now</button>
-          </>
-        )}
-
-        {/* ── Step 7: Historical rounds ── */}
-        {step === 7 && (
-          <>
-            <div className="ob-heading">Want to add a past round?</div>
-            <div className="ob-body">
-              Adding historical rounds gives you more data to work with from day one. You can add up to 5 historical rounds — or come back to this later from your dashboard.
-            </div>
-
-            <div className="ob-hist-count-box">
-              <div className="ob-hist-num">{histCount}</div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-                  {histCount === 1 ? "Historical round" : "Historical rounds"} added
-                </div>
-                <div className="ob-hist-sub">
-                  {histCount >= 5 ? "Maximum reached" : `${5 - histCount} more available`}
+          {/* ── Step 8: Done ── */}
+          {step === 8 && (
+            <div className="ob-step">
+              <div className="ob-step-content">
+                <span className="ob-emoji">🎉</span>
+                <div className="ob-heading">You're all set</div>
+                <div className="ob-body">
+                  Start logging rounds and your coach will have everything they need before your next lesson. The more you log, the better your insights get.
                 </div>
               </div>
-            </div>
-
-            {histCount >= 5 ? (
-              <>
-                <div style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center", marginBottom: 16 }}>
-                  You've added the maximum of 5 historical rounds.
-                </div>
-                <button className="ob-primary" onClick={() => setStep(8)}>Continue</button>
-              </>
-            ) : (
-              <>
+              <div className="ob-step-actions">
                 <button
                   className="ob-primary"
-                  onClick={openHistModal}
-                  disabled={histSaving}
+                  onClick={handleNext}
+                  disabled={saving}
+                  style={{ background: "var(--green-dark)" }}
                 >
-                  Add a historical round
+                  {saving ? "Loading…" : "Go to my dashboard"}
                 </button>
-                {lastAdded && <div className="ob-added">Round added ✓</div>}
-                <button className="ob-secondary" onClick={() => setStep(8)}>
-                  I'll do this later
-                </button>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ── Step 8: Done ── */}
-        {step === 8 && (
-          <>
-            <div className="ob-heading">You're all set 🎉</div>
-            <div className="ob-body">
-              Start logging rounds and your coach will have everything they need before your next lesson. The more you log, the better your insights get.
+              </div>
             </div>
-            <button
-              className="ob-primary"
-              onClick={handleNext}
-              disabled={saving}
-              style={{ background: "var(--green-dark)" }}
-            >
-              {saving ? "Loading…" : "Go to my dashboard"}
-            </button>
-          </>
-        )}
+          )}
 
+        </div>
       </div>
 
       {/* ── Historical round modal (step 7) ── */}

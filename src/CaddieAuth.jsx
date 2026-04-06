@@ -748,29 +748,9 @@ function ForgotScreen({ onBack }) {
   );
 }
 
-function WelcomeScreen({ user, onContinue }) {
-  return (
-    <div className="success-screen">
-      <div className="success-check">⛳</div>
-      <div className="success-screen-title">
-        Welcome{user.firstName ? `, ${user.firstName}` : ""}!
-      </div>
-      <div className="success-screen-sub">
-        {user.role === "coach"
-          ? "Your coach account is ready. Head to your dashboard to invite students and start analysing rounds."
-          : "Your student account is ready. Start logging your first round and your coach will receive the data automatically."}
-      </div>
-      <button className="primary-btn" onClick={onContinue}>
-        {user.role === "coach" ? "Go to dashboard →" : "Log a round →"}
-      </button>
-    </div>
-  );
-}
-
 // ── ROOT COMPONENT ──
 export default function CaddieAuth({ onAuthSuccess }) {
   const [screen, setScreen]         = useState("login");
-  const [authedUser, setAuthedUser]  = useState(null);
   const [inviteCoach, setInviteCoach] = useState(null);
 
   // Read invite code from URL on mount
@@ -806,14 +786,8 @@ export default function CaddieAuth({ onAuthSuccess }) {
       });
   }, []);
 
-  function handleAuthSuccess(user, role, skipWelcome = false) {
-    const fullUser = { ...user, role };
-    setAuthedUser(fullUser);
-    if (skipWelcome) {
-      onAuthSuccess(fullUser, role);
-    } else {
-      setScreen("welcome");
-    }
+  function handleAuthSuccess(user) {
+    onAuthSuccess(user);
   }
 
   return (
@@ -847,12 +821,6 @@ export default function CaddieAuth({ onAuthSuccess }) {
             {screen === "forgot" && (
               <ForgotScreen
                 onBack={() => setScreen("login")}
-              />
-            )}
-            {screen === "welcome" && authedUser && (
-              <WelcomeScreen
-                user={authedUser}
-                onContinue={() => onAuthSuccess(authedUser, authedUser.role)}
               />
             )}
           </div>
