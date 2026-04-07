@@ -1250,12 +1250,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     const isStandardRound = holes.length === 9 || holes.length === 18;
     const sumHcp = parseInt(handicap, 10) || 0;
     const totalScore = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
       if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, sumHcp, holes.length);
       return s + (hd.score || 0);
     }, 0);
     const totalPar = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
       return s + h.par;
@@ -1341,12 +1343,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   if (view === "sent") {
     const sentHcp = parseInt(handicap, 10) || 0;
     const totalScore = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
       if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, sentHcp, holes.length);
       return s + (hd.score || 0);
     }, 0);
-    const attemptedH = holes.filter((h,i) => !holeData[i]?.dna);
+    const attemptedH = holes.filter((h,i) => savedHoles.has(h.n) && !holeData[i]?.dna);
     const aPar = attemptedH.reduce((s,h) => s + h.par, 0);
     const diff = totalScore - aPar;
     return (
@@ -1473,12 +1476,18 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       // Last hole — update totals and go to overview
       const saveHcp = parseInt(handicap, 10) || 0;
       const totalScore = holes.reduce((s, h, i) => {
+        if (!savedHoles.has(h.n)) return s;
         const hd = holeData[i];
         if (!hd || hd.dna) return s;
         if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, saveHcp, holes.length);
         return s + (hd.score || 0);
       }, 0);
-      const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
+      const totalPutts = holes.reduce((s, h, i) => {
+        if (!savedHoles.has(h.n)) return s;
+        const hd = holeData[i];
+        if (!hd || hd.dna || hd.pickedUp) return s;
+        return s + (hd.putts || 0);
+      }, 0);
       await supabase.from("rounds").update({ total_score: totalScore, total_putts: totalPutts }).eq("id", rid);
       setView("overview");
     }
@@ -1513,12 +1522,18 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     setSaving(true);
     const sendHcp = parseInt(handicap, 10) || 0;
     const totalScore = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
       if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, sendHcp, holes.length);
       return s + (hd.score || 0);
     }, 0);
-    const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
+    const totalPutts = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
+      const hd = holeData[i];
+      if (!hd || hd.dna || hd.pickedUp) return s;
+      return s + (hd.putts || 0);
+    }, 0);
     await supabase.from("rounds").update({
       sent_to_coach: true,
       sent_at: new Date().toISOString(),
@@ -1579,12 +1594,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   if (view === "complete") {
     const compHcp = parseInt(handicap, 10) || 0;
     const totalScore = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
       if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, compHcp, holes.length);
       return s + (hd.score || 0);
     }, 0);
     const totalPar = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
       return s + h.par;
