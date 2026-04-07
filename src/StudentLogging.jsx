@@ -471,7 +471,6 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const diff         = totalScore - attemptedPar;
 
   // Stableford (all tiers) — pickedUp = 0 pts, counted in denominator; dna = excluded
-  const holesPlayed = attempted.length;
   let stablefordTotal = 0;
   let stablefordHoles = 0;
   for (const h of attempted) {
@@ -481,9 +480,9 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
       // 0 pts — include in denominator only
     } else if (hd.score !== null && h.idx > 0) {
       let shots = 0;
-      if (hcpVal >= h.idx)                shots = 1;
-      if (hcpVal >= h.idx + holesPlayed)  shots = 2;
-      if (hcpVal >= h.idx + holesPlayed * 2) shots = 3;
+      if (hcpVal >= h.idx)                    shots = 1;
+      if (hcpVal >= h.idx + holes.length)     shots = 2;
+      if (hcpVal >= h.idx + holes.length * 2) shots = 3;
       stablefordTotal += Math.max(0, 2 + h.par - (hd.score - shots));
       stablefordHoles++;
     }
