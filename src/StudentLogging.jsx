@@ -414,14 +414,14 @@ async function callAI(prompt) {
   return d.content?.map(c => c.text || "").join("") || "Analysis unavailable.";
 }
 
-// Net double bogey for a picked-up hole: (par + 2) minus shots received
+// Net double bogey for a picked-up hole: par + 2 + shots received
 function netDoubleBogey(par, si, hcp, holesCount) {
   if (!hcp || !si) return par + 2;
   let shots = 0;
   if (hcp >= si)                  shots = 1;
   if (hcp >= si + holesCount)     shots = 2;
   if (hcp >= si + holesCount * 2) shots = 3;
-  return (par + 2) - shots;
+  return par + 2 + shots;
 }
 
 // ── TOP BAR ──
@@ -703,7 +703,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
                       <td style={{color:"var(--text-dim)"}}>{hole.par}</td>
                       <td>
                         {hd.dna ? <span style={{color:"#999",fontSize:11}}>DNA</span>
-                          : hd.pickedUp ? <span>{netDoubleBogey(hole.par, hole.idx, parseInt(handicap, 10) || 0, holes.length)}<span style={{color:"var(--orange)"}}>*</span></span>
+                          : hd.pickedUp ? <span>{netDoubleBogey(hole.par, hole.idx, hcpVal, holes.length)}<span style={{color:"var(--orange)"}}>*</span></span>
                           : <span className={"ov-sn-" + sLbl}>{hd.score}</span>}
                       </td>
                       <td>{hd.dna || hd.pickedUp ? "—" : hd.putts}</td>
@@ -1340,7 +1340,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   // ── Sent confirmation screen ──
   if (view === "sent") {
-    const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
+    const sentHcp = parseInt(handicap, 10) || 0;
+    const totalScore = holes.reduce((s, h, i) => {
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, sentHcp, holes.length);
+      return s + (hd.score || 0);
+    }, 0);
     const attemptedH = holes.filter((h,i) => !holeData[i]?.dna);
     const aPar = attemptedH.reduce((s,h) => s + h.par, 0);
     const diff = totalScore - aPar;
@@ -1572,8 +1578,18 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   // ── Complete screen ──
   if (view === "complete") {
-    const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
-    const totalPar   = holes.reduce((s, h) => s + h.par, 0);
+    const compHcp = parseInt(handicap, 10) || 0;
+    const totalScore = holes.reduce((s, h, i) => {
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, compHcp, holes.length);
+      return s + (hd.score || 0);
+    }, 0);
+    const totalPar = holes.reduce((s, h, i) => {
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      return s + h.par;
+    }, 0);
     const diff       = totalScore - totalPar;
     const girCount   = holeData.filter((hd, i) => calcGIR(hd.score, hd.putts, holes[i]?.par)).length;
     const tp         = holeData.filter(hd => hd.putts >= 3).length;
