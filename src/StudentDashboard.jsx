@@ -242,8 +242,8 @@ function StudentRoundTrends({ rounds, activeTab }) {
   const [tab, setTab] = useState("score");
   const scored = rounds.filter(r => r.total_score);
   // rounds are newest-first; take the 10 most recent of each type, then reverse for chart display (oldest→newest)
-  const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(0, 10).reverse();
-  const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(0, 10).reverse();
+  const r9  = scored.filter(r => r.holes_played === 9).slice(0, 10).reverse();
+  const r18 = scored.filter(r => r.holes_played === 18).slice(0, 10).reverse();
   const r10 = scored.slice(0, 10).reverse();
   if (scored.length < 2) return null;
 

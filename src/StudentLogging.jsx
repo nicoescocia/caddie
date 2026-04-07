@@ -437,17 +437,24 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
 
   const loggedHoles  = holes.filter(h => savedHoles.has(h.n));
   const attempted    = loggedHoles.filter(h => !holeData[holes.indexOf(h)].dna);
-  const totalScore   = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].score || 0), 0);
+  const statHoles    = attempted.filter(h => !holeData[holes.indexOf(h)].pickedUp);
+  const isStandardRound = holes.length === 9 || holes.length === 18;
+  // Picked up holes score as par + 2 (double bogey) for scoring purposes
+  const totalScore   = attempted.reduce((s, h) => {
+    const hd = holeData[holes.indexOf(h)];
+    if (hd.pickedUp) return s + h.par + 2;
+    return s + (hd.score || 0);
+  }, 0);
   const attemptedPar = attempted.reduce((s, h) => s + h.par, 0);
   const allLogged    = savedHoles.size === holes.length;
-  const girCount     = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par)).length;
-  const fwHoles      = attempted.filter(h => h.par >= 4);
+  const girCount     = statHoles.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par)).length;
+  const fwHoles      = statHoles.filter(h => h.par >= 4);
   const fwHit        = fwHoles.filter(h => holeData[holes.indexOf(h)].fairway === "yes").length;
-  const totalPutts   = attempted.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
-  const avgPutts     = attempted.length ? (totalPutts / attempted.length).toFixed(1) : null;
-  const tpCount      = attempted.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
+  const totalPutts   = statHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
+  const avgPutts     = statHoles.length ? (totalPutts / statHoles.length).toFixed(1) : null;
+  const tpCount      = statHoles.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
   const penalties    = loggedHoles.filter(h => { const p = holeData[holes.indexOf(h)].penalty; return p && p !== "None"; }).length;
-  const missedGIR    = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
+  const missedGIR    = statHoles.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
   const upAndDown    = missedGIR.filter(h => holeData[holes.indexOf(h)].putts <= 1 && holeData[holes.indexOf(h)].score !== null).length;
   const scramblePct  = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
   const diff         = totalScore - attemptedPar;
@@ -470,18 +477,18 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const stablefordPerHole = attempted.length ? (stablefordTotal / attempted.length).toFixed(1) : null;
 
   // Premium computed stats
-  const girHoles      = attempted.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
-  const nonGirHoles   = attempted.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par) && !holeData[holes.indexOf(h)].pickedUp);
+  const girHoles      = statHoles.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
+  const nonGirHoles   = statHoles.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
   const puttsPerGIR    = girHoles.length ? (girHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / girHoles.length).toFixed(2) : null;
   const puttsPerNonGIR = nonGirHoles.length ? (nonGirHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / nonGirHoles.length).toFixed(2) : null;
-  const putt1Vals      = attempted.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
+  const putt1Vals      = statHoles.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
   const avgPutt1       = putt1Vals.length ? (putt1Vals.reduce((a, b) => a + b, 0) / putt1Vals.length).toFixed(1) : null;
-  const tpPct          = attempted.length ? Math.round(tpCount / attempted.length * 100) : 0;
+  const tpPct          = statHoles.length ? Math.round(tpCount / statHoles.length * 100) : 0;
 
   const BAND_KEYS   = ["Under 50","50-75","75-100","100-125","125-150","150+"];
   const BAND_LABELS = {"Under 50":"Under 50","50-75":"50–75","75-100":"75–100","100-125":"100–125","125-150":"125–150","150+":"150+"};
   const bandData = BAND_KEYS.map(key => {
-    const bh = attempted.filter(h => holeData[holes.indexOf(h)].approach === key);
+    const bh = statHoles.filter(h => holeData[holes.indexOf(h)].approach === key);
     if (!bh.length) return null;
     const bGIR = bh.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
     const bP1  = bh.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
@@ -532,17 +539,37 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
         <div className="ov-summary-card">
           <div className="ov-summary-title">{courseName}</div>
           <div className="ov-summary-stats">
-            <div className="ov-stat">
-              <div className="ov-stat-val">{attempted.length > 0 ? totalScore : "—"}</div>
-              <div className="ov-stat-lbl">{attempted.length > 0 ? `${diff > 0 ? "+" : ""}${diff} vs par` : "no holes yet"}</div>
-            </div>
-            {handicap !== "" && attempted.length > 0 && (
-              <div className="ov-stat">
-                <div className="ov-stat-val">{totalScore - parseInt(handicap, 10)}</div>
-                <div className="ov-stat-lbl">net score</div>
-              </div>
+            {isStandardRound ? (
+              <>
+                <div className="ov-stat">
+                  <div className="ov-stat-val">{attempted.length > 0 ? totalScore : "—"}</div>
+                  <div className="ov-stat-lbl">{attempted.length > 0 ? `${diff > 0 ? "+" : ""}${diff} vs par` : "no holes yet"}</div>
+                </div>
+                {handicap !== "" && attempted.length > 0 && (
+                  <div className="ov-stat">
+                    <div className="ov-stat-val">{totalScore - parseInt(handicap, 10)}</div>
+                    <div className="ov-stat-lbl">net score</div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="ov-stat">
+                  <div className="ov-stat-val">{attempted.length > 0 ? (totalScore / attempted.length).toFixed(1) : "—"}</div>
+                  <div className="ov-stat-lbl">score / hole</div>
+                </div>
+                <div className="ov-stat">
+                  <div className="ov-stat-val">{attempted.length > 0 ? `${diff / attempted.length > 0 ? "+" : ""}${(diff / attempted.length).toFixed(1)}` : "—"}</div>
+                  <div className="ov-stat-lbl">vs par / hole</div>
+                </div>
+              </>
             )}
           </div>
+          {!isStandardRound && attempted.length > 0 && (
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:6,textAlign:"center"}}>
+              Non-standard round · stats shown per hole
+            </div>
+          )}
           {/* Editable course handicap */}
           <div style={{marginTop:10,borderTop:"1px solid rgba(255,255,255,0.1)",paddingTop:10}}>
             {hcpEditing ? (
@@ -582,18 +609,25 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
         {attempted.length > 0 && (
           <div className="stats-grid">
             <div className="stat-card">
-              <div className={"stat-card-val " + (girCount/attempted.length > 0.55 ? "ok" : girCount/attempted.length > 0.33 ? "warn" : "bad")}>{girCount}/{attempted.length}</div>
+              <div className={"stat-card-val " + (statHoles.length > 0 ? (girCount/statHoles.length > 0.55 ? "ok" : girCount/statHoles.length > 0.33 ? "warn" : "bad") : "")}>{girCount}/{statHoles.length}</div>
               <div className="stat-card-lbl">GIR</div>
             </div>
             <div className="stat-card">
               <div className={"stat-card-val " + (fwHoles.length > 0 ? (fwHit/fwHoles.length > 0.6 ? "ok" : fwHit/fwHoles.length > 0.4 ? "warn" : "bad") : "")}>{fwHoles.length > 0 ? `${fwHit}/${fwHoles.length}` : "—"}</div>
               <div className="stat-card-lbl">Fairways</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-card-val">{totalPutts}</div>
-              <div className="stat-card-lbl">Total putts</div>
-              <div className="stat-card-sub">avg {avgPutts}/hole</div>
-            </div>
+            {isStandardRound ? (
+              <div className="stat-card">
+                <div className="stat-card-val">{totalPutts}</div>
+                <div className="stat-card-lbl">Total putts</div>
+                <div className="stat-card-sub">avg {avgPutts}/hole</div>
+              </div>
+            ) : (
+              <div className="stat-card">
+                <div className="stat-card-val">{avgPutts ?? "—"}</div>
+                <div className="stat-card-lbl">Putts per hole</div>
+              </div>
+            )}
             <div className="stat-card">
               <div className={"stat-card-val " + (tpCount === 0 ? "ok" : tpCount <= 1 ? "warn" : "bad")}>{tpCount}</div>
               <div className="stat-card-lbl">3-putts</div>
@@ -655,7 +689,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
                       <td style={{color:"var(--text-dim)"}}>{hole.par}</td>
                       <td>
                         {hd.dna ? <span style={{color:"#999",fontSize:11}}>DNA</span>
-                          : hd.pickedUp ? <span style={{color:"var(--orange)",fontSize:11}}>PU</span>
+                          : hd.pickedUp ? <span>{hole.par + 2}<span style={{color:"var(--orange)"}}>*</span></span>
                           : <span className={"ov-sn-" + sLbl}>{hd.score}</span>}
                       </td>
                       <td>{hd.dna || hd.pickedUp ? "—" : hd.putts}</td>
@@ -676,6 +710,9 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
                 })}
               </tbody>
             </table>
+            {holes.some((h, i) => savedHoles.has(h.n) && holeData[i]?.pickedUp) && (
+              <div style={{fontSize:11,color:"var(--text-dim)",marginTop:8}}>* Picked up — scored as double bogey</div>
+            )}
           </div>
         )}
 
@@ -1197,12 +1234,22 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   // ── Summary screen ──
   if (view === "summary") {
-    const netScore = handicap !== "" && holeData.reduce((s,h) => s+(h.score||0),0)
-      ? holeData.reduce((s,h) => s+(h.score||0),0) - parseInt(handicap)
+    const isStandardRound = holes.length === 9 || holes.length === 18;
+    const totalScore = holes.reduce((s, h, i) => {
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      if (hd.pickedUp) return s + h.par + 2;
+      return s + (hd.score || 0);
+    }, 0);
+    const totalPar = holes.reduce((s, h, i) => {
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      return s + h.par;
+    }, 0);
+    const diff = totalScore - totalPar;
+    const netScore = isStandardRound && handicap !== "" && totalScore
+      ? totalScore - parseInt(handicap, 10)
       : null;
-    const totalScore = holeData.reduce((s,h) => s+(h.score||0),0);
-    const totalPar   = holes.reduce((s,h) => s+h.par,0);
-    const diff       = totalScore - totalPar;
     return (
       <>
         <style>{css}</style>
