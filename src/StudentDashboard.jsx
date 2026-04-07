@@ -132,9 +132,24 @@ const COURSE_PAR = {
   "b1a2c3d4-e5f6-7890-abcd-ef1234567890": 68, // Big Course (18 holes)
 };
 function getCoursePar(round) {
+  if (round.total_par) return round.total_par;
   if (round.course_id && COURSE_PAR[round.course_id]) return COURSE_PAR[round.course_id];
-  // Fallback: guess from holes_played
   return round.holes_played === 18 ? 68 : 32;
+}
+
+function prorateHandicap(round, holeStatsMap) {
+  if (!round.handicap) return round.handicap;
+  const holes = holeStatsMap[round.id];
+  if (!holes || !holes.length) return round.handicap;
+  let shots = 0;
+  for (const h of holes) {
+    const si = h.stroke_index || 0;
+    if (!si) continue;
+    if (round.handicap >= si) shots++;
+    if (round.handicap >= si + (round.holes_played || 18)) shots++;
+    if (round.handicap >= si + (round.holes_played || 18) * 2) shots++;
+  }
+  return shots;
 }
 
 // ── TREND HELPERS ──
@@ -251,7 +266,7 @@ function StudentRoundTrends({ rounds, activeTab }) {
     return rs.map(r => ({
       ...r,
       vsPar:             r.total_score - getCoursePar(r),
-      netVsPar:          r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
+      netVsPar:          r.handicap != null ? (r.total_score - (r.prorated_hcp ?? r.handicap)) - getCoursePar(r) : null,
       girPct:            r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
       puttsPerHole:      r.total_putts != null && r.holes_played
                            ? Math.round((r.total_putts / r.holes_played) * 10) / 10
@@ -395,7 +410,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
     async function load() {
       const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
-        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
       ]);
       setProfile(prof);
@@ -613,6 +628,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
     fw_holes:         roundHoleStats[r.id]?.fw_holes          ?? null,
     stableford_total: roundHoleStats[r.id]?.stableford_total  ?? null,
     stableford_holes: roundHoleStats[r.id]?.stableford_holes  ?? null,
+    prorated_hcp:     prorateHandicap(r, roundHolesData),
   }));
 
   return (
@@ -818,7 +834,11 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                       {r.total_score && (
                         <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
                           {r.handicap != null
-                            ? `Course Hcp ${Number(r.handicap).toFixed(1)} · Net ${r.total_score - r.handicap}`
+                            ? (() => {
+                                const proratedHcp = prorateHandicap(r, roundHolesData);
+                                const netScore = r.total_score - proratedHcp;
+                                return `Course Hcp ${Number(r.handicap).toFixed(1)} · Net ${netScore}`;
+                              })()
                             : "Net –"
                           }
                         </div>
