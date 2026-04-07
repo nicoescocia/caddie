@@ -414,6 +414,16 @@ async function callAI(prompt) {
   return d.content?.map(c => c.text || "").join("") || "Analysis unavailable.";
 }
 
+// Net double bogey for a picked-up hole: (par + 2) minus shots received
+function netDoubleBogey(par, si, hcp, holesCount) {
+  if (!hcp || !si) return par + 2;
+  let shots = 0;
+  if (hcp >= si)                  shots = 1;
+  if (hcp >= si + holesCount)     shots = 2;
+  if (hcp >= si + holesCount * 2) shots = 3;
+  return (par + 2) - shots;
+}
+
 // ── TOP BAR ──
 function TopBar({ onSignOut, rightBtn, onHome }) {
   return (
@@ -439,10 +449,11 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const attempted    = loggedHoles.filter(h => !holeData[holes.indexOf(h)].dna);
   const statHoles    = attempted.filter(h => !holeData[holes.indexOf(h)].pickedUp);
   const isStandardRound = holes.length === 9 || holes.length === 18;
-  // Picked up holes score as par + 2 (double bogey) for scoring purposes
+  const hcpVal       = parseInt(handicap, 10) || 0;
+  // Picked up holes score as net double bogey for scoring purposes
   const totalScore   = attempted.reduce((s, h) => {
     const hd = holeData[holes.indexOf(h)];
-    if (hd.pickedUp) return s + h.par + 2;
+    if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, hcpVal, holes.length);
     return s + (hd.score || 0);
   }, 0);
   const attemptedPar = attempted.reduce((s, h) => s + h.par, 0);
@@ -459,22 +470,25 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const scramblePct  = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
   const diff         = totalScore - attemptedPar;
 
-  // Stableford (all tiers)
-  const hcpVal      = parseInt(handicap, 10) || 0;
+  // Stableford (all tiers) — pickedUp = 0 pts, counted in denominator; dna = excluded
   const holesPlayed = attempted.length;
   let stablefordTotal = 0;
+  let stablefordHoles = 0;
   for (const h of attempted) {
     const hd = holeData[holes.indexOf(h)];
-    if (!hd.pickedUp && hd.score !== null && h.idx > 0) {
+    if (hd.pickedUp) {
+      stablefordHoles++;
+      // 0 pts — include in denominator only
+    } else if (hd.score !== null && h.idx > 0) {
       let shots = 0;
       if (hcpVal >= h.idx)                shots = 1;
       if (hcpVal >= h.idx + holesPlayed)  shots = 2;
       if (hcpVal >= h.idx + holesPlayed * 2) shots = 3;
       stablefordTotal += Math.max(0, 2 + h.par - (hd.score - shots));
+      stablefordHoles++;
     }
-    // pickedUp = 0 pts, already excluded by condition above
   }
-  const stablefordPerHole = attempted.length ? (stablefordTotal / attempted.length).toFixed(1) : null;
+  const stablefordPerHole = stablefordHoles ? (stablefordTotal / stablefordHoles).toFixed(1) : null;
 
   // Premium computed stats
   const girHoles      = statHoles.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
@@ -689,7 +703,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
                       <td style={{color:"var(--text-dim)"}}>{hole.par}</td>
                       <td>
                         {hd.dna ? <span style={{color:"#999",fontSize:11}}>DNA</span>
-                          : hd.pickedUp ? <span>{hole.par + 2}<span style={{color:"var(--orange)"}}>*</span></span>
+                          : hd.pickedUp ? <span>{netDoubleBogey(hole.par, hole.idx, parseInt(handicap, 10) || 0, holes.length)}<span style={{color:"var(--orange)"}}>*</span></span>
                           : <span className={"ov-sn-" + sLbl}>{hd.score}</span>}
                       </td>
                       <td>{hd.dna || hd.pickedUp ? "—" : hd.putts}</td>
@@ -1235,10 +1249,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   // ── Summary screen ──
   if (view === "summary") {
     const isStandardRound = holes.length === 9 || holes.length === 18;
+    const sumHcp = parseInt(handicap, 10) || 0;
     const totalScore = holes.reduce((s, h, i) => {
       const hd = holeData[i];
       if (!hd || hd.dna) return s;
-      if (hd.pickedUp) return s + h.par + 2;
+      if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, sumHcp, holes.length);
       return s + (hd.score || 0);
     }, 0);
     const totalPar = holes.reduce((s, h, i) => {
@@ -1451,7 +1466,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       window.scrollTo(0, 0);
     } else {
       // Last hole — update totals and go to overview
-      const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
+      const saveHcp = parseInt(handicap, 10) || 0;
+      const totalScore = holes.reduce((s, h, i) => {
+        const hd = holeData[i];
+        if (!hd || hd.dna) return s;
+        if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, saveHcp, holes.length);
+        return s + (hd.score || 0);
+      }, 0);
       const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
       await supabase.from("rounds").update({ total_score: totalScore, total_putts: totalPutts }).eq("id", rid);
       setView("overview");
@@ -1485,7 +1506,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   async function sendToCoach() {
     if (!roundId) return;
     setSaving(true);
-    const totalScore = holeData.reduce((s, hd) => s + (hd.score || 0), 0);
+    const sendHcp = parseInt(handicap, 10) || 0;
+    const totalScore = holes.reduce((s, h, i) => {
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, sendHcp, holes.length);
+      return s + (hd.score || 0);
+    }, 0);
     const totalPutts = holeData.reduce((s, hd) => s + (hd.putts || 0), 0);
     await supabase.from("rounds").update({
       sent_to_coach: true,
