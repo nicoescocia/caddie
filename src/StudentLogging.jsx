@@ -1,3 +1,4 @@
+// -- ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_complete boolean DEFAULT false;
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -438,7 +439,7 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach }) {
   const [showHoles, setShowHoles] = useState(false);
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -516,7 +517,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!isPremium || attempted.length < 3 || aiText !== null || aiLoading) return;
+    if (!isPremium || !(roundComplete || sent) || attempted.length < 3 || aiText !== null || aiLoading) return;
     setAiLoading(true);
     const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
     const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
@@ -538,7 +539,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
     callAI(prompt)
       .then(t => { setAiText(t); setAiLoading(false); })
       .catch(() => { setAiText("Analysis unavailable."); setAiLoading(false); });
-  }, [isPremium]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPremium, roundComplete, sent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -798,7 +799,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
         </div>}
 
         {/* Premium: approach & putting breakdown */}
-        {isPremium && attempted.length > 0 && bandData.length > 0 && (
+        {isPremium && (roundComplete || sent) && attempted.length > 0 && bandData.length > 0 && (
           <div className="ov-card">
             <div className="ov-card-title">Approach & putting breakdown</div>
             <table className="ov-appr-table">
@@ -827,7 +828,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
         )}
 
         {/* Premium: short game & putting + AI */}
-        {isPremium && attempted.length > 0 && (
+        {isPremium && (roundComplete || sent) && attempted.length > 0 && (
           <div className="ov-card">
             <div className="ov-card-title">Short game & putting</div>
             <div className="stats-grid" style={{marginBottom:0}}>
@@ -863,7 +864,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
         )}
 
         {/* Free tier: premium gate */}
-        {!isPremium && (
+        {!isPremium && (roundComplete || sent) && (
           <div className="ov-premium-gate">
             <div style={{fontSize:24,marginBottom:10}}>📊</div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:17,color:"var(--text)",marginBottom:6}}>Detailed analysis</div>
@@ -905,14 +906,22 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
           </span>
         </button>
 
-        {savedHoles.size > 0 && (
+        {savedHoles.size > 0 && !(roundComplete || sent) && (
           <button
             className="ov-finish-btn"
-            style={allLogged ? {} : {background:"white",color:"var(--green)",border:"1.5px solid var(--green)"}}
+            onClick={onFinishRound}
+            disabled={saving}
+          >
+            {saving ? "Finishing..." : allLogged ? "Finish round" : `Finish round (${savedHoles.size} holes)`}
+          </button>
+        )}
+        {(roundComplete || sent) && hasCoach && savedHoles.size > 0 && (
+          <button
+            className="ov-finish-btn"
             onClick={onOpenSummary}
             disabled={saving}
           >
-            {saving ? "Sending..." : sent ? "Resend to coach" : allLogged ? "Send to coach" : `Finish & send (${savedHoles.size} holes)`}
+            {saving ? "Sending..." : sent ? "Resend to coach" : "Send to coach"}
           </button>
         )}
 
@@ -946,6 +955,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [temperature, setTemperature] = useState(null);
   const [studentNote, setStudentNote] = useState("");
   const [sent, setSent]             = useState(false);
+  const [roundComplete, setRoundComplete] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [hasCoach, setHasCoach]     = useState(false);
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
 
@@ -1022,6 +1034,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       }
       setRoundId(existingRound.id);
       setSent(existingRound.sent_to_coach || false);
+      setRoundComplete((existingRound.round_complete || existingRound.sent_to_coach) || false);
       setHandicap(existingRound.handicap ?? "");
       setWind(existingRound.wind || null);
       setConditions(existingRound.conditions || null);
@@ -1035,15 +1048,15 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   // Fetch student settings (non-blocking — defaults to standard if not yet loaded)
   useEffect(() => {
     async function fetchSettings() {
-      const { data } = await supabase
-        .from("profiles")
-        .select("settings, is_premium, official_handicap")
-        .eq("id", user.id)
-        .single();
+      const [{ data }, { data: coachLink }] = await Promise.all([
+        supabase.from("profiles").select("settings, is_premium, official_handicap").eq("id", user.id).single(),
+        supabase.from("coach_students").select("coach_id").eq("student_id", user.id).maybeSingle(),
+      ]);
       setIsPremium(!!data?.is_premium);
       setPuttMode(data?.settings?.putt_tracking || "standard");
       setApproachLogging(data?.settings?.approach_logging || "enabled");
       if (data?.official_handicap != null) setOfficialHandicap(data.official_handicap);
+      setHasCoach(!!coachLink?.coach_id);
     }
     fetchSettings();
   }, [user.id]);
@@ -1494,7 +1507,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         if (!hd || hd.dna || hd.pickedUp) return s;
         return s + (hd.putts || 0);
       }, 0);
-      await supabase.from("rounds").update({ total_score: totalScore, total_par: totalPar, total_putts: totalPutts }).eq("id", rid);
+      await supabase.from("rounds").update({ total_score: totalScore, total_par: totalPar, total_putts: totalPutts, holes_played: savedHoles.size }).eq("id", rid);
       setView("overview");
     }
   }
@@ -1548,17 +1561,55 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }, 0);
     await supabase.from("rounds").update({
       sent_to_coach: true,
+      round_complete: true,
       sent_at: new Date().toISOString(),
       total_score: totalScore,
       total_par: totalPar,
       total_putts: totalPutts,
+      holes_played: savedHoles.size,
       handicap: handicap !== "" ? parseInt(handicap) : null,
       wind, conditions, temperature,
       student_note: studentNote || null,
     }).eq("id", roundId);
     setSaving(false);
     setSent(true);
+    setRoundComplete(true);
     setView("sent");
+  }
+
+  async function handleFinishRound() {
+    if (!roundId) return;
+    setSaving(true);
+    const saveHcp = parseInt(handicap, 10) || 0;
+    const totalScore = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      if (hd.pickedUp) return s + netDoubleBogey(h.par, h.idx, saveHcp, holes.length);
+      return s + (hd.score || 0);
+    }, 0);
+    const totalPar = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
+      const hd = holeData[i];
+      if (!hd || hd.dna) return s;
+      return s + h.par;
+    }, 0);
+    const totalPutts = holes.reduce((s, h, i) => {
+      if (!savedHoles.has(h.n)) return s;
+      const hd = holeData[i];
+      if (!hd || hd.dna || hd.pickedUp) return s;
+      return s + (hd.putts || 0);
+    }, 0);
+    await supabase.from("rounds").update({
+      round_complete: true,
+      total_score: totalScore,
+      total_par: totalPar,
+      total_putts: totalPutts,
+      holes_played: savedHoles.size,
+      handicap: handicap !== "" ? parseInt(handicap) : null,
+    }).eq("id", roundId);
+    setRoundComplete(true);
+    setSaving(false);
   }
 
   function scoreClass() {
@@ -1599,6 +1650,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         conditions={conditions}
         temperature={temperature}
         isPremium={isPremium}
+        roundComplete={roundComplete}
+        onFinishRound={handleFinishRound}
+        hasCoach={hasCoach}
       />
     );
   }
@@ -1672,7 +1726,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           {savedHoles.size > 0 && (
             <button className="finish-early-btn" onClick={() => { setView("summary"); window.scrollTo(0,0); }}>Finish early</button>
           )}
-          <button className="bar-btn" onClick={() => setView("overview")}>View round</button>
+          <button className="bar-btn" onClick={() => setShowSettingsModal(true)}>⚙️ Settings</button>
+          <button className="bar-btn" onClick={() => setView("overview")}>← Overview</button>
         </div>
       } />
 
@@ -1893,6 +1948,101 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           </button>
         </div>
       </div>
+
+      {showSettingsModal && (
+        <div
+          style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={() => setShowSettingsModal(false)}
+        >
+          <div
+            style={{background:"white",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480}}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:"var(--text)",marginBottom:20}}>
+              Logging settings
+            </div>
+
+            <div style={{marginBottom:22}}>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".09em",color:"var(--text-dim)",marginBottom:10}}>
+                Putt tracking
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {[
+                  { v:"first_only", label:"First putt only" },
+                  { v:"standard",   label:"Standard" },
+                  { v:"full",       label:"Full distances", premium:true },
+                ].map(opt => {
+                  const isLocked = opt.premium && !isPremium;
+                  return (
+                    <button
+                      key={opt.v}
+                      onClick={async () => {
+                        if (isLocked) return;
+                        setPuttMode(opt.v);
+                        const { data: prof } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+                        await supabase.from("profiles").update({ settings: { ...(prof?.settings || {}), putt_tracking: opt.v } }).eq("id", user.id);
+                      }}
+                      style={{
+                        padding:"7px 14px",borderRadius:20,
+                        fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,
+                        cursor:isLocked?"default":"pointer",
+                        background: puttMode === opt.v ? "var(--green-dark)" : "white",
+                        color: puttMode === opt.v ? "white" : isLocked ? "var(--text-dim)" : "var(--text)",
+                        border:"1.5px solid " + (puttMode === opt.v ? "var(--green-dark)" : "var(--border)"),
+                        opacity: isLocked ? 0.5 : 1,
+                      }}
+                    >
+                      {opt.label}
+                      {opt.premium && !isPremium && (
+                        <span style={{fontSize:9,fontWeight:700,background:"var(--gold)",color:"var(--green-dark)",padding:"1px 5px",borderRadius:4,marginLeft:6,textTransform:"uppercase",letterSpacing:".04em"}}>
+                          Premium
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{marginBottom:28}}>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".09em",color:"var(--text-dim)",marginBottom:10}}>
+                Approach distance
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {[
+                  { v:"enabled",  label:"Enabled" },
+                  { v:"disabled", label:"Disabled" },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    onClick={async () => {
+                      setApproachLogging(opt.v);
+                      const { data: prof } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+                      await supabase.from("profiles").update({ settings: { ...(prof?.settings || {}), approach_logging: opt.v } }).eq("id", user.id);
+                    }}
+                    style={{
+                      padding:"7px 14px",borderRadius:20,
+                      fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",
+                      background: approachLogging === opt.v ? "var(--green-dark)" : "white",
+                      color: approachLogging === opt.v ? "white" : "var(--text)",
+                      border:"1.5px solid " + (approachLogging === opt.v ? "var(--green-dark)" : "var(--border)"),
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowSettingsModal(false)}
+              style={{width:"100%",background:"var(--green)",border:"none",borderRadius:12,padding:14,fontFamily:"'Outfit',sans-serif",fontSize:15,fontWeight:700,color:"white",cursor:"pointer"}}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
