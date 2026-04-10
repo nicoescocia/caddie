@@ -136,6 +136,13 @@ function parseFt(v) {
   return parseInt(v) || 0;
 }
 
+function parsePutt2(v) {
+  if (!v) return null;
+  if (v === "<1") return 0.5;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
 function approachPct(v) {
   const m = { "Under 50": 20, "50–75": 38, "75–100": 52, "100–125": 68, "125–150": 84, "150+": 100 };
   return m[v] || 50;
@@ -523,9 +530,9 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             {(() => {
               const putt1Groups = ["<3","3","4","6","9","12","15","20","25","30+"];
               const p2Data = putt1Groups.map(p1v => {
-                const matchHoles = holes.filter(h => h.putt1 === p1v && h.putt2);
+                const matchHoles = holes.filter(h => h.putt1 === p1v && parsePutt2(h.putt2) !== null);
                 if (!matchHoles.length) return null;
-                const avgP2 = matchHoles.reduce((s, h) => s + parseFt(h.putt2), 0) / matchHoles.length;
+                const avgP2 = matchHoles.reduce((s, h) => s + parsePutt2(h.putt2), 0) / matchHoles.length;
                 return { p1v, count: matchHoles.length, avgP2: Math.round(avgP2 * 10) / 10 };
               }).filter(Boolean);
               if (!p2Data.length) return (
