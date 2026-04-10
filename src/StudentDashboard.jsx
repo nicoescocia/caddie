@@ -457,23 +457,28 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
       <div className="trends-title">Analytics</div>
 
       {/* Count selector */}
-      {countOptions.length > 1 && (
-        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-          {countOptions.map(n => (
-            <button
-              key={n}
-              onClick={() => setAnalyticsCount(n)}
-              style={{
-                padding:"5px 14px", borderRadius:20, border:"1.5px solid",
-                borderColor: N === n ? "var(--green-dark)" : "var(--border)",
-                background: N === n ? "var(--green-dark)" : "white",
-                color: N === n ? "white" : "var(--text-dim)",
-                fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
-              }}
-            >
-              Last {n}
-            </button>
-          ))}
+      {countOptions.length > 0 && (
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:7}}>
+            Showing data from:
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {countOptions.map(n => (
+              <button
+                key={n}
+                onClick={() => setAnalyticsCount(n)}
+                style={{
+                  padding:"5px 14px", borderRadius:20, border:"1.5px solid",
+                  borderColor: N === n ? "var(--green-dark)" : "var(--border)",
+                  background: N === n ? "var(--green-dark)" : "white",
+                  color: N === n ? "white" : "var(--text-dim)",
+                  fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
+                }}
+              >
+                Last {n}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -500,7 +505,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
                   <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>Approach</th>
                   <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
                   <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 1st putt</th>
-                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev<br/><span style={{fontWeight:400,fontSize:10,color:"var(--text-dim)"}}>({N} rounds)</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -533,7 +538,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
                   <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>1st putt</th>
                   <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
                   <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 2nd putt</th>
-                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev<br/><span style={{fontWeight:400,fontSize:10,color:"var(--text-dim)"}}>({N} rounds)</span></th>
                 </tr>
               </thead>
               <tbody>
