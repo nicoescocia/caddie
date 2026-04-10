@@ -373,7 +373,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
   const typed = completed.filter(r => r.holes_played === activeStatTab);
   const baseRounds = typed.length >= 5 ? typed : completed;
 
-  const countOptions = [5, 10, 20, 50].filter(n => baseRounds.length >= n);
+  const countOptions = [5, 10, 20, 50].filter(n => completed.length >= n);
 
   useEffect(() => {
     if (countOptions.length > 0 && !countOptions.includes(analyticsCount)) {
@@ -420,12 +420,12 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
 
   // Table 1 data
   const approachBands = [
-    { key: "Under 50", label: "Under 50" },
-    { key: "50-75",    label: "50–75" },
-    { key: "75-100",   label: "75–100" },
-    { key: "100-125",  label: "100–125" },
-    { key: "125-150",  label: "125–150" },
-    { key: "150+",     label: "150+" },
+    { key: "Under 50", label: "Under 50 yds" },
+    { key: "50-75",    label: "50–75 yds" },
+    { key: "75-100",   label: "75–100 yds" },
+    { key: "100-125",  label: "100–125 yds" },
+    { key: "125-150",  label: "125–150 yds" },
+    { key: "150+",     label: "150+ yds" },
   ];
   const approachRows = approachBands.map(({ key, label }) => {
     const cur  = currentHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
