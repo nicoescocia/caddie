@@ -119,7 +119,7 @@ const css = `
   .step-btn:disabled { color:var(--border); cursor:not-allowed; }
   .step-val { font-size:28px; font-weight:700; color:var(--text); min-width:40px; text-align:center; }
   .step-val.over { color:var(--orange); } .step-val.par { color:var(--green-mid); } .step-val.under { color:var(--gold); }
-  .putts-grid { display:flex; flex-direction:row; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; flex-wrap:nowrap; }
+  .putts-grid { display:flex; flex-direction:row; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; flex-wrap:nowrap; width:100%; }
   .putts-grid::-webkit-scrollbar { display:none; }
   .putt-btn { background:white; border:1.5px solid var(--border); border-radius:11px; padding:10px 4px; text-align:center; cursor:pointer; transition:all .15s; font-family:'Outfit',sans-serif; }
   .putt-btn .pv { font-size:20px; font-weight:700; color:var(--text); display:block; }
@@ -1863,7 +1863,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
               <button className="step-btn" onClick={() => update({ score: Math.min(12, d.score + 1) })}>+</button>
             </div>
           </div>
-          <div>
+          <div style={{minWidth:0}}>
             <div className="step-label">Putts</div>
             <div className="putts-grid">
               {[{n:0,label:"chip-in"},{n:1,label:"putt"},{n:2,label:"putts"},{n:3,label:"putts"},{n:4,label:"putts"},{n:5,label:"putts"}].map(p => (
