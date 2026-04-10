@@ -365,8 +365,22 @@ function parsePutt2(v) {
 }
 
 function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab }) {
-  const [analyticsCount, setAnalyticsCount] = useState(10);
+  const [analyticsCount, setAnalyticsCount] = useState(5);
   const [analyticsTab, setAnalyticsTab] = useState("approach");
+
+  // Filter rounds by active 9/18 tab; fall back to all if fewer than 5
+  const completed = rounds.filter(r => r.total_score);
+  const typed = completed.filter(r => r.holes_played === activeStatTab);
+  const baseRounds = typed.length >= 5 ? typed : completed;
+
+  const countOptions = [5, 10, 20, 50].filter(n => baseRounds.length >= n);
+
+  useEffect(() => {
+    if (countOptions.length > 0) {
+      const best = countOptions.includes(10) ? 10 : countOptions[countOptions.length - 1];
+      setAnalyticsCount(best);
+    }
+  }, [baseRounds.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isPremium) {
     return (
@@ -383,12 +397,6 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
     );
   }
 
-  // Filter rounds by active 9/18 tab; fall back to all if fewer than 5
-  const completed = rounds.filter(r => r.total_score);
-  const typed = completed.filter(r => r.holes_played === activeStatTab);
-  const baseRounds = typed.length >= 5 ? typed : completed;
-
-  const countOptions = [5, 10, 20, 50].filter(n => baseRounds.length >= n);
   const N = countOptions.includes(analyticsCount) ? analyticsCount : (countOptions[countOptions.length - 1] || baseRounds.length);
 
   const currentRounds = baseRounds.slice(0, N);
@@ -469,9 +477,9 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
                 onClick={() => setAnalyticsCount(n)}
                 style={{
                   padding:"5px 14px", borderRadius:20, border:"1.5px solid",
-                  borderColor: N === n ? "var(--green-dark)" : "var(--border)",
-                  background: N === n ? "var(--green-dark)" : "white",
-                  color: N === n ? "white" : "var(--text-dim)",
+                  borderColor: analyticsCount === n ? "var(--green-dark)" : "var(--border)",
+                  background: analyticsCount === n ? "var(--green-dark)" : "white",
+                  color: analyticsCount === n ? "white" : "var(--text-dim)",
                   fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
                 }}
               >
