@@ -441,12 +441,16 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         const holesByRound = {};
         for (const h of (holeRows || [])) {
           if (!statsMap[h.round_id]) {
-            statsMap[h.round_id] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0, stableford_total: 0, stableford_holes: 0 };
+            statsMap[h.round_id] = { gir_count: 0, attempted_holes: 0, fw_hit: 0, fw_holes: 0, stableford_total: 0, stableford_holes: 0, total_putts: 0, putt_holes: 0 };
           }
           if (!holesByRound[h.round_id]) holesByRound[h.round_id] = [];
           holesByRound[h.round_id].push(h);
           if (!h.dna) {
             statsMap[h.round_id].attempted_holes++;
+            if (!h.picked_up && h.putts != null) {
+              statsMap[h.round_id].total_putts += h.putts;
+              statsMap[h.round_id].putt_holes++;
+            }
             if (h.gir) statsMap[h.round_id].gir_count++;
             if (h.par >= 4) {
               statsMap[h.round_id].fw_holes++;
@@ -846,6 +850,30 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                     </div>
                     <button className="delete-btn" onClick={e => deleteRound(e, r.id)} title="Delete round">🗑</button>
                   </div>
+                  {(() => {
+                    const hs = roundHoleStats[r.id];
+                    if (!hs) return null;
+                    const chips = [];
+                    if (hs.attempted_holes > 0) {
+                      chips.push(`${hs.gir_count}/${hs.attempted_holes} GIR`);
+                    }
+                    if (hs.fw_holes > 0) {
+                      chips.push(`${hs.fw_hit}/${hs.fw_holes} Fairways`);
+                    }
+                    if (hs.putt_holes > 0) {
+                      chips.push(`${(hs.total_putts / hs.putt_holes).toFixed(1)} putts/hole`);
+                    }
+                    if (!chips.length) return null;
+                    return (
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:10}}>
+                        {chips.map(c => (
+                          <span key={c} style={{background:"#EEE9DF",borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:600,color:"var(--text-mid)"}}>
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   {r.historical && !r.sent_to_coach && coach && (
                     <div style={{paddingTop:10}}>
                       <button
