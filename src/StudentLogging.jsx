@@ -119,7 +119,7 @@ const css = `
   .step-btn:disabled { color:var(--border); cursor:not-allowed; }
   .step-val { font-size:28px; font-weight:700; color:var(--text); min-width:40px; text-align:center; }
   .step-val.over { color:var(--orange); } .step-val.par { color:var(--green-mid); } .step-val.under { color:var(--gold); }
-  .putts-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .putts-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
   .putt-btn { background:white; border:1.5px solid var(--border); border-radius:11px; padding:10px 4px; text-align:center; cursor:pointer; transition:all .15s; font-family:'Outfit',sans-serif; }
   .putt-btn .pv { font-size:20px; font-weight:700; color:var(--text); display:block; }
   .putt-btn .pu { font-size:10px; color:var(--text-dim); display:block; margin-top:1px; }
@@ -947,8 +947,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [puttMode, setPuttMode]         = useState("standard");
   const [approachLogging, setApproachLogging] = useState("enabled");
   const [isPremium, setIsPremium] = useState(false);
-  // view: "course_picker" | "overview" | "logging" | "summary" | "sent" | "complete"
+  // view: "course_picker" | "course_confirm" | "overview" | "logging" | "summary" | "sent" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
+  const [pendingCourse, setPendingCourse] = useState(null);
   const [saving, setSaving]         = useState(false);
   const [wind, setWind]               = useState(null);
   const [conditions, setConditions]   = useState(null);
@@ -991,11 +992,11 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     setHoleData(mapped.map(h => emptyHole(h.par)));
   }
 
-  async function handleCourseSelect(course) {
+  function handleCourseSelect(course) {
     setCourseId(course.id);
     setCourseName(course.name);
-    await loadCourse(course.id);
-    setView("logging");
+    setPendingCourse(course);
+    setView("course_confirm");
   }
 
   useEffect(() => {
@@ -1204,25 +1205,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             </>
           )}
 
-          <div style={{marginTop:20}}>
-            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--text-dim)",marginBottom:7}}>
-              Course handicap <span style={{fontWeight:400}}>(optional)</span>
-            </div>
-            <input
-              type="number"
-              min="0"
-              max="54"
-              placeholder="e.g. 28"
-              value={handicap}
-              onChange={e => setHandicap(e.target.value)}
-              style={{
-                width:"100%", background:"var(--bg)", border:"1.5px solid var(--border)",
-                borderRadius:11, padding:"12px 14px", fontFamily:"'Outfit',sans-serif",
-                fontSize:15, color:"var(--text)", outline:"none",
-              }}
-            />
-          </div>
-          <button className="back-to-dash-btn" style={{marginTop:8}} onClick={onBackToDashboard}>
+          <button className="back-to-dash-btn" style={{marginTop:16}} onClick={onBackToDashboard}>
             Back to my rounds
           </button>
         </div>
@@ -1254,6 +1237,79 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             </div>
           </div>
         )}
+      </>
+    );
+  }
+
+  // ── Course confirm screen ──
+  if (view === "course_confirm" && pendingCourse) {
+    const cStats = courseStats[pendingCourse.id];
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} rightBtn={
+          <button className="bar-btn" onClick={() => setView("course_picker")}>← Courses</button>
+        } />
+        <div className="log-wrap" style={{paddingTop:32}}>
+          <div style={{background:"var(--green-dark)",borderRadius:18,padding:"20px 22px",marginBottom:28,position:"relative",overflow:"hidden"}}>
+            <div style={{content:"''",position:"absolute",right:-30,top:-30,width:140,height:140,borderRadius:"50%",background:"rgba(255,255,255,0.03)",pointerEvents:"none"}} />
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".09em",color:"rgba(255,255,255,0.4)",marginBottom:6}}>
+              Selected course
+            </div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:"white",marginBottom:6,lineHeight:1.2}}>
+              {pendingCourse.name}
+            </div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>
+              {pendingCourse.holes} holes
+              {cStats && ` · Par ${cStats.totalPar}`}
+              {cStats?.hasYardage && ` · ${cStats.totalYardage.toLocaleString()} yds`}
+            </div>
+          </div>
+
+          <div style={{marginBottom:28}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--text-dim)",marginBottom:7}}>
+              Course handicap <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              max="54"
+              placeholder={officialHandicap != null ? `e.g. ${Math.ceil(officialHandicap)}` : "e.g. 28"}
+              value={handicap}
+              onChange={e => setHandicap(e.target.value)}
+              autoFocus
+              style={{
+                width:"100%", background:"var(--bg)", border:"1.5px solid var(--border)",
+                borderRadius:11, padding:"12px 14px", fontFamily:"'Outfit',sans-serif",
+                fontSize:15, color:"var(--text)", outline:"none",
+              }}
+            />
+            <div style={{fontSize:12,color:"var(--text-dim)",marginTop:6,lineHeight:1.5}}>
+              Used for net score and Stableford calculations. You can also set this during the round.
+            </div>
+          </div>
+
+          <button
+            className="next-btn"
+            style={{width:"100%",marginBottom:10}}
+            onClick={async () => {
+              await loadCourse(pendingCourse.id);
+              setView("logging");
+            }}
+          >
+            Start round →
+          </button>
+          <button
+            onClick={() => setView("course_picker")}
+            style={{
+              width:"100%",background:"none",border:"1.5px solid var(--border)",borderRadius:14,
+              padding:14,fontFamily:"'Outfit',sans-serif",fontSize:14,fontWeight:600,
+              color:"var(--text-mid)",cursor:"pointer",
+            }}
+          >
+            ← Change course
+          </button>
+        </div>
       </>
     );
   }
@@ -1809,7 +1865,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           <div>
             <div className="step-label">Putts</div>
             <div className="putts-grid">
-              {[{n:0,label:"chip-in"},{n:1,label:"putt"},{n:2,label:"putts"},{n:3,label:"putts"}].map(p => (
+              {[{n:0,label:"chip-in"},{n:1,label:"putt"},{n:2,label:"putts"},{n:3,label:"putts"},{n:4,label:"putts"},{n:5,label:"putts"}].map(p => (
                 <button
                   key={p.n}
                   className={"putt-btn " + (d.putts === p.n ? (p.n >= 3 ? "sel-tp" : "sel") : "")}
@@ -1820,7 +1876,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                     putt3: puttMode === "full" && p.n >= 3 ? d.putt3 : null,
                   })}
                 >
-                  <span className="pv">{p.n === 3 ? "3+" : p.n}</span>
+                  <span className="pv">{p.n}</span>
                   <span className="pu">{p.label}</span>
                 </button>
               ))}
