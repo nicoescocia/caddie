@@ -376,11 +376,11 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab 
   const countOptions = [5, 10, 20, 50].filter(n => baseRounds.length >= n);
 
   useEffect(() => {
-    if (countOptions.length > 0) {
+    if (countOptions.length > 0 && !countOptions.includes(analyticsCount)) {
       const best = countOptions.includes(10) ? 10 : countOptions[countOptions.length - 1];
       setAnalyticsCount(best);
     }
-  }, [baseRounds.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rounds.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isPremium) {
     return (
