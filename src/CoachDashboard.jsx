@@ -533,7 +533,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 const matchHoles = holes.filter(h => h.putt1 === p1v && parsePutt2(h.putt2) !== null);
                 if (!matchHoles.length) return null;
                 const avgP2 = matchHoles.reduce((s, h) => s + parsePutt2(h.putt2), 0) / matchHoles.length;
-                return { p1v, count: matchHoles.length, avgP2: Math.round(avgP2 * 10) / 10 };
+                return { p1v, count: matchHoles.length, avgP2 };
               }).filter(Boolean);
               if (!p2Data.length) return (
                 <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--border)",fontSize:13,color:"var(--text-dim)"}}>
@@ -552,7 +552,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                         <tr key={g.p1v}>
                           <td>{g.p1v} ft</td>
                           <td>{g.count}</td>
-                          <td><span className={`chip ${g.avgP2 > 5 ? "bad" : g.avgP2 > 3 ? "warn" : "ok"}`}>{g.avgP2} ft</span></td>
+                          <td><span className={`chip ${g.avgP2 > 5 ? "bad" : g.avgP2 > 3 ? "warn" : "ok"}`}>{g.avgP2.toFixed(1)} ft</span></td>
                         </tr>
                       ))}
                     </tbody>
