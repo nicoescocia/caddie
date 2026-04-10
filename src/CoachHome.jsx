@@ -627,6 +627,7 @@ function AnalyticsTab({ sentRounds }) {
   const [analyticsHoles, setAnalyticsHoles] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsCount, setAnalyticsCount] = useState(10);
+  const [analyticsTab, setAnalyticsTab] = useState("approach");
 
   useEffect(() => {
     if (analyticsHoles !== null || analyticsLoading || sentRounds.length === 0) return;
@@ -704,7 +705,7 @@ function AnalyticsTab({ sentRounds }) {
   return (
     <div>
       {/* Count selector */}
-      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
         {countOptions.map(n => (
           <button
             key={n}
@@ -722,67 +723,81 @@ function AnalyticsTab({ sentRounds }) {
         ))}
       </div>
 
-      {/* Table 1 */}
-      <div style={tblWrap}>
-        <div style={tblHead}>Avg 1st putt distance by approach</div>
-        {approachRows.length === 0 ? (
-          <div style={{fontSize:13,color:"var(--text-dim)"}}>No approach data recorded</div>
-        ) : (
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead>
-              <tr style={{color:"var(--text-dim)",fontSize:11}}>
-                <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>Band</th>
-                <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
-                <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 1st putt</th>
-                <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approachRows.map(row => (
-                <tr key={row.label} style={{borderTop:"1px solid var(--border)"}}>
-                  <td style={{padding:"7px 0",fontSize:12,color:"var(--text-mid)"}}>{row.label} yds</td>
-                  <td style={{textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>×{row.count}</td>
-                  <td style={{textAlign:"right",fontWeight:700,color:"var(--text)"}}>{row.avg.toFixed(1)} ft</td>
-                  <td style={{textAlign:"right",fontWeight:700,color: row.indicator === "↓" ? "var(--green-mid)" : row.indicator === "↑" ? "var(--red)" : "var(--text-dim)", fontSize:14}}>
-                    {row.indicator || "–"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* Sub-tab row */}
+      <div className="trends-tabs" style={{marginBottom:14}}>
+        <button className={"trend-tab" + (analyticsTab === "approach" ? " active" : "")} onClick={() => setAnalyticsTab("approach")} style={{whiteSpace:"nowrap"}}>
+          1st Putt by Approach
+        </button>
+        <button className={"trend-tab" + (analyticsTab === "putt2" ? " active" : "")} onClick={() => setAnalyticsTab("putt2")} style={{whiteSpace:"nowrap"}}>
+          2nd Putt by 1st Putt
+        </button>
       </div>
 
-      {/* Table 2 */}
-      <div style={tblWrap}>
-        <div style={tblHead}>Avg 2nd putt distance by 1st putt</div>
-        {putt2Rows.length === 0 ? (
-          <div style={{fontSize:13,color:"var(--text-dim)"}}>No second putt distance data recorded</div>
-        ) : (
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead>
-              <tr style={{color:"var(--text-dim)",fontSize:11}}>
-                <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>1st putt</th>
-                <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
-                <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 2nd putt</th>
-                <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
-              </tr>
-            </thead>
-            <tbody>
-              {putt2Rows.map(row => (
-                <tr key={row.p1v} style={{borderTop:"1px solid var(--border)"}}>
-                  <td style={{padding:"7px 0",fontSize:12,color:"var(--text-mid)"}}>{row.p1v} ft</td>
-                  <td style={{textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>×{row.count}</td>
-                  <td style={{textAlign:"right",fontWeight:700,color:"var(--text)"}}>{row.avg.toFixed(1)} ft</td>
-                  <td style={{textAlign:"right",fontWeight:700,color: row.indicator === "↓" ? "var(--green-mid)" : row.indicator === "↑" ? "var(--red)" : "var(--text-dim)", fontSize:14}}>
-                    {row.indicator || "–"}
-                  </td>
+      {/* Table 1 */}
+      {analyticsTab === "approach" && (
+        <div style={tblWrap}>
+          <div style={tblHead}>Avg 1st putt distance by approach</div>
+          {approachRows.length === 0 ? (
+            <div style={{fontSize:13,color:"var(--text-dim)"}}>No approach data recorded</div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{color:"var(--text-dim)",fontSize:11}}>
+                  <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>Band</th>
+                  <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 1st putt</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {approachRows.map(row => (
+                  <tr key={row.label} style={{borderTop:"1px solid var(--border)"}}>
+                    <td style={{padding:"7px 0",fontSize:12,color:"var(--text-mid)"}}>{row.label} yds</td>
+                    <td style={{textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>×{row.count}</td>
+                    <td style={{textAlign:"right",fontWeight:700,color:"var(--text)"}}>{row.avg.toFixed(1)} ft</td>
+                    <td style={{textAlign:"right",fontWeight:700,color: row.indicator === "↓" ? "var(--green-mid)" : row.indicator === "↑" ? "var(--red)" : "var(--text-dim)", fontSize:14}}>
+                      {row.indicator || "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Table 2 */}
+      {analyticsTab === "putt2" && (
+        <div style={tblWrap}>
+          <div style={tblHead}>Avg 2nd putt distance by 1st putt</div>
+          {putt2Rows.length === 0 ? (
+            <div style={{fontSize:13,color:"var(--text-dim)"}}>No second putt distance data recorded</div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{color:"var(--text-dim)",fontSize:11}}>
+                  <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>1st putt</th>
+                  <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 2nd putt</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
+                </tr>
+              </thead>
+              <tbody>
+                {putt2Rows.map(row => (
+                  <tr key={row.p1v} style={{borderTop:"1px solid var(--border)"}}>
+                    <td style={{padding:"7px 0",fontSize:12,color:"var(--text-mid)"}}>{row.p1v} ft</td>
+                    <td style={{textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>×{row.count}</td>
+                    <td style={{textAlign:"right",fontWeight:700,color:"var(--text)"}}>{row.avg.toFixed(1)} ft</td>
+                    <td style={{textAlign:"right",fontWeight:700,color: row.indicator === "↓" ? "var(--green-mid)" : row.indicator === "↑" ? "var(--red)" : "var(--text-dim)", fontSize:14}}>
+                      {row.indicator || "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -794,7 +809,7 @@ function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHom
   const rounds18Count = scored.filter(r => r.holes_played === 18).length;
   const [activeStatTab, setActiveStatTab] = useState(() => rounds9Count > rounds18Count ? 9 : 18);
   const [aiPatterns, setAiPatterns] = useState(null);
-  const [histTab, setHistTab] = useState("history");
+  const [mainView, setMainView] = useState("trends");
 
   const diffs   = scored.map(r => r.total_score - getCoursePar(r));
   const avgDiff = diffs.length ? Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length) : null;
@@ -911,79 +926,73 @@ OUTPUT FORMAT
           </div>
         ) : (
           <>
-            {/* Tab bar */}
+            {/* Trends / Analytics toggle */}
             <div className="trends-tabs" style={{marginBottom:16}}>
-              {["history","trends","analytics"].map(t => (
-                <button
-                  key={t}
-                  className={"trend-tab" + (histTab === t ? " active" : "")}
-                  onClick={() => setHistTab(t)}
-                >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </button>
-              ))}
+              <button className={"trend-tab" + (mainView === "trends" ? " active" : "")} onClick={() => setMainView("trends")}>
+                Trends
+              </button>
+              <button className={"trend-tab" + (mainView === "analytics" ? " active" : "")} onClick={() => setMainView("analytics")}>
+                Analytics
+              </button>
             </div>
 
-            {histTab === "trends" && (
+            {mainView === "trends" && (
               <RoundTrends rounds={sentRounds} activeTab={activeStatTab} setActiveTab={setActiveStatTab} />
             )}
 
-            {histTab === "analytics" && (
+            {mainView === "analytics" && (
               <AnalyticsTab sentRounds={sentRounds} />
             )}
 
-            {histTab === "history" && (
-              <>
-                {scored.length >= 3 && (
-                  <div className="ai-box">
-                    <div className="ai-label">✦ Multi-round pattern analysis — last {aiRoundsCount} rounds</div>
-                    {aiPatterns
-                      ? <div className="ai-text">{aiPatterns}</div>
-                      : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns across rounds…</div>}
-                  </div>
-                )}
-                <div className="section-label">Round history</div>
-                {sentRounds.map(r => {
-                  const diff = parDiff(r.total_score, r);
-                  return (
-                    <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
-                      <div className="round-card-top">
-                        <div>
-                          <div className="round-card-date" style={{fontWeight:700,color:"var(--text)",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
-                            {r.courses?.name || "Golf Course"}
-                            {r.historical && <span style={{background:"#EEF0FF",color:"#4A5FBD",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6}}>Historical</span>}
-                          </div>
-                          <div className="round-card-course">{fmtDate(r.created_at)} · {r.attempted_holes != null && r.attempted_holes !== r.holes_played ? `${r.attempted_holes}/${r.holes_played} holes` : `${r.holes_played} holes`}</div>
-                        </div>
-                        <div className="round-score-block">
-                          <div className="round-score-num">{r.total_score ?? "—"}</div>
-                          {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
-                          {r.handicap != null && (
-                            <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                              Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - (r.prorated_hcp ?? r.handicap)}` : ""}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="round-stats-row">
-                        <div className="round-stat-chip">
-                          <div className={"rsc-val " + (r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.55 ? "ok" : r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.attempted_holes ?? r.holes_played}` : "—"}</div>
-                          <div className="rsc-lbl">GIR</div>
-                        </div>
-                        <div className="round-stat-chip">
-                          <div className={"rsc-val " + (r.fw_holes > 0 ? (r.fw_hit/r.fw_holes >= 0.6 ? "ok" : r.fw_hit/r.fw_holes >= 0.4 ? "warn" : "bad") : "")}>{r.fw_hit != null && r.fw_holes != null ? `${r.fw_hit}/${r.fw_holes}` : "—"}</div>
-                          <div className="rsc-lbl">Fairways</div>
-                        </div>
-                        <div className="round-stat-chip">
-                          <div className={"rsc-val " + (r.three_putt_count === 0 ? "ok" : r.three_putt_count <= 1 ? "warn" : "bad")}>{r.three_putt_count != null ? r.three_putt_count : "—"}</div>
-                          <div className="rsc-lbl">3-putts</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </>
+            {scored.length >= 3 && (
+              <div className="ai-box">
+                <div className="ai-label">✦ Multi-round pattern analysis — last {aiRoundsCount} rounds</div>
+                {aiPatterns
+                  ? <div className="ai-text">{aiPatterns}</div>
+                  : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns across rounds…</div>}
+              </div>
             )}
+
+            <div className="section-label">Round history</div>
+            {sentRounds.map(r => {
+              const diff = parDiff(r.total_score, r);
+              return (
+                <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
+                  <div className="round-card-top">
+                    <div>
+                      <div className="round-card-date" style={{fontWeight:700,color:"var(--text)",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+                        {r.courses?.name || "Golf Course"}
+                        {r.historical && <span style={{background:"#EEF0FF",color:"#4A5FBD",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6}}>Historical</span>}
+                      </div>
+                      <div className="round-card-course">{fmtDate(r.created_at)} · {r.attempted_holes != null && r.attempted_holes !== r.holes_played ? `${r.attempted_holes}/${r.holes_played} holes` : `${r.holes_played} holes`}</div>
+                    </div>
+                    <div className="round-score-block">
+                      <div className="round-score-num">{r.total_score ?? "—"}</div>
+                      {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
+                      {r.handicap != null && (
+                        <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - (r.prorated_hcp ?? r.handicap)}` : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="round-stats-row">
+                    <div className="round-stat-chip">
+                      <div className={"rsc-val " + (r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.55 ? "ok" : r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.attempted_holes ?? r.holes_played}` : "—"}</div>
+                      <div className="rsc-lbl">GIR</div>
+                    </div>
+                    <div className="round-stat-chip">
+                      <div className={"rsc-val " + (r.fw_holes > 0 ? (r.fw_hit/r.fw_holes >= 0.6 ? "ok" : r.fw_hit/r.fw_holes >= 0.4 ? "warn" : "bad") : "")}>{r.fw_hit != null && r.fw_holes != null ? `${r.fw_hit}/${r.fw_holes}` : "—"}</div>
+                      <div className="rsc-lbl">Fairways</div>
+                    </div>
+                    <div className="round-stat-chip">
+                      <div className={"rsc-val " + (r.three_putt_count === 0 ? "ok" : r.three_putt_count <= 1 ? "warn" : "bad")}>{r.three_putt_count != null ? r.three_putt_count : "—"}</div>
+                      <div className="rsc-lbl">3-putts</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </>
         )}
       </div>
