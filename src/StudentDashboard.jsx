@@ -349,6 +349,213 @@ function StudentRoundTrends({ rounds, activeTab }) {
   );
 }
 
+function parseFt(v) {
+  if (!v) return null;
+  if (v === "<3") return 1.5;
+  if (v === "30+") return 32;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+function parsePutt2(v) {
+  if (!v) return null;
+  if (v === "<1") return 0.5;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab }) {
+  const [analyticsCount, setAnalyticsCount] = useState(10);
+  const [analyticsTab, setAnalyticsTab] = useState("approach");
+
+  if (!isPremium) {
+    return (
+      <div style={{
+        background:"white", border:"1.5px solid var(--gold)", borderRadius:14,
+        padding:"20px 18px", marginBottom:16, textAlign:"center",
+      }}>
+        <div style={{fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:6}}>📊 Putting Analytics</div>
+        <div style={{fontSize:13,color:"var(--text-mid)",marginBottom:14,lineHeight:1.6}}>
+          Upgrade to Premium to unlock putting analytics
+        </div>
+        <div style={{fontSize:12,color:"var(--gold)",fontWeight:700}}>Premium only</div>
+      </div>
+    );
+  }
+
+  // Filter rounds by active 9/18 tab; fall back to all if fewer than 5
+  const completed = rounds.filter(r => r.total_score);
+  const typed = completed.filter(r => r.holes_played === activeStatTab);
+  const baseRounds = typed.length >= 5 ? typed : completed;
+
+  const countOptions = [5, 10, 20, 50].filter(n => baseRounds.length >= n);
+  const N = countOptions.includes(analyticsCount) ? analyticsCount : (countOptions[countOptions.length - 1] || baseRounds.length);
+
+  const currentRounds = baseRounds.slice(0, N);
+  const prevRounds    = baseRounds.slice(N, N * 2);
+
+  const currentRoundIds = new Set(currentRounds.map(r => r.id));
+  const prevRoundIds    = new Set(prevRounds.map(r => r.id));
+
+  function getActiveHoles(roundIdSet) {
+    const holes = [];
+    for (const rid of roundIdSet) {
+      for (const h of (analyticsHolesMap[rid] || [])) {
+        if (!h.dna && !h.picked_up) holes.push(h);
+      }
+    }
+    return holes;
+  }
+
+  const currentHoles = getActiveHoles(currentRoundIds);
+  const prevHoles    = getActiveHoles(prevRoundIds);
+
+  // Table 1 data
+  const approachBands = [
+    { key: "Under 50", label: "Under 50" },
+    { key: "50-75",    label: "50–75" },
+    { key: "75-100",   label: "75–100" },
+    { key: "100-125",  label: "100–125" },
+    { key: "125-150",  label: "125–150" },
+    { key: "150+",     label: "150+" },
+  ];
+  const approachRows = approachBands.map(({ key, label }) => {
+    const cur  = currentHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
+    const prev = prevHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
+    if (!cur.length) return null;
+    const avgCur  = cur.reduce((s, h) => s + parseFt(h.putt1), 0) / cur.length;
+    const avgPrev = prev.length >= 3 ? prev.reduce((s, h) => s + parseFt(h.putt1), 0) / prev.length : null;
+    let indicator = null;
+    if (avgPrev !== null && cur.length >= 3) {
+      if (avgCur < avgPrev - 0.5)      indicator = "↓";
+      else if (avgCur > avgPrev + 0.5) indicator = "↑";
+    }
+    return { label, count: cur.length, avg: avgCur, indicator };
+  }).filter(Boolean);
+
+  // Table 2 data
+  const putt1Groups = ["<3","3","4","6","9","12","15","20","25","30+"];
+  const putt2Rows = putt1Groups.map(p1v => {
+    const cur  = currentHoles.filter(h => h.putt1 === p1v && parsePutt2(h.putt2) !== null);
+    const prev = prevHoles.filter(h => h.putt1 === p1v && parsePutt2(h.putt2) !== null);
+    if (!cur.length) return null;
+    const avgCur  = cur.reduce((s, h) => s + parsePutt2(h.putt2), 0) / cur.length;
+    const avgPrev = prev.length >= 3 ? prev.reduce((s, h) => s + parsePutt2(h.putt2), 0) / prev.length : null;
+    let indicator = null;
+    if (avgPrev !== null && cur.length >= 3) {
+      if (avgCur < avgPrev - 0.3)      indicator = "↓";
+      else if (avgCur > avgPrev + 0.3) indicator = "↑";
+    }
+    return { p1v, count: cur.length, avg: avgCur, indicator };
+  }).filter(Boolean);
+
+  const tblHead = { fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"var(--text-dim)", marginBottom:10 };
+  const tblWrap = { background:"white", border:"1px solid var(--border)", borderRadius:14, padding:"14px 16px", marginBottom:12 };
+
+  return (
+    <div className="trends-wrap">
+      <div className="trends-title">Analytics</div>
+
+      {/* Count selector */}
+      {countOptions.length > 1 && (
+        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+          {countOptions.map(n => (
+            <button
+              key={n}
+              onClick={() => setAnalyticsCount(n)}
+              style={{
+                padding:"5px 14px", borderRadius:20, border:"1.5px solid",
+                borderColor: N === n ? "var(--green-dark)" : "var(--border)",
+                background: N === n ? "var(--green-dark)" : "white",
+                color: N === n ? "white" : "var(--text-dim)",
+                fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
+              }}
+            >
+              Last {n}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sub-tab row */}
+      <div className="trends-tabs" style={{marginBottom:14}}>
+        <button className={"trend-tab" + (analyticsTab === "approach" ? " active" : "")} onClick={() => setAnalyticsTab("approach")} style={{whiteSpace:"nowrap"}}>
+          1st Putt by Approach
+        </button>
+        <button className={"trend-tab" + (analyticsTab === "putt2" ? " active" : "")} onClick={() => setAnalyticsTab("putt2")} style={{whiteSpace:"nowrap"}}>
+          2nd Putt by 1st Putt
+        </button>
+      </div>
+
+      {/* Table 1 */}
+      {analyticsTab === "approach" && (
+        <div style={tblWrap}>
+          <div style={tblHead}>Avg 1st putt distance by approach</div>
+          {approachRows.length === 0 ? (
+            <div style={{fontSize:13,color:"var(--text-dim)"}}>No approach data recorded</div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{color:"var(--text-dim)",fontSize:11}}>
+                  <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>Approach</th>
+                  <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 1st putt</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
+                </tr>
+              </thead>
+              <tbody>
+                {approachRows.map(row => (
+                  <tr key={row.label} style={{borderTop:"1px solid var(--border)"}}>
+                    <td style={{padding:"7px 0",fontSize:12,color:"var(--text-mid)"}}>{row.label} yds</td>
+                    <td style={{textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>×{row.count}</td>
+                    <td style={{textAlign:"right",fontWeight:700,color:"var(--text)"}}>{row.avg.toFixed(1)} ft</td>
+                    <td style={{textAlign:"right",fontWeight:700,fontSize:14,color: row.indicator === "↓" ? "var(--green-mid)" : row.indicator === "↑" ? "var(--red)" : "var(--text-dim)"}}>
+                      {row.indicator || "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Table 2 */}
+      {analyticsTab === "putt2" && (
+        <div style={tblWrap}>
+          <div style={tblHead}>Avg 2nd putt distance by 1st putt</div>
+          {putt2Rows.length === 0 ? (
+            <div style={{fontSize:13,color:"var(--text-dim)"}}>No second putt distance data recorded</div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{color:"var(--text-dim)",fontSize:11}}>
+                  <th style={{textAlign:"left",paddingBottom:6,fontWeight:600}}>1st putt</th>
+                  <th style={{textAlign:"center",paddingBottom:6,fontWeight:600}}>Holes</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>Avg 2nd putt</th>
+                  <th style={{textAlign:"right",paddingBottom:6,fontWeight:600}}>vs prev</th>
+                </tr>
+              </thead>
+              <tbody>
+                {putt2Rows.map(row => (
+                  <tr key={row.p1v} style={{borderTop:"1px solid var(--border)"}}>
+                    <td style={{padding:"7px 0",fontSize:12,color:"var(--text-mid)"}}>{row.p1v} ft</td>
+                    <td style={{textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>×{row.count}</td>
+                    <td style={{textAlign:"right",fontWeight:700,color:"var(--text)"}}>{row.avg.toFixed(1)} ft</td>
+                    <td style={{textAlign:"right",fontWeight:700,fontSize:14,color: row.indicator === "↓" ? "var(--green-mid)" : row.indicator === "↑" ? "var(--red)" : "var(--text-dim)"}}>
+                      {row.indicator || "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
@@ -367,7 +574,9 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
   const [histEditLoading, setHistEditLoading] = useState(false);
   const [roundHoleStats, setRoundHoleStats]   = useState({});
   const [roundHolesData, setRoundHolesData]   = useState({});
+  const [analyticsHolesMap, setAnalyticsHolesMap] = useState({});
   const [statTab, setStatTab]                 = useState(null);
+  const [mainView, setMainView]               = useState("trends");
 
   function updateHistHole(i, fields) {
     setHistHoles(prev => prev.map((h, idx) => idx === i ? { ...h, ...fields } : h));
@@ -420,7 +629,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
       if (roundIds.length > 0) {
         const { data: holeRows } = await supabase
           .from("round_holes")
-          .select("round_id, hole_number, gir, dna, fairway, par, score, putts, penalty, picked_up, stroke_index")
+          .select("round_id, hole_number, gir, dna, fairway, par, score, putts, penalty, picked_up, stroke_index, putt1, putt2, approach")
           .in("round_id", roundIds)
           .order("hole_number", { ascending: true });
         const roundsById = Object.fromEntries((rds || []).map(r => [r.id, r]));
@@ -477,8 +686,14 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
             }
           }
         }
+        const analyticsMap = {};
+        for (const h of (holeRows || [])) {
+          if (!analyticsMap[h.round_id]) analyticsMap[h.round_id] = [];
+          analyticsMap[h.round_id].push(h);
+        }
         setRoundHoleStats(statsMap);
         setRoundHolesData(holesByRound);
+        setAnalyticsHolesMap(analyticsMap);
       }
       // Fetch coach profile separately if link exists
       if (link?.coach_id) {
@@ -736,7 +951,27 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           </div>
         </div>
 
-        <StudentRoundTrends rounds={enrichedForTrends} activeTab={activeStatTab} />
+        {enrichedForTrends.filter(r => r.total_score).length >= 2 && (
+          <div className="trends-tabs" style={{marginBottom:12}}>
+            <button className={"trend-tab" + (mainView === "trends" ? " active" : "")} onClick={() => setMainView("trends")}>
+              Trends
+            </button>
+            <button className={"trend-tab" + (mainView === "analytics" ? " active" : "")} onClick={() => setMainView("analytics")}>
+              Analytics
+            </button>
+          </div>
+        )}
+        {mainView === "trends" && (
+          <StudentRoundTrends rounds={enrichedForTrends} activeTab={activeStatTab} />
+        )}
+        {mainView === "analytics" && (
+          <StudentAnalytics
+            rounds={enrichedForTrends}
+            analyticsHolesMap={analyticsHolesMap}
+            isPremium={!!profile?.is_premium}
+            activeStatTab={activeStatTab}
+          />
+        )}
 
         {/* Coach card */}
         {coach ? (
