@@ -364,14 +364,13 @@ function parsePutt2(v) {
   return isNaN(n) ? null : n;
 }
 
-function StudentAnalytics({ rounds, analyticsHolesMap, isPremium, activeStatTab }) {
+function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
   const [analyticsCount, setAnalyticsCount] = useState(5);
   const [analyticsTab, setAnalyticsTab] = useState("approach");
 
   // Filter rounds by active 9/18 tab; fall back to all if fewer than 5
   const completed = rounds.filter(r => r.total_score);
-  const typed = completed.filter(r => r.holes_played === activeStatTab);
-  const baseRounds = typed.length >= 5 ? typed : completed;
+  const baseRounds = completed;
 
   const countOptions = [5, 10, 20, 50].filter(n => completed.length >= n);
 
