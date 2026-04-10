@@ -119,7 +119,8 @@ const css = `
   .step-btn:disabled { color:var(--border); cursor:not-allowed; }
   .step-val { font-size:28px; font-weight:700; color:var(--text); min-width:40px; text-align:center; }
   .step-val.over { color:var(--orange); } .step-val.par { color:var(--green-mid); } .step-val.under { color:var(--gold); }
-  .putts-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .putts-grid { display:flex; flex-direction:row; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; flex-wrap:nowrap; }
+  .putts-grid::-webkit-scrollbar { display:none; }
   .putt-btn { background:white; border:1.5px solid var(--border); border-radius:11px; padding:10px 4px; text-align:center; cursor:pointer; transition:all .15s; font-family:'Outfit',sans-serif; }
   .putt-btn .pv { font-size:20px; font-weight:700; color:var(--text); display:block; }
   .putt-btn .pu { font-size:10px; color:var(--text-dim); display:block; margin-top:1px; }
@@ -1869,6 +1870,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                 <button
                   key={p.n}
                   className={"putt-btn " + (d.putts === p.n ? (p.n >= 3 ? "sel-tp" : "sel") : "")}
+                  style={{flexShrink:0,minWidth:52}}
                   onClick={() => update({
                     putts: p.n,
                     putt1: p.n < 1 ? null : d.putt1,
