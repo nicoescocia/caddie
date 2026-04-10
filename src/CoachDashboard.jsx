@@ -520,6 +520,39 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 </div>
               );
             })()}
+            {(() => {
+              const putt1Groups = ["<3","3","4","6","9","12","15","20","25","30+"];
+              const p2Data = putt1Groups.map(p1v => {
+                const matchHoles = holes.filter(h => h.putt1 === p1v && h.putt2);
+                if (!matchHoles.length) return null;
+                const avgP2 = matchHoles.reduce((s, h) => s + parseFt(h.putt2), 0) / matchHoles.length;
+                return { p1v, count: matchHoles.length, avgP2: Math.round(avgP2 * 10) / 10 };
+              }).filter(Boolean);
+              if (!p2Data.length) return (
+                <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--border)",fontSize:13,color:"var(--text-dim)"}}>
+                  No second putt distance data recorded
+                </div>
+              );
+              return (
+                <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--border)"}}>
+                  <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:10}}>
+                    Avg 2nd putt distance by 1st putt
+                  </div>
+                  <table className="pt">
+                    <thead><tr><th>1st putt</th><th>Holes</th><th>Avg 2nd putt</th></tr></thead>
+                    <tbody>
+                      {p2Data.map(g => (
+                        <tr key={g.p1v}>
+                          <td>{g.p1v} ft</td>
+                          <td>{g.count}</td>
+                          <td><span className={`chip ${g.avgP2 > 5 ? "bad" : g.avgP2 > 3 ? "warn" : "ok"}`}>{g.avgP2} ft</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
             <div className="ai-box">
               <div className="ai-label">✦ AI Coach Analysis</div>
               {aiPutting

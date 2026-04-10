@@ -135,13 +135,27 @@ const css = `
   }
 `;
 
-const COURSE_PAR = {
-  "89e2ad4e-8d5a-4244-8568-b2c8a448a77f": 32,
-  "b1a2c3d4-e5f6-7890-abcd-ef1234567890": 68,
-};
 function getCoursePar(round) {
-  if (round?.course_id && COURSE_PAR[round.course_id]) return COURSE_PAR[round.course_id];
-  return round?.holes_played === 18 ? 68 : 32;
+  if (round.total_par) return round.total_par;
+  if (round.holes_played === 18) return 68;
+  if (round.holes_played === 9) return 32;
+  return round.holes_played ? Math.round(round.holes_played * 68 / 18) : 68;
+}
+
+function prorateHandicap(round, holeStatsMap) {
+  if (!round.handicap) return round.handicap;
+  const holes = holeStatsMap ? (holeStatsMap[round.id] || []) : [];
+  if (!holes.length) return round.handicap;
+  let shots = 0;
+  const courseLen = round.holes_played || 18;
+  for (const h of holes) {
+    const si = h.stroke_index || 0;
+    if (!si) continue;
+    if (round.handicap >= si) shots++;
+    if (round.handicap >= si + courseLen) shots++;
+    if (round.handicap >= si + courseLen * 2) shots++;
+  }
+  return shots;
 }
 
 function initials(first, last) {
@@ -405,15 +419,15 @@ function RoundTrends({ rounds, activeTab, setActiveTab }) {
   const [tab, setTab] = useState("score");
   const scored = rounds.filter(r => r.total_score && r.sent_to_coach);
   // newest-first; take 10 most recent of each type, reverse for chart (oldest→newest)
-  const r9  = scored.filter(r => (r.holes_played || 9) <= 9).slice(0, 10).reverse();
-  const r18 = scored.filter(r => (r.holes_played || 9) > 9).slice(0, 10).reverse();
+  const r9  = scored.filter(r => r.holes_played === 9).slice(0, 10).reverse();
+  const r18 = scored.filter(r => r.holes_played === 18).slice(0, 10).reverse();
   if (scored.length < 2) return null;
 
   function enrich(rs) {
     return rs.map(r => ({
       ...r,
       vsPar:             r.total_score - getCoursePar(r),
-      netVsPar:          r.handicap != null ? (r.total_score - r.handicap) - getCoursePar(r) : null,
+      netVsPar:          r.handicap != null ? (r.total_score - (r.prorated_hcp ?? r.handicap)) - getCoursePar(r) : null,
       girPct:            r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
       puttsPerHole:      r.total_putts != null && r.holes_played
                            ? Math.round((r.total_putts / r.holes_played) * 10) / 10
@@ -573,7 +587,12 @@ async function enrichRounds(rounds) {
     }
   }
 
-  return rounds.map(r => ({ ...r, ...statsMap[r.id] }));
+  const holesByRound = {};
+  for (const h of (holesRes.data || [])) {
+    if (!holesByRound[h.round_id]) holesByRound[h.round_id] = [];
+    holesByRound[h.round_id].push(h);
+  }
+  return rounds.map(r => ({ ...r, ...statsMap[r.id], prorated_hcp: prorateHandicap(r, holesByRound) }));
 }
 
 async function callAI(prompt) {
@@ -593,8 +612,8 @@ async function callAI(prompt) {
 function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHome }) {
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
-  const rounds9Count  = scored.filter(r => (r.holes_played || 9) <= 9).length;
-  const rounds18Count = scored.filter(r => (r.holes_played || 9) > 9).length;
+  const rounds9Count  = scored.filter(r => r.holes_played === 9).length;
+  const rounds18Count = scored.filter(r => r.holes_played === 18).length;
   const [activeStatTab, setActiveStatTab] = useState(() => rounds9Count > rounds18Count ? 9 : 18);
   const [aiPatterns, setAiPatterns] = useState(null);
 
@@ -740,7 +759,7 @@ OUTPUT FORMAT
                       {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
                       {r.handicap != null && (
                         <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - r.handicap}` : ""}
+                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - (r.prorated_hcp ?? r.handicap)}` : ""}
                         </div>
                       )}
                     </div>
@@ -800,7 +819,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       // Load rounds for all students to compute stats
       const { data: allRounds } = await supabase
         .from("rounds")
-        .select("id, student_id, total_score, handicap, holes_played, course_id, sent_to_coach, created_at")
+        .select("id, student_id, total_score, handicap, holes_played, total_par, course_id, sent_to_coach, created_at")
         .in("student_id", ids)
         .eq("sent_to_coach", true)
         .order("created_at", { ascending: false });
