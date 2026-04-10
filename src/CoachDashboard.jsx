@@ -144,7 +144,7 @@ function parsePutt2(v) {
 }
 
 function approachPct(v) {
-  const m = { "Under 50": 20, "50–75": 38, "75–100": 52, "100–125": 68, "125–150": 84, "150+": 100 };
+  const m = { "Under 50": 20, "50-75": 38, "75-100": 52, "100-125": 68, "125-150": 84, "150+": 100 };
   return m[v] || 50;
 }
 
@@ -501,7 +501,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             </table>
             {/* Grouped avg 1st putt by approach band */}
             {(() => {
-              const bands = ["Under 50","50–75","75–100","100–125","125–150","150+"];
+              const bands = ["Under 50","50-75","75-100","100-125","125-150","150+"];
               const grouped = bands.map(band => {
                 const bandHoles = attempted.filter(h => h.approach === band && h.putt1);
                 if (!bandHoles.length) return null;
@@ -516,7 +516,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                   </div>
                   {grouped.map(g => (
                     <div key={g.band} style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
-                      <div style={{fontSize:12,color:"var(--text-mid)",width:80,flexShrink:0}}>{g.band} yds</div>
+                      <div style={{fontSize:12,color:"var(--text-mid)",width:80,flexShrink:0}}>{g.band.replace("-","–")} yds</div>
                       <div style={{flex:1,height:6,background:"#EEE",borderRadius:3,overflow:"hidden"}}>
                         <div style={{height:"100%",borderRadius:3,background:g.avg>20?"var(--red)":g.avg>14?"var(--orange)":"var(--green-light)",width:Math.min(100,Math.round(g.avg/35*100))+"%"}} />
                       </div>
