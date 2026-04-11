@@ -75,13 +75,7 @@ export default function CoachOnboarding({ user, onComplete }) {
   const [bio, setBio] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Step 4 — invite
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  // Step 4b — home course
+  // Step 4 — home course
   const [availableCourses, setAvailableCourses] = useState([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [course1, setCourse1] = useState("");
@@ -90,9 +84,24 @@ export default function CoachOnboarding({ user, onComplete }) {
   const [courseMode2, setCourseMode2] = useState("select");
   const [showCourse2, setShowCourse2] = useState(false);
 
-  // Load invite code when we reach step 4
+  // Step 5 — invite
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Load courses when we reach step 4
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 4 || coursesLoaded) return;
+    supabase.from("courses").select("id, name").order("name", { ascending: true }).then(({ data }) => {
+      setAvailableCourses(data || []);
+      setCoursesLoaded(true);
+    });
+  }, [step, coursesLoaded]);
+
+  // Load invite code when we reach step 5
+  useEffect(() => {
+    if (step !== 5) return;
     setInviteLoading(true);
     async function loadInvite() {
       const { data: existing } = await supabase
@@ -123,15 +132,6 @@ export default function CoachOnboarding({ user, onComplete }) {
     loadInvite();
   }, [step, user.id]);
 
-  // Load courses when we reach step 4b
-  useEffect(() => {
-    if (step !== 5 || coursesLoaded) return;
-    supabase.from("courses").select("id, name").order("name", { ascending: true }).then(({ data }) => {
-      setAvailableCourses(data || []);
-      setCoursesLoaded(true);
-    });
-  }, [step, coursesLoaded]);
-
   const progress = (step / TOTAL_STEPS) * 100;
   const inviteLink = inviteCode ? `https://caddie-rust.vercel.app?invite=${inviteCode}` : "";
 
@@ -159,12 +159,12 @@ export default function CoachOnboarding({ user, onComplete }) {
     setStep(4);
   }
 
-  async function handleStep4bNext() {
+  async function handleStep4Next() {
     const vals = [course1.trim(), course2.trim()].filter(Boolean);
     if (vals.length > 0) {
       await supabase.from("profiles").update({ home_courses: vals }).eq("id", user.id);
     }
-    setStep(6);
+    setStep(5);
   }
 
   async function handleFinish() {
@@ -251,53 +251,8 @@ export default function CoachOnboarding({ user, onComplete }) {
             </div>
           )}
 
-          {/* ── Step 4: Invite ── */}
+          {/* ── Step 4: Home course ── */}
           {step === 4 && (
-            <div className="ob-step">
-              <span className="ob-emoji">🤝</span>
-              <h1 className="ob-heading">Invite your first student</h1>
-              <p className="ob-body">
-                Share this link with your student. When they tap it, they'll be taken straight to Caddie with your invite pre-filled.
-              </p>
-              {inviteLoading ? (
-                <div className="ob-spinner" />
-              ) : (
-                <>
-                  {inviteLink && (
-                    <div className="ob-link-primary-box">
-                      <div className="ob-link-primary-url">{inviteLink}</div>
-                      <button
-                        className={"ob-link-primary-btn" + (linkCopied ? " copied" : "")}
-                        onClick={copyLink}
-                      >
-                        {linkCopied ? "Copied ✓" : "Copy invite link"}
-                      </button>
-                    </div>
-                  )}
-                  <div className="ob-code-section-label">Or share the code instead</div>
-                  <div className="ob-code-secondary">
-                    <div>
-                      <div className="ob-code-secondary-label">Invite code</div>
-                      <div className="ob-code-secondary-val">{inviteCode}</div>
-                    </div>
-                    <button
-                      className={"ob-code-secondary-btn" + (codeCopied ? " copied" : "")}
-                      onClick={copyCode}
-                    >
-                      {codeCopied ? "Copied ✓" : "Copy code"}
-                    </button>
-                  </div>
-                </>
-              )}
-              <div className="ob-step-actions">
-                <button className="ob-primary" onClick={() => setStep(5)}>Next</button>
-                <button className="ob-skip" onClick={() => setStep(5)}>Skip for now</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 4b (5): Home course ── */}
-          {step === 5 && (
             <div className="ob-step">
               <span className="ob-emoji">📍</span>
               <h1 className="ob-heading">Where do you coach?</h1>
@@ -339,14 +294,13 @@ export default function CoachOnboarding({ user, onComplete }) {
                 )}
               </div>
 
-              {/* Add second course */}
+              {/* Progressive reveal of second course */}
               {course1.trim() && !showCourse2 && (
                 <button className="ob-add-another" onClick={() => setShowCourse2(true)}>
                   + Add another
                 </button>
               )}
 
-              {/* Course 2 */}
               {showCourse2 && (
                 <div className="ob-field">
                   <label className="ob-label">Second location</label>
@@ -383,7 +337,52 @@ export default function CoachOnboarding({ user, onComplete }) {
               )}
 
               <div className="ob-step-actions">
-                <button className="ob-primary" onClick={handleStep4bNext}>Next</button>
+                <button className="ob-primary" onClick={handleStep4Next}>Next</button>
+                <button className="ob-skip" onClick={() => setStep(5)}>Skip for now</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 5: Invite ── */}
+          {step === 5 && (
+            <div className="ob-step">
+              <span className="ob-emoji">🤝</span>
+              <h1 className="ob-heading">Invite your first student</h1>
+              <p className="ob-body">
+                Share this link with your student. When they tap it, they'll be taken straight to Caddie with your invite pre-filled.
+              </p>
+              {inviteLoading ? (
+                <div className="ob-spinner" />
+              ) : (
+                <>
+                  {inviteLink && (
+                    <div className="ob-link-primary-box">
+                      <div className="ob-link-primary-url">{inviteLink}</div>
+                      <button
+                        className={"ob-link-primary-btn" + (linkCopied ? " copied" : "")}
+                        onClick={copyLink}
+                      >
+                        {linkCopied ? "Copied ✓" : "Copy invite link"}
+                      </button>
+                    </div>
+                  )}
+                  <div className="ob-code-section-label">Student already has Caddie? Share the code instead</div>
+                  <div className="ob-code-secondary">
+                    <div>
+                      <div className="ob-code-secondary-label">Invite code</div>
+                      <div className="ob-code-secondary-val">{inviteCode}</div>
+                    </div>
+                    <button
+                      className={"ob-code-secondary-btn" + (codeCopied ? " copied" : "")}
+                      onClick={copyCode}
+                    >
+                      {codeCopied ? "Copied ✓" : "Copy code"}
+                    </button>
+                  </div>
+                </>
+              )}
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={() => setStep(6)}>Next</button>
                 <button className="ob-skip" onClick={() => setStep(6)}>Skip for now</button>
               </div>
             </div>
