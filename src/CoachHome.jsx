@@ -626,7 +626,7 @@ function parsePutt2(v) {
 function AnalyticsTab({ sentRounds }) {
   const [analyticsHoles, setAnalyticsHoles] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsCount, setAnalyticsCount] = useState(10);
+  const [analyticsCount, setAnalyticsCount] = useState(5);
   const [analyticsTab, setAnalyticsTab] = useState("approach");
 
   useEffect(() => {
@@ -653,7 +653,6 @@ function AnalyticsTab({ sentRounds }) {
   const N = analyticsCount;
   const currentRoundIds = new Set(sentRounds.slice(0, N).map(r => r.id));
   const prevRoundIds    = new Set(sentRounds.slice(N, N * 2).map(r => r.id));
-  console.log("COACH currentRoundIds", [...currentRoundIds]);
 
   const activeHoles = analyticsHoles.filter(h => !h.dna && !h.picked_up);
   const currentHoles = activeHoles.filter(h => currentRoundIds.has(h.round_id));

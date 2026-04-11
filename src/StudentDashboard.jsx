@@ -338,7 +338,6 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
 
   const currentRoundIds = new Set(currentRounds.map(r => r.id));
   const prevRoundIds    = new Set(prevRounds.map(r => r.id));
-  console.log("STUDENT currentRoundIds", [...currentRoundIds]);
 
   function getActiveHoles(roundIdSet) {
     const holes = [];
