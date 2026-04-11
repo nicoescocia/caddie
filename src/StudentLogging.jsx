@@ -958,7 +958,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [roundComplete, setRoundComplete] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [hasCoach, setHasCoach]     = useState(false);
-  const [coachId, setCoachId]       = useState(null);
+  const [coachIds, setCoachIds]     = useState([]);
   const [studentName, setStudentName] = useState("");
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
@@ -1050,16 +1050,17 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   // Fetch student settings (non-blocking — defaults to standard if not yet loaded)
   useEffect(() => {
     async function fetchSettings() {
-      const [{ data }, { data: coachLink }] = await Promise.all([
+      const [{ data }, { data: coachLinks }] = await Promise.all([
         supabase.from("profiles").select("settings, is_premium, official_handicap, first_name, last_name").eq("id", user.id).single(),
-        supabase.from("coach_students").select("coach_id").eq("student_id", user.id).maybeSingle(),
+        supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
       ]);
       setIsPremium(!!data?.is_premium);
       setPuttMode(data?.settings?.putt_tracking || "standard");
       setApproachLogging(data?.settings?.approach_logging || "enabled");
       if (data?.official_handicap != null) setOfficialHandicap(data.official_handicap);
-      setHasCoach(!!coachLink?.coach_id);
-      setCoachId(coachLink?.coach_id || null);
+      const linkedCoachRows = coachLinks || [];
+      setHasCoach(linkedCoachRows.length > 0);
+      setCoachIds(linkedCoachRows.map(l => l.coach_id));
       if (data?.first_name || data?.last_name) {
         setStudentName([data.first_name, data.last_name].filter(Boolean).join(" "));
       }
@@ -1633,22 +1634,24 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       student_note: studentNote || null,
     }).eq("id", roundId);
 
-    if (coachId) {
+    if (coachIds.length > 0) {
       const diff = totalScore - totalPar;
       const vsParLabel = diff === 0 ? "E" : diff > 0 ? "+" + diff : String(diff);
-      fetch("/api/notify-coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coachId,
-          studentName: studentName || "Your student",
-          courseName,
-          score: totalScore,
-          holesPlayed: savedHoles.size,
-          vsParLabel,
-          roundId,
-        }),
-      }).catch(() => {});
+      for (const cId of coachIds) {
+        fetch("/api/notify-coach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            coachId: cId,
+            studentName: studentName || "Your student",
+            courseName,
+            score: totalScore,
+            holesPlayed: savedHoles.size,
+            vsParLabel,
+            roundId,
+          }),
+        }).catch(() => {});
+      }
     }
 
     setSaving(false);

@@ -99,6 +99,11 @@ const css = `
   .modal-submit:disabled { opacity:.5; cursor:not-allowed; }
   .modal-cancel { background:none; border:1.5px solid var(--border); border-radius:12px; padding:14px 20px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:600; color:var(--text-mid); cursor:pointer; }
 
+  .coach-unlink-btn { background:none; border:none; padding:0; font-family:'Outfit',sans-serif; font-size:12px; color:var(--text-dim); cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; flex-shrink:0; }
+  .coach-unlink-btn:hover { color:var(--red); }
+  .coach-add-btn { width:100%; background:none; border:1.5px dashed var(--border); border-radius:14px; padding:12px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--green); cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:14px; }
+  .coach-add-btn:hover { border-color:var(--green-light); background:white; }
+
   .hist-section { padding-top:14px; border-top:1.5px solid var(--border); margin-bottom:6px; }
   .hist-col-headers { display:flex; gap:6px; padding-bottom:5px; border-bottom:1.5px solid var(--border); }
   .hist-ch { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim); text-align:center; }
@@ -571,10 +576,13 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
 export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
-  const [coach, setCoach]       = useState(null);
-  const [inviteLink, setInviteLink] = useState(null);
-  const [inviteCopied, setInviteCopied] = useState(false);
-  const [inviteLoading, setInviteLoading] = useState(false);
+  const [coaches, setCoaches]             = useState([]);
+  const [coachesExpanded, setCoachesExpanded] = useState(false);
+  const [showAddCoachModal, setShowAddCoachModal] = useState(false);
+  const [addCoachCode, setAddCoachCode]   = useState("");
+  const [addCoachError, setAddCoachError] = useState("");
+  const [addCoachSaving, setAddCoachSaving] = useState(false);
+  const [unlinkCoachId, setUnlinkCoachId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [hcpEditing, setHcpEditing] = useState(false);
   const [hcpInput, setHcpInput]     = useState("");
@@ -629,10 +637,10 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
 
   useEffect(() => {
     async function load() {
-      const [{ data: prof }, { data: rds }, { data: link }] = await Promise.all([
+      const [{ data: prof }, { data: rds }, { data: coachLinks }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("coach_students").select("coach_id").eq("student_id", user.id).single(),
+        supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
       ]);
       setProfile(prof);
       setRounds(rds || []);
@@ -707,35 +715,71 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         setRoundHolesData(holesByRound);
         setAnalyticsHolesMap(analyticsMap);
       }
-      // Fetch coach profile separately if link exists
-      if (link?.coach_id) {
-        const { data: coachProf } = await supabase
+      // Fetch all linked coach profiles
+      const linkedCoaches = coachLinks || [];
+      if (linkedCoaches.length > 0) {
+        const coachIdList = linkedCoaches.map(l => l.coach_id);
+        const { data: coachProfs } = await supabase
           .from("profiles")
-          .select("first_name, last_name")
-          .eq("id", link.coach_id)
-          .single();
-        if (coachProf) setCoach(coachProf);
+          .select("id, first_name, last_name")
+          .in("id", coachIdList);
+        if (coachProfs) setCoaches(coachProfs);
       }
       setLoading(false);
     }
     load();
   }, [user.id]);
 
-  async function generateCoachInvite() {
-    setInviteLoading(true);
-    const code = "S-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { error } = await supabase.from("invites").insert([{ code, coach_id: user.id, invite_type: "coach" }]);
-    if (!error) {
-      setInviteLink(`${window.location.origin}?invite=${code}&type=coach`);
+  async function addCoach(e) {
+    e.preventDefault();
+    const code = addCoachCode.trim().toUpperCase();
+    if (!code) return;
+    setAddCoachSaving(true);
+    setAddCoachError("");
+    const { data: invite } = await supabase
+      .from("invites")
+      .select("id, coach_id")
+      .eq("code", code)
+      .is("used_by", null)
+      .maybeSingle();
+    if (!invite) {
+      setAddCoachError("Invalid or already-used invite code. Ask your coach for a new one.");
+      setAddCoachSaving(false);
+      return;
     }
-    setInviteLoading(false);
+    if (coaches.some(c => c.id === invite.coach_id)) {
+      setAddCoachError("You're already linked to this coach.");
+      setAddCoachSaving(false);
+      return;
+    }
+    const { error: linkError } = await supabase
+      .from("coach_students")
+      .insert([{ coach_id: invite.coach_id, student_id: user.id }]);
+    if (linkError) {
+      setAddCoachError("Failed to link coach. Please try again.");
+      setAddCoachSaving(false);
+      return;
+    }
+    await supabase.from("invites").update({ used_by: user.id }).eq("id", invite.id);
+    const { data: coachProf } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .eq("id", invite.coach_id)
+      .single();
+    if (coachProf) setCoaches(prev => [...prev, coachProf]);
+    setAddCoachCode("");
+    setShowAddCoachModal(false);
+    setAddCoachSaving(false);
   }
 
-  function copyInvite() {
-    if (!inviteLink) return;
-    navigator.clipboard.writeText(inviteLink);
-    setInviteCopied(true);
-    setTimeout(() => setInviteCopied(false), 2000);
+  async function unlinkCoach(coachId) {
+    await supabase
+      .from("coach_students")
+      .delete()
+      .eq("coach_id", coachId)
+      .eq("student_id", user.id);
+    setCoaches(prev => prev.filter(c => c.id !== coachId));
+    setUnlinkCoachId(null);
   }
 
   async function saveHandicap() {
@@ -985,70 +1029,53 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           />
         )}
 
-        {/* Coach card */}
-        {coach ? (
-          <div style={{
-            background:"white", border:"1px solid var(--border)", borderRadius:14,
-            padding:"14px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:12,
-          }}>
-            <div style={{
-              width:40, height:40, borderRadius:"50%", background:"var(--green-dark)",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontFamily:"'Playfair Display',serif", fontSize:16, color:"var(--gold)", flexShrink:0,
-            }}>
-              {coach.first_name?.[0]}{coach.last_name?.[0]}
+        {/* Coach section */}
+        <div style={{marginBottom:14}}>
+          {coaches.length > 0 && (
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".09em",color:"var(--text-dim)",marginBottom:10}}>
+              {coaches.length > 1 ? "Your Coaches" : "Your Coach"}
             </div>
-            <div>
-              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:2}}>Your coach</div>
-              <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>{coach.first_name} {coach.last_name}</div>
+          )}
+          {coaches.length === 0 ? (
+            <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+              <div style={{fontSize:13,color:"var(--text-dim)"}}>No coach linked yet. Add your coach using their invite code.</div>
             </div>
-            <div style={{marginLeft:"auto",fontSize:12,color:"var(--green)",fontWeight:600}}>✓ Linked</div>
-          </div>
-        ) : (
-          <div style={{
-            background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
-            padding:"14px 16px", marginBottom:14,
-          }}>
-            <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:10}}>
-              No coach linked yet.{" "}
-              <span style={{color:"var(--text-mid)"}}>Send your coach a link to connect your account.</span>
-            </div>
-            {inviteLink ? (
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <div style={{
-                  flex:1, background:"white", border:"1px solid var(--border)", borderRadius:8,
-                  padding:"8px 10px", fontSize:11, color:"var(--text-mid)",
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                }}>
-                  {inviteLink}
+          ) : (
+            <>
+              {[coaches[0], ...(coachesExpanded ? coaches.slice(1) : [])].map(c => (
+                <div key={c.id} style={{background:"white",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",marginBottom:6,display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{width:40,height:40,borderRadius:"50%",background:"var(--green-dark)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Playfair Display',serif",fontSize:16,color:"var(--gold)",flexShrink:0}}>
+                    {c.first_name?.[0]}{c.last_name?.[0]}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>{c.first_name} {c.last_name}</div>
+                    <div style={{fontSize:11,color:"var(--green)",fontWeight:600,marginTop:2}}>✓ Linked</div>
+                  </div>
+                  <button className="coach-unlink-btn" onClick={() => setUnlinkCoachId(c.id)}>Unlink</button>
                 </div>
+              ))}
+              {!coachesExpanded && coaches.length > 1 && (
                 <button
-                  onClick={copyInvite}
-                  style={{
-                    background: inviteCopied ? "var(--green-mid)" : "var(--green-dark)",
-                    border:"none", borderRadius:8, padding:"8px 14px",
-                    fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:700,
-                    color:"white", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
-                  }}
+                  onClick={() => setCoachesExpanded(true)}
+                  style={{background:"none",border:"none",padding:"2px 0 8px",fontFamily:"'Outfit',sans-serif",fontSize:13,color:"var(--green)",fontWeight:600,cursor:"pointer",display:"block"}}
                 >
-                  {inviteCopied ? "✓ Copied" : "Copy"}
+                  + {coaches.length - 1} more
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={generateCoachInvite}
-                disabled={inviteLoading}
-                style={{
-                  background:"none", border:"none", padding:0,
-                  fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:600,
-                  color:"var(--green)", cursor:"pointer", textDecoration:"underline",
-                }}
-              >
-                {inviteLoading ? "Generating…" : "Generate a link for your coach →"}
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+          {profile?.is_premium && coaches.length < 3 && (
+            <button className="coach-add-btn" onClick={() => { setAddCoachCode(""); setAddCoachError(""); setShowAddCoachModal(true); }}>
+              + Add a coach
+            </button>
+          )}
+          {!profile?.is_premium && coaches.length >= 1 && (
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:"white",border:"1.5px solid var(--border)",borderRadius:10,marginTop:6}}>
+              <span style={{fontSize:14,color:"var(--gold)"}}>🔒</span>
+              <span style={{fontSize:12,color:"var(--text-dim)"}}>Premium — link up to 3 coaches</span>
+            </div>
+          )}
+        </div>
 
         <button className="new-round-btn" onClick={onNewRound}>
           ⛳ Start new round
@@ -1121,7 +1148,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                       </div>
                     );
                   })()}
-                  {r.historical && !r.sent_to_coach && coach && (
+                  {r.historical && !r.sent_to_coach && coaches.length > 0 && (
                     <div style={{paddingTop:10}}>
                       <button
                         onClick={e => sendHistToCoach(e, r.id)}
@@ -1161,6 +1188,54 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           </div>
         )}
       </div>
+
+      {showAddCoachModal && (
+        <div className="modal-backdrop" onClick={() => setShowAddCoachModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">Add a coach</div>
+            <form onSubmit={addCoach}>
+              <div className="modal-field">
+                <label className="modal-label">Invite code</label>
+                <input
+                  className="modal-input"
+                  placeholder="Enter invite code from your coach"
+                  value={addCoachCode}
+                  onChange={e => setAddCoachCode(e.target.value.toUpperCase())}
+                  autoFocus
+                />
+              </div>
+              {addCoachError && (
+                <div style={{fontSize:13,color:"var(--red)",marginBottom:12,padding:"8px 12px",background:"#FEF2F2",borderRadius:8}}>
+                  {addCoachError}
+                </div>
+              )}
+              <div className="modal-actions">
+                <button type="button" className="modal-cancel" onClick={() => setShowAddCoachModal(false)}>Cancel</button>
+                <button type="submit" className="modal-submit" disabled={!addCoachCode.trim() || addCoachSaving}>
+                  {addCoachSaving ? "Linking…" : "Link coach"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {unlinkCoachId && (
+        <div className="modal-backdrop" onClick={() => setUnlinkCoachId(null)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">Remove coach?</div>
+            <p style={{fontSize:14,color:"var(--text-mid)",marginBottom:24,lineHeight:1.6}}>
+              {(() => { const c = coaches.find(x => x.id === unlinkCoachId); return `Remove ${c?.first_name} ${c?.last_name} as your coach? They will no longer receive your rounds.`; })()}
+            </p>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => setUnlinkCoachId(null)}>Cancel</button>
+              <button className="modal-submit" style={{background:"var(--red)"}} onClick={() => unlinkCoach(unlinkCoachId)}>
+                Remove coach
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showHistModal && (
         <div className="modal-backdrop" onClick={closeHistModal}>
