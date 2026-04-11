@@ -555,7 +555,22 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
       }
     });
 
-    if (authErr) { setLoading(false); setError(authErr.message); return; }
+    if (authErr) {
+      setLoading(false);
+      if (authErr.message?.toLowerCase().includes("already registered")) {
+        setError("An account with this email already exists. Try logging in instead.");
+      } else {
+        setError(authErr.message);
+      }
+      return;
+    }
+
+    // Supabase returns identities: [] when email confirmation is on and the address is already registered
+    if (!data.user?.identities?.length) {
+      setLoading(false);
+      setError("An account with this email already exists. Try logging in instead.");
+      return;
+    }
 
     await supabase.from("profiles").insert([{
       id:         data.user?.id,
