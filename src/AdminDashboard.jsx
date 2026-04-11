@@ -194,6 +194,9 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [editCourseLoading, setEditCourseLoading] = useState(false);
   const [editCourseSaving, setEditCourseSaving] = useState(false);
   const [editCourseSiErr, setEditCourseSiErr] = useState("");
+  const [emailMap, setEmailMap] = useState({});
+  const [roundStats, setRoundStats] = useState({});
+  const [deletingFbId, setDeletingFbId] = useState(null);
 
   // Link form state
   const [linkCoachId, setLinkCoachId] = useState("");
@@ -202,17 +205,37 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
   const [linkError, setLinkError] = useState("");
 
   async function load() {
-    const [profilesRes, roundsRes, csRes, flagsRes, feedbackRes] = await Promise.all([
+    const [profilesRes, roundsRes, csRes, flagsRes, feedbackRes, allRoundsRes, usersRes] = await Promise.all([
       adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, phone, home_courses, bio, created_at"),
       adminClient.from("rounds").select("id", { count: "exact", head: true }),
       adminClient.from("coach_students").select("coach_id, student_id"),
       adminClient.from("course_flags").select("id, course_id, note, created_at, courses(id, name), profiles!flagged_by(first_name, last_name)").eq("resolved", false).order("created_at", { ascending: false }),
       adminClient.from("feedback").select("id, user_id, category, message, page, created_at, profiles(first_name, last_name)").order("created_at", { ascending: false }).limit(100),
+      adminClient.from("rounds").select("student_id, created_at").order("created_at", { ascending: false }),
+      adminClient.auth.admin.listUsers({ perPage: 1000 }),
     ]);
 
     const allProfiles = profilesRes.data || [];
     if (profilesRes.data) setProfiles(allProfiles);
     if (roundsRes.count != null) setRoundCount(roundsRes.count);
+
+    // Build email map from auth users
+    const em = {};
+    for (const u of (usersRes.data?.users || [])) {
+      em[u.id] = u.email || "";
+    }
+    setEmailMap(em);
+
+    // Build round stats map: student_id → { count, last }
+    const rsMap = {};
+    for (const r of (allRoundsRes.data || [])) {
+      if (!rsMap[r.student_id]) {
+        rsMap[r.student_id] = { count: 0, last: r.created_at };
+      }
+      rsMap[r.student_id].count++;
+      // rows are newest-first; first occurrence is already the latest
+    }
+    setRoundStats(rsMap);
 
     if (csRes.data) {
       const profileById = Object.fromEntries(allProfiles.map(p => [p.id, p]));
@@ -365,18 +388,26 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
     setProfileLoadingId(null);
   }
 
+  async function handleDeleteFeedback(fbId) {
+    setDeletingFbId(fbId);
+    const { error } = await adminClient.from("feedback").delete().eq("id", fbId);
+    if (!error) setFeedbackItems(prev => prev.filter(f => f.id !== fbId));
+    setDeletingFbId(null);
+  }
+
   const totalRelationships = relationships.reduce((s, r) => s + r.students.length, 0);
 
-  const sortedProfiles = [...profiles].sort((a, b) => {
-    const roleOrder = { coach: 0, student: 1, admin: 2 };
-    const ra = roleOrder[a.role] ?? 3;
-    const rb = roleOrder[b.role] ?? 3;
-    if (ra !== rb) return ra - rb;
-    return `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
-  });
+  const coaches = profiles
+    .filter(p => p.role === "coach")
+    .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`));
 
-  const coaches = profiles.filter(p => p.role === "coach");
-  const students = profiles.filter(p => p.role === "student");
+  const students = profiles
+    .filter(p => p.role === "student")
+    .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`));
+
+  const coachStudentCount = Object.fromEntries(
+    relationships.map(r => [r.coach?.id, r.students.length])
+  );
 
   return (
     <>
@@ -420,36 +451,82 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
               </div>
             </div>
 
-            {/* ── Users Table ── */}
+            {/* ── Coaches Table ── */}
             <div className="adm-card">
-              <div className="adm-card-title">All users</div>
-              {sortedProfiles.length === 0 ? (
-                <div className="adm-empty">No profiles found.</div>
+              <div className="adm-card-title">Coaches</div>
+              {coaches.length === 0 ? (
+                <div className="adm-empty">No coaches found.</div>
               ) : (
                 <table className="adm-table">
                   <thead>
                     <tr>
                       <th>Name</th>
-                      <th>Role</th>
-                      <th className="adm-hide-sm">Handicap</th>
+                      <th className="adm-hide-sm">Email</th>
+                      <th>Students</th>
                       <th className="adm-hide-sm">Joined</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedProfiles.map(p => (
+                    {coaches.map(p => (
                       <tr key={p.id}>
-                        <td style={{ fontWeight: 600 }}>
-                          {p.first_name} {p.last_name}
-                        </td>
+                        <td style={{fontWeight:600}}>{p.first_name} {p.last_name}</td>
+                        <td className="adm-hide-sm" style={{fontSize:12,color:"var(--text-dim)"}}>{emailMap[p.id] || "—"}</td>
+                        <td style={{textAlign:"center"}}>{coachStudentCount[p.id] ?? 0}</td>
+                        <td className="adm-hide-sm">{fmtDate(p.created_at)}</td>
                         <td>
-                          <span className={`adm-role-badge ${p.role || "student"}`}>
-                            {p.role || "student"}
-                          </span>
+                          <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
+                            <button
+                              className="adm-btn-view"
+                              disabled={profileLoadingId === p.id}
+                              onClick={() => handleViewProfile(p)}
+                            >
+                              {profileLoadingId === p.id ? "…" : "View"}
+                            </button>
+                            {p.id !== user?.id && (
+                              <button
+                                className="adm-btn-delete"
+                                disabled={deletingId === p.id}
+                                onClick={() => handleDeleteUser(p)}
+                              >
+                                {deletingId === p.id ? "Deleting…" : "Delete"}
+                              </button>
+                            )}
+                          </div>
                         </td>
-                        <td className="adm-hide-sm">
-                          {p.official_handicap != null ? Number(p.official_handicap).toFixed(1) : "—"}
-                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* ── Students Table ── */}
+            <div className="adm-card">
+              <div className="adm-card-title">Students</div>
+              {students.length === 0 ? (
+                <div className="adm-empty">No students found.</div>
+              ) : (
+                <table className="adm-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th className="adm-hide-sm">Email</th>
+                      <th className="adm-hide-sm">Handicap</th>
+                      <th>Rounds</th>
+                      <th className="adm-hide-sm">Last round</th>
+                      <th className="adm-hide-sm">Joined</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map(p => (
+                      <tr key={p.id}>
+                        <td style={{fontWeight:600}}>{p.first_name} {p.last_name}</td>
+                        <td className="adm-hide-sm" style={{fontSize:12,color:"var(--text-dim)"}}>{emailMap[p.id] || "—"}</td>
+                        <td className="adm-hide-sm">{p.official_handicap != null ? Number(p.official_handicap).toFixed(1) : "—"}</td>
+                        <td style={{textAlign:"center"}}>{roundStats[p.id]?.count ?? 0}</td>
+                        <td className="adm-hide-sm">{roundStats[p.id]?.last ? fmtDate(roundStats[p.id].last) : "—"}</td>
                         <td className="adm-hide-sm">{fmtDate(p.created_at)}</td>
                         <td>
                           <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
@@ -626,6 +703,14 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                       <span className={"adm-fb-cat " + (fb.category || "General")}>{fb.category || "General"}</span>
                       {fb.page && <span className="adm-fb-page">· {fb.page}</span>}
                       <span className="adm-fb-date">{fmtDate(fb.created_at)}</span>
+                      <button
+                        className="adm-btn-resolve"
+                        disabled={deletingFbId === fb.id}
+                        onClick={() => handleDeleteFeedback(fb.id)}
+                        style={{marginLeft:"auto"}}
+                      >
+                        {deletingFbId === fb.id ? "…" : "Delete"}
+                      </button>
                     </div>
                     <div className="adm-fb-message">{fb.message}</div>
                   </div>
