@@ -313,18 +313,8 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
   const [analyticsCount, setAnalyticsCount] = useState(5);
   const [analyticsTab, setAnalyticsTab] = useState("approach");
 
-  // Filter rounds by active 9/18 tab; fall back to all if fewer than 5
   const completed = rounds.filter(r => r.total_score);
-  const baseRounds = completed;
-
   const countOptions = [5, 10, 20, 50].filter(n => completed.length >= n);
-
-  useEffect(() => {
-    if (countOptions.length > 0 && !countOptions.includes(analyticsCount)) {
-      const best = countOptions.includes(10) ? 10 : countOptions[countOptions.length - 1];
-      setAnalyticsCount(best);
-    }
-  }, [rounds.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isPremium) {
     return (
@@ -341,10 +331,10 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
     );
   }
 
-  const N = countOptions.includes(analyticsCount) ? analyticsCount : (countOptions[countOptions.length - 1] || baseRounds.length);
+  const N = analyticsCount;
 
-  const currentRounds = baseRounds.slice(0, N);
-  const prevRounds    = baseRounds.slice(N, N * 2);
+  const currentRounds = completed.slice(0, N);
+  const prevRounds    = completed.slice(N, N * 2);
 
   const currentRoundIds = new Set(currentRounds.map(r => r.id));
   const prevRoundIds    = new Set(prevRounds.map(r => r.id));
@@ -372,8 +362,8 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
     { key: "150+",     label: "150+" },
   ];
   const approachRows = approachBands.map(({ key, label }) => {
-    const cur  = currentHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
-    const prev = prevHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
+    const cur  = currentHoles.filter(h => h.approach === key && h.putt1);
+    const prev = prevHoles.filter(h => h.approach === key && h.putt1);
     if (!cur.length) return null;
     const avgCur  = cur.reduce((s, h) => s + parseFt(h.putt1), 0) / cur.length;
     const avgPrev = prev.length >= 3 ? prev.reduce((s, h) => s + parseFt(h.putt1), 0) / prev.length : null;
