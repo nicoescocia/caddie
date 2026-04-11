@@ -130,10 +130,10 @@ const css = `
 `;
 
 function parseFt(v) {
-  if (!v) return 0;
-  if (v === "30+" || v === "20+") return parseInt(v) + 2;
-  if (v === "7+") return 8;
-  return parseInt(v) || 0;
+  if (!v) return null;
+  if (v === "<3") return 1.5;
+  if (v === "30+" || v === "20+" || v === "7+") return parseFloat(v) + 2;
+  return parseFloat(v);
 }
 
 function parsePutt2(v) {
