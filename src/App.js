@@ -11,12 +11,14 @@ import StudentSettings from './StudentSettings'
 import CourseForm from './CourseForm'
 import FeedbackButton from './FeedbackButton'
 import StudentOnboarding from './StudentOnboarding'
+import CoachOnboarding from './CoachOnboarding'
 
 function App() {
   const [user, setUser]     = useState(null)
   const [role, setRole]     = useState(null)
   const [loading, setLoading] = useState(true)
   const [onboardingComplete, setOnboardingComplete] = useState(null)
+  const [onboardingCompleteCoach, setOnboardingCompleteCoach] = useState(null)
 
   const [adminView, setAdminView]         = useState('admin')
   const [studentScreen, setStudentScreen] = useState('dashboard')
@@ -41,9 +43,10 @@ function App() {
 
   async function fetchAndSetRole(userId) {
     const { data } = await supabase
-      .from('profiles').select('role, first_name, last_name, official_handicap, onboarding_complete').eq('id', userId).single()
+      .from('profiles').select('role, first_name, last_name, official_handicap, onboarding_complete, onboarding_complete_coach').eq('id', userId).single()
     setRole(data?.role ?? null)
     setOnboardingComplete(data?.onboarding_complete ?? false)
+    setOnboardingCompleteCoach(data?.onboarding_complete_coach ?? false)
     return data?.role ?? null
   }
 
@@ -180,6 +183,14 @@ function App() {
       )
     }
     return <AdminDashboard user={user} onSignOut={handleSignOut} onStudentView={() => setAdminView('student')} />
+  }
+  if (role === 'coach' && onboardingCompleteCoach === false) {
+    return (
+      <CoachOnboarding
+        user={user}
+        onComplete={() => setOnboardingCompleteCoach(true)}
+      />
+    )
   }
   if (role === 'coach') {
     if (coachScreen === 'profile') {
