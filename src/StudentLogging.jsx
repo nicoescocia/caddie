@@ -499,7 +499,6 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const stablefordPerHole = stablefordHoles ? (stablefordTotal / stablefordHoles).toFixed(1) : null;
 
   // Premium computed stats
-  const avgPutts       = statHoles.length ? (statHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / statHoles.length).toFixed(1) : null;
   const putt1Vals      = statHoles.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
   const avgPutt1       = putt1Vals.length ? (putt1Vals.reduce((a, b) => a + b, 0) / putt1Vals.length).toFixed(1) : null;
   const tpPct          = statHoles.length ? Math.round(tpCount / statHoles.length * 100) : 0;
