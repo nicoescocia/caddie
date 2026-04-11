@@ -523,7 +523,7 @@ function LoginScreen({ onSwitch, onForgot, onSuccess }) {
   );
 }
 
-function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
+function SignUpScreen({ onSwitch, onSuccess, inviteCoach, inviteError }) {
   const [role, setRole]           = useState("student");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName]   = useState("");
@@ -604,6 +604,13 @@ function SignUpScreen({ onSwitch, onSuccess, inviteCoach }) {
       )}
 
       {!inviteCoach && <RoleSelector role={role} onChange={setRole} />}
+
+      {inviteError && (
+        <div className="error-msg">
+          <span className="error-msg-icon">⚠</span>
+          <span>{inviteError}</span>
+        </div>
+      )}
 
       {error && (
         <div className="error-msg">
@@ -752,6 +759,7 @@ function ForgotScreen({ onBack }) {
 export default function CaddieAuth({ onAuthSuccess }) {
   const [screen, setScreen]         = useState("login");
   const [inviteCoach, setInviteCoach] = useState(null);
+  const [inviteError, setInviteError] = useState(null);
 
   // Read invite code from URL on mount
   useEffect(() => {
@@ -763,12 +771,15 @@ export default function CaddieAuth({ onAuthSuccess }) {
     // Two-step lookup to avoid FK alias issues
     supabase
       .from("invites")
-      .select("id, coach_id")
+      .select("id, coach_id, used_by")
       .eq("code", code)
-      .is("used_by", null)
       .single()
       .then(async ({ data: invite, error }) => {
         if (!invite || error) return;
+        if (invite.used_by) {
+          setInviteError("This invite link has already been used.");
+          return;
+        }
         // Now fetch the coach/student profile separately
         const { data: prof } = await supabase
           .from("profiles")
@@ -816,6 +827,7 @@ export default function CaddieAuth({ onAuthSuccess }) {
                 onSwitch={() => setScreen("login")}
                 onSuccess={handleAuthSuccess}
                 inviteCoach={inviteCoach}
+                inviteError={inviteError}
               />
             )}
             {screen === "forgot" && (
