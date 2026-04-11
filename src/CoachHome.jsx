@@ -658,13 +658,13 @@ function AnalyticsTab({ sentRounds }) {
   const currentHoles = activeHoles.filter(h => currentRoundIds.has(h.round_id));
   const prevHoles    = activeHoles.filter(h => prevRoundIds.has(h.round_id));
 
-  // Table 1 — Avg 1st putt by approach band (DB uses hyphens)
+  // Table 1 — Avg 1st putt by approach band
   const approachBands = [
     { key: "Under 50", label: "Under 50" },
-    { key: "50-75",    label: "50–75" },
-    { key: "75-100",   label: "75–100" },
-    { key: "100-125",  label: "100–125" },
-    { key: "125-150",  label: "125–150" },
+    { key: "50–75",    label: "50–75" },
+    { key: "75–100",   label: "75–100" },
+    { key: "100–125",  label: "100–125" },
+    { key: "125–150",  label: "125–150" },
     { key: "150+",     label: "150+" },
   ];
 

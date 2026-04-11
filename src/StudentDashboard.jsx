@@ -365,10 +365,10 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
   // Table 1 data
   const approachBands = [
     { key: "Under 50", label: "Under 50" },
-    { key: "50-75",    label: "50–75" },
-    { key: "75-100",   label: "75–100" },
-    { key: "100-125",  label: "100–125" },
-    { key: "125-150",  label: "125–150" },
+    { key: "50–75",    label: "50–75" },
+    { key: "75–100",   label: "75–100" },
+    { key: "100–125",  label: "100–125" },
+    { key: "125–150",  label: "125–150" },
     { key: "150+",     label: "150+" },
   ];
   const approachRows = approachBands.map(({ key, label }) => {
