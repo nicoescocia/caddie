@@ -40,24 +40,32 @@ const css = `
   .ob-input:focus { border-color:var(--green); }
   .ob-textarea { width:100%; padding:13px 16px; border:1.5px solid var(--border); border-radius:12px; font-family:'Outfit',sans-serif; font-size:15px; color:var(--text); background:white; outline:none; transition:border-color .15s; resize:vertical; min-height:100px; line-height:1.6; }
   .ob-textarea:focus { border-color:var(--green); }
+  .ob-select { width:100%; padding:13px 40px 13px 16px; border:1.5px solid var(--border); border-radius:12px; font-family:'Outfit',sans-serif; font-size:15px; color:var(--text); background:white; outline:none; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; transition:border-color .15s; }
+  .ob-select:focus { border-color:var(--green); }
+  .ob-toggle-link { background:none; border:none; padding:0; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; margin-top:7px; display:inline-block; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+  .ob-toggle-link:hover { color:var(--text-mid); }
+  .ob-add-another { background:none; border:none; padding:4px 0; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:var(--green); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+  .ob-add-another:hover { color:var(--green-mid); }
 
-  .ob-code-box { background:white; border:2px solid var(--border); border-radius:14px; padding:20px; text-align:center; margin-bottom:16px; }
-  .ob-code-val { font-family:'Playfair Display',serif; font-size:34px; color:var(--green-dark); letter-spacing:.18em; margin-bottom:12px; }
-  .ob-copy-btn { background:var(--green-dark); border:none; border-radius:10px; padding:10px 24px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:700; color:white; cursor:pointer; transition:all .2s; }
-  .ob-copy-btn:hover { background:var(--green); }
-  .ob-copy-btn.copied { background:var(--green-mid); }
+  .ob-link-primary-box { background:white; border:2px solid var(--green); border-radius:14px; padding:18px; margin-bottom:16px; }
+  .ob-link-primary-url { font-size:12px; color:var(--text-dim); margin-bottom:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ob-link-primary-btn { width:100%; background:var(--green-dark); border:none; border-radius:10px; padding:13px; font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:white; cursor:pointer; transition:all .2s; }
+  .ob-link-primary-btn:hover { background:var(--green); }
+  .ob-link-primary-btn.copied { background:var(--green-mid); }
 
-  .ob-link-row { display:flex; gap:8px; align-items:center; background:white; border:1.5px solid var(--border); border-radius:12px; padding:10px 14px; margin-bottom:24px; }
-  .ob-link-text { flex:1; font-size:12px; color:var(--text-mid); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ob-link-copy { background:none; border:1.5px solid var(--border); border-radius:8px; padding:6px 12px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:700; color:var(--text-mid); cursor:pointer; white-space:nowrap; transition:all .2s; flex-shrink:0; }
-  .ob-link-copy:hover { border-color:var(--green-light); color:var(--green); }
-  .ob-link-copy.copied { border-color:var(--green-mid); color:var(--green-mid); }
+  .ob-code-secondary { background:white; border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .ob-code-secondary-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:4px; }
+  .ob-code-secondary-val { font-family:'Playfair Display',serif; font-size:22px; color:var(--text-mid); letter-spacing:.12em; }
+  .ob-code-secondary-btn { background:none; border:1.5px solid var(--border); border-radius:8px; padding:7px 14px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:700; color:var(--text-mid); cursor:pointer; white-space:nowrap; flex-shrink:0; transition:all .2s; }
+  .ob-code-secondary-btn:hover { border-color:var(--green-light); color:var(--green); }
+  .ob-code-secondary-btn.copied { border-color:var(--green-mid); color:var(--green-mid); }
+  .ob-code-section-label { font-size:12px; color:var(--text-dim); margin-bottom:8px; }
 
   .ob-spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:ob-spin .7s linear infinite; margin:40px auto; display:block; }
   @keyframes ob-spin { to { transform:rotate(360deg); } }
 `;
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 export default function CoachOnboarding({ user, onComplete }) {
   const [step, setStep] = useState(1);
@@ -73,12 +81,20 @@ export default function CoachOnboarding({ user, onComplete }) {
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // Step 4b — home course
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const [course1, setCourse1] = useState("");
+  const [courseMode1, setCourseMode1] = useState("select");
+  const [course2, setCourse2] = useState("");
+  const [courseMode2, setCourseMode2] = useState("select");
+  const [showCourse2, setShowCourse2] = useState(false);
+
   // Load invite code when we reach step 4
   useEffect(() => {
     if (step !== 4) return;
     setInviteLoading(true);
     async function loadInvite() {
-      // Check for existing unused student invite
       const { data: existing } = await supabase
         .from("invites")
         .select("code")
@@ -94,7 +110,6 @@ export default function CoachOnboarding({ user, onComplete }) {
         return;
       }
 
-      // Generate a new one
       const code = Math.random().toString(36).substring(2, 10).toUpperCase();
       const { error } = await supabase.from("invites").insert([{
         code,
@@ -107,6 +122,15 @@ export default function CoachOnboarding({ user, onComplete }) {
     }
     loadInvite();
   }, [step, user.id]);
+
+  // Load courses when we reach step 4b
+  useEffect(() => {
+    if (step !== 5 || coursesLoaded) return;
+    supabase.from("courses").select("id, name").order("name", { ascending: true }).then(({ data }) => {
+      setAvailableCourses(data || []);
+      setCoursesLoaded(true);
+    });
+  }, [step, coursesLoaded]);
 
   const progress = (step / TOTAL_STEPS) * 100;
   const inviteLink = inviteCode ? `https://caddie-rust.vercel.app?invite=${inviteCode}` : "";
@@ -133,6 +157,14 @@ export default function CoachOnboarding({ user, onComplete }) {
       }).eq("id", user.id);
     }
     setStep(4);
+  }
+
+  async function handleStep4bNext() {
+    const vals = [course1.trim(), course2.trim()].filter(Boolean);
+    if (vals.length > 0) {
+      await supabase.from("profiles").update({ home_courses: vals }).eq("id", user.id);
+    }
+    setStep(6);
   }
 
   async function handleFinish() {
@@ -225,26 +257,36 @@ export default function CoachOnboarding({ user, onComplete }) {
               <span className="ob-emoji">🤝</span>
               <h1 className="ob-heading">Invite your first student</h1>
               <p className="ob-body">
-                Share this code with your student. When they sign up or log in, they can enter it to link their account to yours.
+                Share this link with your student. When they tap it, they'll be taken straight to Caddie with your invite pre-filled.
               </p>
               {inviteLoading ? (
                 <div className="ob-spinner" />
               ) : (
                 <>
-                  <div className="ob-code-box">
-                    <div className="ob-code-val">{inviteCode}</div>
-                    <button className={"ob-copy-btn" + (codeCopied ? " copied" : "")} onClick={copyCode}>
-                      {codeCopied ? "Copied ✓" : "Copy code"}
-                    </button>
-                  </div>
                   {inviteLink && (
-                    <div className="ob-link-row">
-                      <span className="ob-link-text">{inviteLink}</span>
-                      <button className={"ob-link-copy" + (linkCopied ? " copied" : "")} onClick={copyLink}>
-                        {linkCopied ? "Copied ✓" : "Copy link"}
+                    <div className="ob-link-primary-box">
+                      <div className="ob-link-primary-url">{inviteLink}</div>
+                      <button
+                        className={"ob-link-primary-btn" + (linkCopied ? " copied" : "")}
+                        onClick={copyLink}
+                      >
+                        {linkCopied ? "Copied ✓" : "Copy invite link"}
                       </button>
                     </div>
                   )}
+                  <div className="ob-code-section-label">Or share the code instead</div>
+                  <div className="ob-code-secondary">
+                    <div>
+                      <div className="ob-code-secondary-label">Invite code</div>
+                      <div className="ob-code-secondary-val">{inviteCode}</div>
+                    </div>
+                    <button
+                      className={"ob-code-secondary-btn" + (codeCopied ? " copied" : "")}
+                      onClick={copyCode}
+                    >
+                      {codeCopied ? "Copied ✓" : "Copy code"}
+                    </button>
+                  </div>
                 </>
               )}
               <div className="ob-step-actions">
@@ -254,8 +296,101 @@ export default function CoachOnboarding({ user, onComplete }) {
             </div>
           )}
 
-          {/* ── Step 5: Done ── */}
+          {/* ── Step 4b (5): Home course ── */}
           {step === 5 && (
+            <div className="ob-step">
+              <span className="ob-emoji">📍</span>
+              <h1 className="ob-heading">Where do you coach?</h1>
+              <p className="ob-body">
+                Add your home course or driving range. Students will see this on your profile.
+              </p>
+
+              {/* Course 1 */}
+              <div className="ob-field">
+                <label className="ob-label">Home course / range</label>
+                {courseMode1 === "select" ? (
+                  <>
+                    <select
+                      className="ob-select"
+                      value={course1}
+                      onChange={e => setCourse1(e.target.value)}
+                    >
+                      <option value="">Select a course…</option>
+                      {availableCourses.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button className="ob-toggle-link" onClick={() => setCourseMode1("text")}>
+                      Type a name instead
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      className="ob-input"
+                      placeholder="e.g. Greenock Golf Club"
+                      value={course1}
+                      onChange={e => setCourse1(e.target.value)}
+                    />
+                    <button className="ob-toggle-link" onClick={() => { setCourseMode1("select"); setCourse1(""); }}>
+                      Choose from list instead
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Add second course */}
+              {course1.trim() && !showCourse2 && (
+                <button className="ob-add-another" onClick={() => setShowCourse2(true)}>
+                  + Add another
+                </button>
+              )}
+
+              {/* Course 2 */}
+              {showCourse2 && (
+                <div className="ob-field">
+                  <label className="ob-label">Second location</label>
+                  {courseMode2 === "select" ? (
+                    <>
+                      <select
+                        className="ob-select"
+                        value={course2}
+                        onChange={e => setCourse2(e.target.value)}
+                      >
+                        <option value="">Select a course…</option>
+                        {availableCourses.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+                      <button className="ob-toggle-link" onClick={() => setCourseMode2("text")}>
+                        Type a name instead
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        className="ob-input"
+                        placeholder="e.g. Greenock Driving Range"
+                        value={course2}
+                        onChange={e => setCourse2(e.target.value)}
+                      />
+                      <button className="ob-toggle-link" onClick={() => { setCourseMode2("select"); setCourse2(""); }}>
+                        Choose from list instead
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="ob-step-actions">
+                <button className="ob-primary" onClick={handleStep4bNext}>Next</button>
+                <button className="ob-skip" onClick={() => setStep(6)}>Skip for now</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 6: Done ── */}
+          {step === 6 && (
             <div className="ob-step">
               <span className="ob-emoji">🎉</span>
               <h1 className="ob-heading">You're ready to coach</h1>
