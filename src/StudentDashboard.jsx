@@ -364,16 +364,16 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
 
   // Table 1 data
   const approachBands = [
-    { keys: ["Under 50"],           label: "Under 50" },
-    { keys: ["50–75",  "50-75"],    label: "50–75" },
-    { keys: ["75–100", "75-100"],   label: "75–100" },
-    { keys: ["100–125","100-125"],  label: "100–125" },
-    { keys: ["125–150","125-150"],  label: "125–150" },
-    { keys: ["150+"],               label: "150+" },
+    { key: "Under 50", label: "Under 50" },
+    { key: "50-75",    label: "50–75" },
+    { key: "75-100",   label: "75–100" },
+    { key: "100-125",  label: "100–125" },
+    { key: "125-150",  label: "125–150" },
+    { key: "150+",     label: "150+" },
   ];
-  const approachRows = approachBands.map(({ keys, label }) => {
-    const cur  = currentHoles.filter(h => keys.includes(h.approach) && parseFt(h.putt1) !== null);
-    const prev = prevHoles.filter(h => keys.includes(h.approach) && parseFt(h.putt1) !== null);
+  const approachRows = approachBands.map(({ key, label }) => {
+    const cur  = currentHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
+    const prev = prevHoles.filter(h => h.approach === key && parseFt(h.putt1) !== null);
     if (!cur.length) return null;
     const avgCur  = cur.reduce((s, h) => s + parseFt(h.putt1), 0) / cur.length;
     const avgPrev = prev.length >= 3 ? prev.reduce((s, h) => s + parseFt(h.putt1), 0) / prev.length : null;
