@@ -12,6 +12,7 @@ import CourseForm from './CourseForm'
 import FeedbackButton from './FeedbackButton'
 import StudentOnboarding from './StudentOnboarding'
 import CoachOnboarding from './CoachOnboarding'
+import CoachDirectory from './CoachDirectory'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -167,6 +168,9 @@ function App() {
           </>
         )
       }
+      if (studentScreen === 'coachDirectory') {
+        return <CoachDirectory onBack={() => setStudentScreen('dashboard')} />
+      }
       return (
         <>
           <StudentDashboard
@@ -177,6 +181,7 @@ function App() {
             onBackToAdmin={() => { resetScreenState(); setAdminView('admin') }}
             onProfile={() => setStudentScreen('profile')}
             onSettings={() => setStudentScreen('settings')}
+            onFindCoach={() => setStudentScreen('coachDirectory')}
           />
           <FeedbackButton userId={user.id} page="dashboard" />
         </>
@@ -317,6 +322,9 @@ function App() {
       </>
     )
   }
+  if (studentScreen === 'coachDirectory') {
+    return <CoachDirectory onBack={() => setStudentScreen('dashboard')} />
+  }
   return (
     <>
       <StudentDashboard
@@ -326,6 +334,7 @@ function App() {
         onEditRound={r => { setEditRound(r); setStudentScreen('editing') }}
         onProfile={() => setStudentScreen('profile')}
         onSettings={() => setStudentScreen('settings')}
+        onFindCoach={() => setStudentScreen('coachDirectory')}
       />
       <FeedbackButton userId={user.id} page="dashboard" />
     </>

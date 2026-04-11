@@ -500,7 +500,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
   );
 }
 
-export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings }) {
+export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings, onFindCoach }) {
   const [rounds, setRounds]   = useState([]);
   const [profile, setProfile] = useState(null);
   const [coaches, setCoaches]             = useState([]);
@@ -934,6 +934,21 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           </div>
         </div>
 
+        {coaches.length === 0 && onFindCoach && (
+          <div style={{background:"var(--green-dark)",borderRadius:16,padding:"18px 20px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:"white",marginBottom:4}}>Find a Coach</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.55)"}}>Browse coaches and get in touch</div>
+            </div>
+            <button
+              onClick={onFindCoach}
+              style={{flexShrink:0,background:"var(--gold)",border:"none",borderRadius:10,padding:"9px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,color:"var(--green-dark)",cursor:"pointer",whiteSpace:"nowrap"}}
+            >
+              Browse
+            </button>
+          </div>
+        )}
+
         {enrichedForTrends.filter(r => r.total_score).length >= 2 && (
           <div className="trends-tabs" style={{marginBottom:12}}>
             <button className={"trend-tab" + (mainView === "trends" ? " active" : "")} onClick={() => setMainView("trends")}>
@@ -1007,6 +1022,14 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
               <span style={{fontSize:14,color:"var(--gold)"}}>🔒</span>
               <span style={{fontSize:12,color:"var(--text-dim)"}}>Premium — link up to 3 coaches</span>
             </div>
+          )}
+          {coaches.length > 0 && onFindCoach && (
+            <button
+              onClick={onFindCoach}
+              style={{background:"none",border:"none",padding:"6px 0 0",fontFamily:"'Outfit',sans-serif",fontSize:12,color:"var(--text-dim)",cursor:"pointer",display:"block",textDecoration:"underline"}}
+            >
+              Find a Coach
+            </button>
           )}
         </div>
 
