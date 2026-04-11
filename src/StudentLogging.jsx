@@ -967,6 +967,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [roundComplete, setRoundComplete] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [hasCoach, setHasCoach]     = useState(false);
+  const [coachId, setCoachId]       = useState(null);
+  const [studentName, setStudentName] = useState("");
   const [savedHoles, setSavedHoles] = useState(new Set());
   const [loading, setLoading]       = useState(isEditMode);
 
@@ -1058,7 +1060,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   useEffect(() => {
     async function fetchSettings() {
       const [{ data }, { data: coachLink }] = await Promise.all([
-        supabase.from("profiles").select("settings, is_premium, official_handicap").eq("id", user.id).single(),
+        supabase.from("profiles").select("settings, is_premium, official_handicap, first_name, last_name").eq("id", user.id).single(),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id).maybeSingle(),
       ]);
       setIsPremium(!!data?.is_premium);
@@ -1066,6 +1068,10 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       setApproachLogging(data?.settings?.approach_logging || "enabled");
       if (data?.official_handicap != null) setOfficialHandicap(data.official_handicap);
       setHasCoach(!!coachLink?.coach_id);
+      setCoachId(coachLink?.coach_id || null);
+      if (data?.first_name || data?.last_name) {
+        setStudentName([data.first_name, data.last_name].filter(Boolean).join(" "));
+      }
     }
     fetchSettings();
   }, [user.id]);
@@ -1635,6 +1641,25 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       wind, conditions, temperature,
       student_note: studentNote || null,
     }).eq("id", roundId);
+
+    if (coachId) {
+      const diff = totalScore - totalPar;
+      const vsParLabel = diff === 0 ? "E" : diff > 0 ? "+" + diff : String(diff);
+      fetch("/api/notify-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachId,
+          studentName: studentName || "Your student",
+          courseName,
+          score: totalScore,
+          holesPlayed: savedHoles.size,
+          vsParLabel,
+          roundId,
+        }),
+      }).catch(() => {});
+    }
+
     setSaving(false);
     setSent(true);
     setRoundComplete(true);
