@@ -499,10 +499,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const stablefordPerHole = stablefordHoles ? (stablefordTotal / stablefordHoles).toFixed(1) : null;
 
   // Premium computed stats
-  const girHoles      = statHoles.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
-  const nonGirHoles   = statHoles.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
-  const puttsPerGIR    = girHoles.length ? (girHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / girHoles.length).toFixed(2) : null;
-  const puttsPerNonGIR = nonGirHoles.length ? (nonGirHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / nonGirHoles.length).toFixed(2) : null;
+  const avgPutts       = statHoles.length ? (statHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / statHoles.length).toFixed(1) : null;
   const putt1Vals      = statHoles.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
   const avgPutt1       = putt1Vals.length ? (putt1Vals.reduce((a, b) => a + b, 0) / putt1Vals.length).toFixed(1) : null;
   const tpPct          = statHoles.length ? Math.round(tpCount / statHoles.length * 100) : 0;
@@ -538,8 +535,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
     if (scramblePct !== null) prompt += `Scrambling: ${scramblePct}% (${upAndDown}/${missedGIR.length} up & down)\n`;
     prompt += `Penalties: ${penalties}\n`;
     if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
-    if (puttsPerGIR) prompt += `Putts per GIR hole: ${puttsPerGIR}\n`;
-    if (puttsPerNonGIR) prompt += `Putts per missed-GIR hole: ${puttsPerNonGIR}\n`;
+    if (avgPutts) prompt += `Avg putts per hole: ${avgPutts}\n`;
     if (bandData.length) {
       prompt += `\nApproach breakdown:\n`;
       bandData.forEach(b => { prompt += `  ${b.label} yds: ${b.count} hole${b.count !== 1 ? "s" : ""}, ${b.girPct}% GIR, avg ${b.avgPutts} putts\n`; });
@@ -841,12 +837,8 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
             <div className="ov-card-title">Short game & putting</div>
             <div className="stats-grid" style={{marginBottom:0}}>
               <div className="stat-card">
-                <div className="stat-card-val">{puttsPerGIR ?? "—"}</div>
-                <div className="stat-card-lbl">Putts / GIR</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-card-val">{puttsPerNonGIR ?? "—"}</div>
-                <div className="stat-card-lbl">Putts / non-GIR</div>
+                <div className="stat-card-val">{avgPutts ?? "—"}</div>
+                <div className="stat-card-lbl">AVG PUTTS</div>
               </div>
               <div className="stat-card">
                 <div className={"stat-card-val " + (scramblePct != null ? (scramblePct >= 50 ? "ok" : scramblePct >= 30 ? "warn" : "bad") : "")}>{scramblePct != null ? scramblePct + "%" : "—"}</div>
