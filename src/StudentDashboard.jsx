@@ -74,14 +74,7 @@ const css = `
   .trend-legend { display:flex; gap:14px; margin-top:8px; }
   .trend-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-dim); }
   .trend-legend-dot { width:8px; height:8px; border-radius:50%; }
-  .trend-summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px; }
-  .trend-stat { background:white; border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
-  .trend-stat-val { font-family:'Playfair Display',serif; font-size:22px; color:var(--text); line-height:1; }
-  .trend-stat-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-top:3px; }
-  .trend-direction { font-size:10px; font-weight:700; margin-top:2px; }
-  .trend-direction.improving { color:var(--green-mid); }
-  .trend-direction.worsening { color:var(--red); }
-  .trend-direction.stable { color:var(--text-dim); }
+
   .trend-charts-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 
   .hist-btn { width:100%; background:none; border:1.5px solid var(--border); border-radius:14px; padding:13px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-mid); cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:24px; }
@@ -239,25 +232,6 @@ function TrendLine({ data9, data18, metric, label, yTicks, formatY, height = 90,
   );
 }
 
-function trendDirection(vals) {
-  if (vals.length < 3) return null;
-  const recent    = vals.slice(-3).reduce((a,b) => a+b, 0) / 3;
-  const olderVals = vals.slice(0, -3);
-  if (!olderVals.length) return null;
-  const older = olderVals.reduce((a,b) => a+b, 0) / olderVals.length;
-  const delta = recent - older;
-  return Math.abs(delta) < 0.1 ? "stable" : delta < 0 ? "improving" : "worsening";
-}
-
-function trendLabel(dir, lowerIsBetter = true) {
-  if (!dir) return null;
-  if (dir === "stable") return { text: "Stable", cls: "stable" };
-  const improving = lowerIsBetter ? dir === "improving" : dir === "worsening";
-  return improving
-    ? { text: "↑ Improving", cls: "improving" }
-    : { text: "↓ Worsening", cls: "worsening" };
-}
-
 function StudentRoundTrends({ rounds, activeTab }) {
   const [tab, setTab] = useState("score");
   const scored = rounds.filter(r => r.total_score);
@@ -286,47 +260,13 @@ function StudentRoundTrends({ rounds, activeTab }) {
   const e18 = enrich(r18);
   const e10 = enrich(r10);
 
-  // Summary stats and trend direction respect the active 9/18 tab
-  const activeEnriched = activeTab === 9 ? e9 : e18;
-  const activeRoundsCount = activeTab === 9 ? r9.length : r18.length;
-  const scoreDiffs = activeEnriched.map(r => r.vsPar / (r.holes_played || 9));
-  const dir = trendDirection(scoreDiffs);
-  const tl  = trendLabel(dir, true);
-  const rawVsPars = activeEnriched.map(r => r.vsPar);
-  const avgVsPar  = rawVsPars.length ? Math.round(rawVsPars.reduce((a,b)=>a+b,0)/rawVsPars.length) : null;
-  const bestVsPar = rawVsPars.length ? Math.min(...rawVsPars) : null;
-
   // Handicap progression — all completed rounds with whs_index, up to 10 most recent
   const whsRounds = e10.filter(r => r.whs_index != null);
-  const whsDiffs  = whsRounds.map(r => r.whs_index);
-  const whsDir    = trendDirection(whsDiffs);
-  const whsTl     = trendLabel(whsDir, true);
-  const activeTl  = tab === "handicap" ? whsTl : tl;
 
   const fmtPar = v => v > 0 ? "+"+v : v === 0 ? "E" : String(v);
 
   return (
     <div className="trends-wrap">
-      <div className="trends-title">
-        Trends — last {Math.min(activeRoundsCount, 10)} rounds
-        {activeTl && <span className={"trend-direction " + activeTl.cls}>{activeTl.text}</span>}
-      </div>
-
-      <div className="trend-summary">
-        <div className="trend-stat">
-          <div className="trend-stat-val">{avgVsPar != null ? fmtPar(avgVsPar) : "—"}</div>
-          <div className="trend-stat-lbl">Avg vs par</div>
-        </div>
-        <div className="trend-stat">
-          <div className="trend-stat-val">{bestVsPar != null ? fmtPar(bestVsPar) : "—"}</div>
-          <div className="trend-stat-lbl">Best</div>
-        </div>
-        <div className="trend-stat">
-          <div className="trend-stat-val">{activeRoundsCount}</div>
-          <div className="trend-stat-lbl">Rounds</div>
-        </div>
-      </div>
-
       <div className="trends-tabs">
         {["score","gir","putts","fairways","stableford","handicap"].map(t => (
           <button key={t} className={"trend-tab" + (tab === t ? " active" : "")} onClick={() => setTab(t)}>
@@ -471,9 +411,6 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
       {/* Count selector */}
       {countOptions.length > 0 && (
         <div style={{marginBottom:14}}>
-          <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:7}}>
-            Showing data from:
-          </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {countOptions.map(n => (
               <button
@@ -1038,7 +975,10 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           )}
           {coaches.length === 0 ? (
             <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",marginBottom:10}}>
-              <div style={{fontSize:13,color:"var(--text-dim)"}}>No coach linked yet. Add your coach using their invite code.</div>
+              <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:10}}>No coach linked yet — enter your coach's invite code to get started.</div>
+              <button className="coach-add-btn" style={{marginBottom:0}} onClick={() => { setAddCoachCode(""); setAddCoachError(""); setShowAddCoachModal(true); }}>
+                + Add a coach
+              </button>
             </div>
           ) : (
             <>
@@ -1064,9 +1004,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
               )}
             </>
           )}
-          {profile?.is_premium && coaches.length < 3 && (
-            <button className="coach-add-btn" onClick={() => { setAddCoachCode(""); setAddCoachError(""); setShowAddCoachModal(true); }}>
-              + Add a coach
+          {profile?.is_premium && coaches.length > 0 && coaches.length < 3 && (
+            <button
+              onClick={() => { setAddCoachCode(""); setAddCoachError(""); setShowAddCoachModal(true); }}
+              style={{background:"none",border:"none",padding:"4px 0",fontFamily:"'Outfit',sans-serif",fontSize:12,color:"var(--text-dim)",cursor:"pointer",display:"block"}}
+            >
+              + Add another coach
             </button>
           )}
           {!profile?.is_premium && coaches.length >= 1 && (
