@@ -169,7 +169,7 @@ function App() {
         )
       }
       if (studentScreen === 'coachDirectory') {
-        return <CoachDirectory onBack={() => setStudentScreen('dashboard')} />
+        return <CoachDirectory onBack={() => setStudentScreen('dashboard')} user={user} onCoachLinked={() => setStudentScreen('dashboard')} />
       }
       return (
         <>
@@ -323,7 +323,7 @@ function App() {
     )
   }
   if (studentScreen === 'coachDirectory') {
-    return <CoachDirectory onBack={() => setStudentScreen('dashboard')} />
+    return <CoachDirectory onBack={() => setStudentScreen('dashboard')} user={user} onCoachLinked={() => setStudentScreen('dashboard')} />
   }
   return (
     <>

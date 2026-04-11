@@ -509,6 +509,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
   const [addCoachCode, setAddCoachCode]   = useState("");
   const [addCoachError, setAddCoachError] = useState("");
   const [addCoachSaving, setAddCoachSaving] = useState(false);
+  const [showInlineInvite, setShowInlineInvite] = useState(false);
   const [unlinkCoachId, setUnlinkCoachId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [hcpEditing, setHcpEditing] = useState(false);
@@ -696,6 +697,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
     if (coachProf) setCoaches(prev => [...prev, coachProf]);
     setAddCoachCode("");
     setShowAddCoachModal(false);
+    setShowInlineInvite(false);
     setAddCoachSaving(false);
   }
 
@@ -935,17 +937,59 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         </div>
 
         {coaches.length === 0 && onFindCoach && (
-          <div style={{background:"var(--green-dark)",borderRadius:16,padding:"18px 20px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-            <div>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:"white",marginBottom:4}}>Find a Coach</div>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.55)"}}>Browse coaches and get in touch</div>
+          <div style={{background:"var(--green-dark)",borderRadius:16,padding:"18px 20px",marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom: showInlineInvite ? 16 : 0}}>
+              <div>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:"white",marginBottom:4}}>Find a Coach</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.55)"}}>Browse coaches and get in touch</div>
+              </div>
+              <button
+                onClick={onFindCoach}
+                style={{flexShrink:0,background:"var(--gold)",border:"none",borderRadius:10,padding:"9px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,color:"var(--green-dark)",cursor:"pointer",whiteSpace:"nowrap"}}
+              >
+                Browse
+              </button>
             </div>
-            <button
-              onClick={onFindCoach}
-              style={{flexShrink:0,background:"var(--gold)",border:"none",borderRadius:10,padding:"9px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,color:"var(--green-dark)",cursor:"pointer",whiteSpace:"nowrap"}}
-            >
-              Browse
-            </button>
+            {!showInlineInvite && (
+              <button
+                onClick={() => { setShowInlineInvite(true); setAddCoachCode(""); setAddCoachError(""); }}
+                style={{background:"none",border:"none",padding:"8px 0 0",fontFamily:"'Outfit',sans-serif",fontSize:12,color:"rgba(255,255,255,0.5)",cursor:"pointer",textDecoration:"underline",display:"block"}}
+              >
+                Already have an invite code?
+              </button>
+            )}
+            {showInlineInvite && (
+              <form onSubmit={addCoach} style={{marginTop:4}}>
+                <input
+                  style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.1)",color:"white",fontFamily:"'Outfit',sans-serif",fontSize:14,outline:"none",letterSpacing:".05em",textTransform:"uppercase",marginBottom:8}}
+                  placeholder="Enter invite code"
+                  value={addCoachCode}
+                  onChange={e => { setAddCoachCode(e.target.value.toUpperCase()); setAddCoachError(""); }}
+                  autoFocus
+                />
+                {addCoachError && (
+                  <div style={{fontSize:12,color:"#FCA5A5",marginBottom:8,padding:"6px 10px",background:"rgba(239,68,68,0.15)",borderRadius:8}}>
+                    {addCoachError}
+                  </div>
+                )}
+                <div style={{display:"flex",gap:8}}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowInlineInvite(false); setAddCoachCode(""); setAddCoachError(""); }}
+                    style={{flex:1,padding:"9px",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,background:"none",fontFamily:"'Outfit',sans-serif",fontSize:13,color:"rgba(255,255,255,0.6)",cursor:"pointer"}}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!addCoachCode.trim() || addCoachSaving}
+                    style={{flex:2,padding:"9px",border:"none",borderRadius:10,background:"var(--gold)",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,color:"var(--green-dark)",cursor:"pointer",opacity:(!addCoachCode.trim() || addCoachSaving) ? 0.5 : 1}}
+                  >
+                    {addCoachSaving ? "Linking…" : "Link coach"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
 
