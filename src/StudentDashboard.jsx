@@ -572,6 +572,18 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
       ]);
       setProfile(prof);
       setRounds(rds || []);
+      // Resolve coach profiles immediately — before the slow round-holes fetch below.
+      // This ensures unlinkCoach()'s setCoaches(filter) is never overwritten by stale data.
+      const linkedCoachIds = (coachLinks || []).map(l => l.coach_id);
+      if (linkedCoachIds.length > 0) {
+        const { data: coachProfs } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name")
+          .in("id", linkedCoachIds);
+        setCoaches(coachProfs || []);
+      } else {
+        setCoaches([]);
+      }
       // Fetch per-hole stats for GIR, fairway, and Stableford charts
       const roundIds = (rds || []).map(r => r.id);
       if (roundIds.length > 0) {
@@ -642,16 +654,6 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         setRoundHoleStats(statsMap);
         setRoundHolesData(holesByRound);
         setAnalyticsHolesMap(analyticsMap);
-      }
-      // Fetch all linked coach profiles
-      const linkedCoaches = coachLinks || [];
-      if (linkedCoaches.length > 0) {
-        const coachIdList = linkedCoaches.map(l => l.coach_id);
-        const { data: coachProfs } = await supabase
-          .from("profiles")
-          .select("id, first_name, last_name")
-          .in("id", coachIdList);
-        if (coachProfs) setCoaches(coachProfs);
       }
       setLoading(false);
     }
