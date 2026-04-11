@@ -303,8 +303,8 @@ const HOLE_PARS = {
 };
 
 const APPROACH_BANDS = [
-  { v:"Under 50", u:"yds" }, { v:"50-75", u:"yds" }, { v:"75-100", u:"yds" },
-  { v:"100-125", u:"yds" }, { v:"125-150", u:"yds" }, { v:"150+", u:"yds" },
+  { v:"Under 50", u:"yds" }, { v:"50–75", u:"yds" }, { v:"75–100", u:"yds" },
+  { v:"100–125", u:"yds" }, { v:"125–150", u:"yds" }, { v:"150+", u:"yds" },
 ];
 const PUTT_DIST  = [{v:"<3",u:"ft"},{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"6",u:"ft"},{v:"9",u:"ft"},{v:"12",u:"ft"},{v:"15",u:"ft"},{v:"20",u:"ft"},{v:"25",u:"ft"},{v:"30+",u:"ft"}];
 const PUTT2_DIST = [{v:"<1",u:"ft"},{v:"1",u:"ft"},{v:"2",u:"ft"},{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"5",u:"ft"},{v:"6",u:"ft"},{v:"7+",u:"ft"}];
@@ -503,8 +503,8 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const avgPutt1       = putt1Vals.length ? (putt1Vals.reduce((a, b) => a + b, 0) / putt1Vals.length).toFixed(1) : null;
   const tpPct          = statHoles.length ? Math.round(tpCount / statHoles.length * 100) : 0;
 
-  const BAND_KEYS   = ["Under 50","50-75","75-100","100-125","125-150","150+"];
-  const BAND_LABELS = {"Under 50":"Under 50","50-75":"50–75","75-100":"75–100","100-125":"100–125","125-150":"125–150","150+":"150+"};
+  const BAND_KEYS   = ["Under 50","50–75","75–100","100–125","125–150","150+"];
+  const BAND_LABELS = {"Under 50":"Under 50","50–75":"50–75","75–100":"75–100","100–125":"100–125","125–150":"125–150","150+":"150+"};
   const bandData = BAND_KEYS.map(key => {
     const bh = statHoles.filter(h => holeData[holes.indexOf(h)].approach === key);
     if (!bh.length) return null;
