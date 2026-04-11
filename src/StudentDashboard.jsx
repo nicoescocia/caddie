@@ -1022,14 +1022,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
               {coaches.length > 1 ? "Your Coaches" : "Your Coach"}
             </div>
           )}
-          {coaches.length === 0 ? (
-            <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",marginBottom:10}}>
-              <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:10}}>No coach linked yet — enter your coach's invite code to get started.</div>
-              <button className="coach-add-btn" style={{marginBottom:0}} onClick={() => { setAddCoachCode(""); setAddCoachError(""); setShowAddCoachModal(true); }}>
-                + Add a coach
-              </button>
-            </div>
-          ) : (
+          {coaches.length > 0 && (
             <>
               {[coaches[0], ...(coachesExpanded ? coaches.slice(1) : [])].map(c => (
                 <div key={c.id} style={{background:"white",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",marginBottom:6,display:"flex",alignItems:"center",gap:12}}>
