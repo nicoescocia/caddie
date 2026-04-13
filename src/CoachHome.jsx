@@ -948,13 +948,14 @@ OUTPUT FORMAT
       try {
         const result = await callAI(enhancedPrompt);
         setAiPatterns(result);
-        supabase.from("ai_cache").upsert({
+        const { error: cacheError } = await supabase.from("ai_cache").upsert({
           coach_id: coachId,
           student_id: student.id,
           cache_type: "patterns",
           content: result,
           round_ids: last5.map(r => r.id),
         }, { onConflict: "coach_id,student_id,cache_type" });
+        if (cacheError) console.error("ai_cache upsert failed:", cacheError);
       } catch {
         setAiPatterns("Pattern analysis unavailable.");
       }
