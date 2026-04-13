@@ -510,12 +510,14 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
     if (!bh.length) return null;
     const bGIR = bh.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
     const bP1  = bh.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
+    const bP1Valid = bh.filter(h => holeData[holes.indexOf(h)].putt1);
     return {
-      label:    BAND_LABELS[key],
-      count:    bh.length,
-      girPct:   Math.round(bGIR.length / bh.length * 100),
-      avgPutts: (bh.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / bh.length).toFixed(2),
-      avgPutt1: bP1.length ? (bP1.reduce((a, b) => a + b, 0) / bP1.length).toFixed(1) : "—",
+      label:      BAND_LABELS[key],
+      count:      bh.length,
+      girPct:     Math.round(bGIR.length / bh.length * 100),
+      avgPutts:   (bh.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / bh.length).toFixed(2),
+      avgPutt1:   bP1.length ? (bP1.reduce((a, b) => a + b, 0) / bP1.length).toFixed(1) : "—",
+      putt1Count: bP1Valid.length,
     };
   }).filter(Boolean);
 
@@ -536,8 +538,12 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
     if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
     if (avgPutts) prompt += `Avg putts per hole: ${avgPutts}\n`;
     if (bandData.length) {
+      prompt += `\nDo not comment on GIR from under 50 yards — it is not a meaningful metric at that distance. Use avg first putt distance as the measure of proximity and quality of approach play.\n`;
       prompt += `\nApproach breakdown:\n`;
-      bandData.forEach(b => { prompt += `  ${b.label} yds: ${b.count} hole${b.count !== 1 ? "s" : ""}, ${b.girPct}% GIR, avg ${b.avgPutts} putts\n`; });
+      bandData.forEach(b => {
+        const putt1Part = b.putt1Count >= 2 ? `, avg first putt ${b.avgPutt1}ft` : "";
+        prompt += `  ${b.label} yds: ${b.count} hole${b.count !== 1 ? "s" : ""}${putt1Part}\n`;
+      });
     }
     callAI(prompt)
       .then(t => { setAiText(t); setAiLoading(false); })
