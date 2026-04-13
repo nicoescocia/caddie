@@ -51,6 +51,8 @@ TONE
 - Prioritise the 1-2 most impactful areas for improvement rather than listing every weakness.
 - End with a forward-looking statement about what improvement in that area would look like.`;
 
+const DELAYS = [0, 2000, 4000]; // ms to wait before attempt 0, 1, 2
+
 export default async function handler(req, res) {
   // Only allow POST
   if (req.method !== "POST") {
@@ -58,23 +60,38 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({ ...req.body, system: SYSTEM_PROMPT }),
-    });
+    let lastData;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (DELAYS[attempt] > 0) {
+        await new Promise(resolve => setTimeout(resolve, DELAYS[attempt]));
+      }
 
-    const data = await response.json();
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({ ...req.body, system: SYSTEM_PROMPT }),
+      });
 
-    if (!response.ok) {
-      return res.status(response.status).json(data);
+      const data = await response.json();
+
+      if (response.ok) {
+        return res.status(200).json(data);
+      }
+
+      if (response.status !== 529) {
+        return res.status(response.status).json(data);
+      }
+
+      lastData = data;
     }
 
-    return res.status(200).json(data);
+    // All 3 attempts failed with 529
+    console.error("Anthropic API overloaded after 3 attempts:", lastData);
+    return res.status(503).json({ error: "AI analysis temporarily unavailable. Please try again in a moment." });
   } catch (err) {
     console.error("Proxy error:", err);
     return res.status(500).json({ error: "Proxy request failed" });
