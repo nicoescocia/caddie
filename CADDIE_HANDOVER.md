@@ -1,6 +1,6 @@
 # Caddie — Handover Document
 
-**Last updated:** 2026-04-11
+**Last updated:** 2026-04-13
 
 ---
 
@@ -85,6 +85,7 @@ AdminDashboard requires `REACT_APP_SUPABASE_SERVICE_KEY` set as a Vercel env var
 | temperature | text | |
 | student_note | text | |
 | coach_note | text | saved by coach from CoachDashboard |
+| ai_analysis | text | nullable; cached JSON `{ putting, sg }` from CoachDashboard AI call — set once on first coach view, never cleared |
 | historical | bool | true for rounds entered retrospectively via the historical round modal |
 | created_at | timestamptz | |
 
@@ -101,7 +102,7 @@ AdminDashboard requires `REACT_APP_SUPABASE_SERVICE_KEY` set as a Vercel env var
 | putt2 | text | second putt distance |
 | gir | bool | greens in regulation |
 | fairway | text | `'left'`, `'right'`, `'yes'`, `'miss'` |
-| approach | text | distance band — see note on en-dash vs hyphen below |
+| approach | text | distance band — en-dash format e.g. `"50–75"` (see Approach bands below) |
 | shots_inside_50 | int | number of shots played inside 50 yards on this hole |
 | penalty | text | `'None'` or description e.g. `'OB'`, `'Hazard'` |
 | dna | bool | did not attempt (incomplete hole) |
@@ -139,6 +140,19 @@ Supports multiple rows per student (multiple coaches). Free students are limited
 | coach_id | uuid | FK → `profiles.id` |
 | invite_type | text | `'student'` (default) or `'coach'` |
 | used_by | uuid | FK → `profiles.id`, set on redemption |
+
+### `ai_cache`
+| column | type | notes |
+|---|---|---|
+| id | uuid | PK, `gen_random_uuid()` |
+| coach_id | uuid | FK → `profiles.id` ON DELETE CASCADE |
+| student_id | uuid | FK → `profiles.id` ON DELETE CASCADE |
+| cache_type | text | e.g. `'patterns'` |
+| content | text | cached AI response string |
+| round_ids | text[] | sorted array of round IDs the response was generated from |
+| created_at | timestamptz | `now()` |
+
+Unique constraint on `(coach_id, student_id, cache_type)`. Upserted on each successful API call; invalidated when `round_ids` no longer match the current set of sent rounds.
 
 ### `course_flags`
 | column | type | notes |
@@ -203,6 +217,7 @@ Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed 
 | `src/StudentLogging.jsx` | Hole-by-hole round entry + overview + send-to-coach |
 | `src/CoachHome.jsx` | Coach home: student list, round history, trend charts, analytics tab |
 | `src/CoachDashboard.jsx` | Coach round detail: scorecard, stats, AI analysis, coach notes |
+| `src/CoachDirectory.jsx` | Searchable coach directory for students — browse by name/club, view coach profile, redeem invite code |
 | `src/AdminDashboard.jsx` | Admin: coaches table, students table, relationships, courses, course flags, feedback |
 | `src/ProfilePage.jsx` | Profile editing for students and coaches |
 | `src/StudentSettings.jsx` | Student settings screen |
@@ -215,30 +230,26 @@ Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed 
 | `scripts/setup-demo.js` | Sets demo credentials (jamie@caddie-test.com / craig@caddie-test.com), purges test users |
 | `scripts/migrate-official-handicap.js` | One-off migration script for `official_handicap` column |
 | `scripts/add-profile-columns.js` | One-off migration script for new profile columns |
+| `scripts/add-ai-cache.js` | Migration script — adds `rounds.ai_analysis` column and creates `ai_cache` table |
 
 ---
 
 ## Key Definitions
 
 ### Approach bands
-Stored in `round_holes.approach`. Two sources write this field with different dash characters:
+Stored in `round_holes.approach`. Values use **en-dash** format: `"Under 50"`, `"50–75"`, `"75–100"`, `"100–125"`, `"125–150"`, `"150+"`.
 
-| Source | Format | Example |
-|---|---|---|
-| `scripts/seed-test-data.js` | **en-dash** | `"50–75"` |
-| `src/StudentLogging.jsx` (live rounds) | **hyphen** | `"50-75"` |
+`StudentLogging.jsx` now writes en-dash values (fixed 2026-04-11). Older rounds logged before that fix have hyphen values (`"50-75"`) and will not match analytics filters — there is no backfill for historical data.
 
-Analytics in both `CoachHome.jsx` and `StudentDashboard.jsx` filter with **en-dash** keys, meaning they will match seeded/imported data but **not** live rounds logged by students. This is a known data inconsistency.
-
-`StudentLogging.jsx` uses `BAND_KEYS` (hyphens) for state and `BAND_LABELS` (en-dashes) for display only — the value written to the DB is the hyphen form.
+Analytics in both `CoachHome.jsx` and `StudentDashboard.jsx` filter with en-dash keys.
 
 ### `parseFt(v)` — first putt distance parser
-Two slightly different implementations exist:
+All three files (`CoachHome.jsx`, `CoachDashboard.jsx`, `StudentDashboard.jsx`) now use the same implementation (aligned 2026-04-11):
 
-- **CoachHome / CoachDashboard**: `!v → 0`, `"30+" or "20+" → parseInt + 2`, `"7+" → 8`, else `parseInt`
-- **StudentDashboard / StudentLogging**: `!v → null`, `"<3" → 1.5`, `"30+" → 32`, else `parseFloat`
-
-The StudentDashboard version is more precise. CoachDashboard's version returns 0 for missing values rather than null.
+- `!v → null`
+- `"<3" → 1.5`
+- `"30+"`, `"20+"`, `"7+" → parseFloat(v) + 2`
+- else `parseFloat(v)`
 
 ### `parsePutt2(v)` — second putt distance parser
 Consistent across files: `!v → null`, `"<1" → 0.5`, else `parseFloat`.
@@ -261,6 +272,12 @@ Both `AnalyticsTab` (CoachHome) and `StudentAnalytics` (StudentDashboard) defaul
 - **CoachHome**: receives only `sent_to_coach = true` rounds (filtered at DB query)
 - **StudentDashboard**: receives all completed rounds regardless of `sent_to_coach` status
 
+### AI caching
+
+**Per-round analysis** (`CoachDashboard`): On first coach view of a round, two AI calls are made (putting insight + short game insight). On success, both results are stored as `{ putting, sg }` JSON in `rounds.ai_analysis`. Subsequent views read from the column and skip the API. The cache is never invalidated — `coach_note` saves do not touch `ai_analysis`. On API failure nothing is written.
+
+**Multi-round pattern analysis** (`CoachHome` → `RoundHistory`): Before calling the API, checks `ai_cache` for a row matching `(coach_id, student_id, cache_type='patterns')`. If found, compares the stored `round_ids` (sorted) against the current last-5 sent round IDs (sorted). An exact match serves the cached content. Any mismatch (e.g. a new round was sent) triggers a fresh API call. On success, upserts to `ai_cache` using the unique constraint `(coach_id, student_id, cache_type)`. On failure, shows the error string and writes nothing.
+
 ### AI model
 All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome pattern analysis / overview) or 1000 (CoachDashboard round detail). `/api/ai.js` injects a detailed golf system prompt covering approach interpretation, GIR, putting, scrambling, Stableford, and tone guidelines.
 
@@ -271,7 +288,9 @@ All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome 
 
 ## Known Issues / Gotchas
 
-**Approach band en-dash/hyphen mismatch**: Live rounds written by `StudentLogging.jsx` store hyphen-separated approach values (`"50-75"`). Analytics code in both CoachHome and StudentDashboard filters with en-dash keys (`"50–75"`), matching only seeded data. Live student rounds will show no data in the analytics approach table.
+**Approach band hyphen/en-dash mismatch (historical data only)**: `StudentLogging.jsx` was fixed (2026-04-11) to write en-dash values. Rounds logged before that date have hyphen values (`"50-75"`) in the DB and will not appear in analytics approach tables. No backfill has been done.
+
+**`parseFt` inconsistency resolved**: All three files now use the same implementation as of 2026-04-11. No longer a source of divergence.
 
 **`no-unused-vars` ESLint warning**: Destructured variables only used in removed code trigger warnings that block clean builds. Always remove unused destructured vars before committing.
 
@@ -292,6 +311,8 @@ All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome 
 **AdminDashboard needs `REACT_APP_SUPABASE_SERVICE_KEY`**: Must be set in Vercel env vars. Without it the admin client uses the anon key and RLS filters results, breaking the admin view.
 
 **Stableford excluded when SI is 0**: Holes with unknown stroke index (`si === 0`) are excluded from the Stableford denominator, which can cause a round to be excluded from the Stableford chart entirely if no SI data is available.
+
+**`scripts/add-ai-cache.js` requires manual SQL**: The migration script cannot execute DDL via the Supabase service role key (PostgREST does not support DDL). It prints the required SQL when `exec_sql` RPC is absent, then verifies schema state via SELECT. Run SQL in the Supabase SQL editor, then re-run the script to confirm.
 
 ---
 
@@ -322,7 +343,12 @@ Caddie is in private beta at Greenock Golf Club. There is no public signup. Stud
 - [x] Admin dashboard improvements — coaches/students split into separate tables, round stats, premium toggle, feedback delete
 - [x] Historical round entry — students can log past rounds via a modal in StudentDashboard
 - [x] WHS index tracking — stored per round, rendered as Handicap trend chart in StudentDashboard
-- [ ] **Fix approach band key mismatch** — `StudentLogging.jsx` writes hyphens; analytics code expects en-dashes; live rounds show no data in analytics approach table
+- [x] Fix approach band key mismatch — `StudentLogging.jsx` now writes en-dashes; analytics code and DB values are aligned for new rounds
+- [x] Duplicate account prevention via invite — `CaddieAuth.jsx` checks Supabase auth error message and `identities.length === 0` to block re-registration with an existing email
+- [x] Per-round AI analysis caching — `rounds.ai_analysis` stores putting + short game JSON; CoachDashboard reads cache before calling API
+- [x] Multi-round pattern analysis caching — `ai_cache` table stores pattern analysis keyed by `(coach_id, student_id, cache_type)`; invalidated when sent round IDs change
+- [ ] **AI retry with backoff on 529 errors** — the AI endpoint can return 529 (overloaded); no retry logic exists; failed calls silently show "Analysis unavailable"
+- [ ] **Student-facing AI analysis caching** — StudentLogging's AI round summary uses the same API but has no caching layer; add a similar pattern to `rounds.ai_analysis` or a separate field
 - [ ] Handicap tracking over time (chart exists; needs more rounds with `whs_index` populated)
 - [ ] Invite link expiry / single-use enforcement
 - [ ] Round editing after send (currently locked once sent to coach)
