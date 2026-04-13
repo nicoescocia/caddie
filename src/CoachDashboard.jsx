@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabaseClient";
 
 const css = `
@@ -180,6 +180,41 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const [coachNote, setCoachNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
 
+  const runAI = useCallback(async (holeRows) => {
+    const summary = holeRows.map(h =>
+      `H${h.hole_number} Par${h.par}: score ${h.score}, ${h.putts} putts, GIR ${h.gir ? "yes" : "no"}` +
+      (h.approach ? `, approach ${h.approach}` : "") +
+      (h.shots_inside_50 ? `, shots inside 50yds: ${h.shots_inside_50}` : "") +
+      (h.putt1 ? `, 1st putt ${h.putt1}` : "") +
+      (h.putt2 ? `, 2nd putt ${h.putt2}` : "") +
+      (h.fairway ? `, fairway ${h.fairway}` : "") +
+      (h.penalty && h.penalty !== "None" ? `, penalty ${h.penalty}` : "")
+    ).join("\n");
+
+    const tp    = holeRows.filter(h => h.putts >= 3).length;
+    const tpPct = Math.round(tp / holeRows.length * 100);
+    const p1s   = holeRows.filter(h => h.putt1).map(h => parseFt(h.putt1));
+    const avgP  = p1s.length ? Math.round(p1s.reduce((a, b) => a + b) / p1s.length) : 0;
+    const missL = holeRows.filter(h => h.fairway === "left").length;
+    const missR = holeRows.filter(h => h.fairway === "right").length;
+    const aiMissedGIR  = holeRows.filter(h => !h.gir && !h.picked_up && !h.dna);
+    const aiUnder50    = aiMissedGIR.filter(h => h.approach === "Under 50");
+    const aiScrambMade = aiUnder50.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length;
+
+    try {
+      const [r1, r2] = await Promise.all([
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\nAvg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
+      ]);
+      setAiPutting(r1);
+      setAiSg(r2);
+      await supabase.from("rounds").update({ ai_analysis: JSON.stringify({ putting: r1, sg: r2 }) }).eq("id", round.id);
+    } catch {
+      setAiPutting("Analysis unavailable.");
+      setAiSg("Analysis unavailable.");
+    }
+  }, [round]);
+
   useEffect(() => {
     if (!round) return;
     async function loadHoles() {
@@ -206,42 +241,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       }
     }
     loadHoles();
-  }, [round]);
-
-  async function runAI(holeRows) {
-    const summary = holeRows.map(h =>
-      `H${h.hole_number} Par${h.par}: score ${h.score}, ${h.putts} putts, GIR ${h.gir ? "yes" : "no"}` +
-      (h.approach ? `, approach ${h.approach}` : "") +
-      (h.shots_inside_50 ? `, shots inside 50yds: ${h.shots_inside_50}` : "") +
-      (h.putt1 ? `, 1st putt ${h.putt1}` : "") +
-      (h.putt2 ? `, 2nd putt ${h.putt2}` : "") +
-      (h.fairway ? `, fairway ${h.fairway}` : "") +
-      (h.penalty && h.penalty !== "None" ? `, penalty ${h.penalty}` : "")
-    ).join("\n");
-
-    const tp    = holeRows.filter(h => h.putts >= 3).length;
-    const tpPct = Math.round(tp / holeRows.length * 100);
-    const p1s   = holeRows.filter(h => h.putt1).map(h => parseFt(h.putt1));
-    const avgP  = p1s.length ? Math.round(p1s.reduce((a, b) => a + b) / p1s.length) : 0;
-    const missL = holeRows.filter(h => h.fairway === "left").length;
-    const missR = holeRows.filter(h => h.fairway === "right").length;
-    const aiMissedGIR    = holeRows.filter(h => !h.gir && !h.picked_up && !h.dna);
-    const aiUnder50      = aiMissedGIR.filter(h => h.approach === "Under 50");
-    const aiScrambMade   = aiUnder50.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length;
-
-    try {
-      const [r1, r2] = await Promise.all([
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\nAvg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
-      ]);
-      setAiPutting(r1);
-      setAiSg(r2);
-      await supabase.from("rounds").update({ ai_analysis: JSON.stringify({ putting: r1, sg: r2 }) }).eq("id", round.id);
-    } catch (e) {
-      setAiPutting("Analysis unavailable.");
-      setAiSg("Analysis unavailable.");
-    }
-  }
+  }, [round, runAI]);
 
   async function saveNote() {
     await supabase.from("rounds").update({ coach_note: coachNote }).eq("id", round.id);
