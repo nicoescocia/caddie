@@ -948,6 +948,7 @@ OUTPUT FORMAT
       try {
         const result = await callAI(enhancedPrompt);
         setAiPatterns(result);
+        console.log("ai_cache upsert values:", { coach_id: coachId, student_id: student.id, cache_type: "patterns", round_ids: last5.map(r => r.id) });
         const { error: cacheError } = await supabase.from("ai_cache").upsert({
           coach_id: coachId,
           student_id: student.id,
