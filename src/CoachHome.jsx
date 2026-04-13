@@ -842,7 +842,7 @@ function RoundHistory({ student, rounds, coachId, onSelectRound, onBack, onSignO
         (scrPct       != null ? `, scrambling ${scrPct}%` : "") +
         (r.handicap   != null ? `, course hcp ${r.handicap}` : "") +
         (r.whs_index  != null ? `, WHS index ${r.whs_index}` : "");
-    }).join("\n");
+    });
 
     const SYSTEM_PROMPT = `You are an expert golf coach analysing a student's recent rounds to identify performance patterns. All stats have been normalised per hole so rounds of different lengths (9 or 18 holes) are directly comparable.
 
@@ -874,8 +874,16 @@ OUTPUT FORMAT
 - Be constructive — frame patterns as development opportunities, not criticisms
 - Do not mention round length or the normalisation process in the output`;
 
-    const prompt = `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}`;
     const last5Ids = last5.map(r => r.id).sort();
+
+    const APPROACH_BANDS = [
+      { key: "Under 50", label: "under 50" },
+      { key: "50\u201375",    label: "50\u201375" },
+      { key: "75\u2013100",   label: "75\u2013100" },
+      { key: "100\u2013125",  label: "100\u2013125" },
+      { key: "125\u2013150",  label: "125\u2013150" },
+      { key: "150+",     label: "150+" },
+    ];
 
     async function run() {
       const { data: cached } = await supabase
@@ -892,8 +900,53 @@ OUTPUT FORMAT
           return;
         }
       }
+
+      // Fetch per-hole data for approach and putt enrichment
+      const { data: allHoles } = await supabase
+        .from("round_holes")
+        .select("round_id, approach, putt1, dna, picked_up")
+        .in("round_id", last5.map(r => r.id));
+
+      const holesByRound = {};
+      (allHoles || []).forEach(h => {
+        if (!holesByRound[h.round_id]) holesByRound[h.round_id] = [];
+        holesByRound[h.round_id].push(h);
+      });
+
+      const enhancedSummaries = last5.map((r, i) => {
+        const holes = (holesByRound[r.id] || []).filter(h => !h.dna && !h.picked_up);
+        const approachHoles = holes.filter(h => h.approach);
+        const totalApproach = approachHoles.length;
+
+        let approachLine = "";
+        if (totalApproach > 0) {
+          const parts = APPROACH_BANDS
+            .map(b => {
+              const count = approachHoles.filter(h => h.approach === b.key).length;
+              return count > 0 ? `${Math.round(count / totalApproach * 100)}% ${b.label}` : null;
+            })
+            .filter(Boolean);
+          if (parts.length > 0) approachLine = `\n  Approach: ${parts.join(", ")}`;
+        }
+
+        let puttLine = "";
+        const puttParts = APPROACH_BANDS
+          .map(b => {
+            const bandHoles = approachHoles.filter(h => h.approach === b.key && h.putt1);
+            if (bandHoles.length < 2) return null;
+            const avg = Math.round(bandHoles.reduce((sum, h) => sum + parseFt(h.putt1), 0) / bandHoles.length);
+            return `${b.label} = ${avg}ft`;
+          })
+          .filter(Boolean);
+        if (puttParts.length > 0) puttLine = `\n  Avg 1st putt: ${puttParts.join(", ")}`;
+
+        return roundSummaries[i] + approachLine + puttLine;
+      });
+
+      const enhancedPrompt = `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${enhancedSummaries.join("\n")}`;
+
       try {
-        const result = await callAI(prompt);
+        const result = await callAI(enhancedPrompt);
         setAiPatterns(result);
         supabase.from("ai_cache").upsert({
           coach_id: coachId,
