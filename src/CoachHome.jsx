@@ -802,7 +802,7 @@ function AnalyticsTab({ sentRounds }) {
   );
 }
 
-function RoundHistory({ student, rounds, onSelectRound, onBack, onSignOut, onHome }) {
+function RoundHistory({ student, rounds, coachId, onSelectRound, onBack, onSignOut, onHome }) {
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
   const rounds9Count  = scored.filter(r => r.holes_played === 9).length;
@@ -874,9 +874,39 @@ OUTPUT FORMAT
 - Be constructive — frame patterns as development opportunities, not criticisms
 - Do not mention round length or the normalisation process in the output`;
 
-    callAI(
-      `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}`
-    ).then(setAiPatterns).catch(() => setAiPatterns("Pattern analysis unavailable."));
+    const prompt = `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${roundSummaries}`;
+    const last5Ids = last5.map(r => r.id).sort();
+
+    async function run() {
+      const { data: cached } = await supabase
+        .from("ai_cache")
+        .select("content, round_ids")
+        .eq("coach_id", coachId)
+        .eq("student_id", student.id)
+        .eq("cache_type", "patterns")
+        .maybeSingle();
+      if (cached) {
+        const cachedIds = [...cached.round_ids].sort();
+        if (cachedIds.length === last5Ids.length && cachedIds.every((id, i) => id === last5Ids[i])) {
+          setAiPatterns(cached.content);
+          return;
+        }
+      }
+      try {
+        const result = await callAI(prompt);
+        setAiPatterns(result);
+        supabase.from("ai_cache").upsert({
+          coach_id: coachId,
+          student_id: student.id,
+          cache_type: "patterns",
+          content: result,
+          round_ids: last5.map(r => r.id),
+        }, { onConflict: "coach_id,student_id,cache_type" });
+      } catch {
+        setAiPatterns("Pattern analysis unavailable.");
+      }
+    }
+    run();
   }, [rounds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -1135,6 +1165,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
     return (
       <RoundHistory
         student={selectedStudent}
+        coachId={user.id}
         onHome={() => setScreen("students")}
         rounds={studentRounds}
         onSelectRound={r => onSelectRound(r, selectedStudent)}
