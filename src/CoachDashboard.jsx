@@ -193,7 +193,17 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       setCoachNote(round.coach_note || "");
       setNoteSaved(false);
       setLoading(false);
-      if (data && data.length > 0) runAI(data);
+      if (round.ai_analysis) {
+        try {
+          const cached = JSON.parse(round.ai_analysis);
+          setAiPutting(cached.putting || null);
+          setAiSg(cached.sg || null);
+        } catch {
+          if (data && data.length > 0) runAI(data);
+        }
+      } else if (data && data.length > 0) {
+        runAI(data);
+      }
     }
     loadHoles();
   }, [round]);
@@ -226,6 +236,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       ]);
       setAiPutting(r1);
       setAiSg(r2);
+      await supabase.from("rounds").update({ ai_analysis: JSON.stringify({ putting: r1, sg: r2 }) }).eq("id", round.id);
     } catch (e) {
       setAiPutting("Analysis unavailable.");
       setAiSg("Analysis unavailable.");
