@@ -39,8 +39,7 @@ HANDICAP CONTEXT
 - Avoid comparisons to tour averages unless directly relevant.
 
 SAMPLE SIZE AND COURSE COMPARISONS
-- Never draw conclusions from fewer than 10 rounds on a specific course. If a player has played fewer than 10 rounds on a course, treat any course-specific patterns as noise, not signal.
-- Never compare performance between two courses unless the player has at least 10 rounds on each. If this threshold is not met, do not mention course-specific performance differences at all.
+- Never mention course names, never compare performance between courses, and never reference which course a round was played on. All analysis must be based purely on statistics.
 - When sample size is small (fewer than 5 rounds total), focus only on what happened in the rounds provided — do not speculate about trends or patterns.
 - High handicap players are inherently inconsistent. Variation in stats across a small number of rounds should be attributed to normal inconsistency, not meaningful patterns. Only flag something as a genuine pattern if it appears consistently across at least 5 rounds.
 - Never use phrases like "dramatically different", "clear pattern", or "significant development" when based on fewer than 5 data points.
@@ -58,7 +57,7 @@ BENCHMARKS AND COMPARISONS
 - Do not comment on GIR from under 50 yards — it is not meaningful at that distance.
 
 PENALTIES
-- Penalty shots are a primary scoring concern. If a player has 2 or more penalties in a round, this must be identified as a key focus area. Do not bury penalties as a secondary observation.`;
+- If a player has 2 or more penalty shots in a round this MUST be the primary focus area of the analysis, listed first, before any other observations.`;
 
 const DELAYS = [0, 2000, 4000]; // ms to wait before attempt 0, 1, 2
 
