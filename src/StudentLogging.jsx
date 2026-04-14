@@ -319,7 +319,7 @@ const HOLE_PARS = {
 };
 
 const APPROACH_BANDS = [
-  { v:"Under 50", u:"yds" }, { v:"50–75", u:"yds" }, { v:"75–100", u:"yds" },
+  { v:"Under 25", u:"yds" }, { v:"25–50", u:"yds" }, { v:"50–75", u:"yds" }, { v:"75–100", u:"yds" },
   { v:"100–125", u:"yds" }, { v:"125–150", u:"yds" }, { v:"150+", u:"yds" },
 ];
 const PUTT_DIST  = [{v:"<3",u:"ft"},{v:"3",u:"ft"},{v:"4",u:"ft"},{v:"6",u:"ft"},{v:"9",u:"ft"},{v:"12",u:"ft"},{v:"15",u:"ft"},{v:"20",u:"ft"},{v:"25",u:"ft"},{v:"30+",u:"ft"}];
@@ -519,8 +519,8 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
   const avgPutt1       = putt1Vals.length ? (putt1Vals.reduce((a, b) => a + b, 0) / putt1Vals.length).toFixed(1) : null;
   const tpPct          = statHoles.length ? Math.round(tpCount / statHoles.length * 100) : 0;
 
-  const BAND_KEYS   = ["Under 50","50–75","75–100","100–125","125–150","150+"];
-  const BAND_LABELS = {"Under 50":"Under 50","50–75":"50–75","75–100":"75–100","100–125":"100–125","125–150":"125–150","150+":"150+"};
+  const BAND_KEYS   = ["Under 25","25–50","50–75","75–100","100–125","125–150","150+"];
+  const BAND_LABELS = {"Under 25":"Under 25","25–50":"25–50","50–75":"50–75","75–100":"75–100","100–125":"100–125","125–150":"125–150","150+":"150+"};
   const bandData = BAND_KEYS.map(key => {
     const bh = statHoles.filter(h => holeData[holes.indexOf(h)].approach === key);
     if (!bh.length) return null;
@@ -1822,7 +1822,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   const par3GIR   = h.par === 3 && gir === true;
   const showAppr  = h.par >= 4 || (d.putts !== null && !par3GIR);
-  const showSI50  = d.approach === "Under 50";
+  const showSI50  = d.approach === "Under 25" || d.approach === "25–50";
   const show3putt = d.putts >= 3;
   const showFW    = h.par >= 4;
   const showMiss  = d.fairway === "left" || d.fairway === "right";
@@ -1966,7 +1966,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             <div className="sec-label">Approach distance</div>
             <div className="appr-grid">
               {APPROACH_BANDS.map(b => (
-                <button key={b.v} className={"appr-btn " + (d.approach === b.v ? "sel" : "")} onClick={() => update({ approach: b.v, shotsInside50: b.v === "Under 50" ? (d.shotsInside50 || 1) : null })}>
+                <button key={b.v} className={"appr-btn " + (d.approach === b.v ? "sel" : "")} onClick={() => update({ approach: b.v, shotsInside50: (b.v === "Under 25" || b.v === "25–50") ? (d.shotsInside50 || 1) : null })}>
                   <span className="av">{b.v}</span><span className="au">{b.u}</span>
                 </button>
               ))}
