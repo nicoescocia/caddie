@@ -856,8 +856,9 @@ function RoundHistory({ student, rounds, coachId, onSelectRound, onBack, onSignO
         (fwPct        != null ? `, fairways ${fwPct}% (${r.miss_left ?? 0}L ${r.miss_right ?? 0}R miss)` : "") +
         (puttsPerHole != null ? `, putts/hole ${puttsPerHole}` : "") +
         (scrPct       != null ? `, scrambling ${scrPct}%` : "") +
-        (r.handicap   != null ? `, course hcp ${r.handicap}` : "") +
-        (r.whs_index  != null ? `, WHS index ${r.whs_index}` : "");
+        (r.whs_index  != null ? `, WHS index ${r.whs_index}` : "") +
+        (r.student_note ? `, student note: "${r.student_note}"` : "") +
+        (r.wind || r.conditions || r.temperature ? `, conditions: ${[r.wind, r.conditions, r.temperature].filter(Boolean).join(", ")}` : "");
     });
 
     const SYSTEM_PROMPT = `You are an expert golf coach analysing a student's recent rounds to identify performance patterns. All stats have been normalised per hole so rounds of different lengths (9 or 18 holes) are directly comparable.
