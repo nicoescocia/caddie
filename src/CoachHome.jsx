@@ -849,8 +849,7 @@ function RoundHistory({ student, rounds, coachId, onSelectRound, onBack, onSignO
       const stableford   = r.stableford_holes ? (r.stableford_total / r.stableford_holes).toFixed(2) : null;
       const scrPct       = r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null;
       const fmtDate      = new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-      const courseName   = r.courses?.name || "Golf Course";
-      return `Round ${i + 1} (${fmtDate}, ${courseName}, ${hp} holes):` +
+      return `Round ${i + 1} (${fmtDate}, ${hp} holes):` +
         ` vs par/hole ${vsParPerHole >= 0 ? "+" : ""}${vsParPerHole}` +
         (stableford   != null ? `, stableford/hole ${stableford}` : "") +
         (girPct       != null ? `, GIR ${girPct}%` : "") +
