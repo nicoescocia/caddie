@@ -2,6 +2,22 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
+const HANDICAP_BENCHMARKS = {
+  0:  { proximity_u50: 11, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
+  5:  { proximity_u50: 13, proximity_50_75: 21, proximity_75_100: 28, proximity_100_125: 33, proximity_125_150: 40, proximity_150plus: 63, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33 },
+  10: { proximity_u50: 15, proximity_50_75: 24, proximity_75_100: 32, proximity_100_125: 40, proximity_125_150: 50, proximity_150plus: 72, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34 },
+  15: { proximity_u50: 18, proximity_50_75: 28, proximity_75_100: 38, proximity_100_125: 50, proximity_125_150: 65, proximity_150plus: 92, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35 },
+  20: { proximity_u50: 20, proximity_50_75: 32, proximity_75_100: 44, proximity_100_125: 56, proximity_125_150: 75, proximity_150plus: 109, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36 },
+  25: { proximity_u50: 22, proximity_50_75: 36, proximity_75_100: 50, proximity_100_125: 62, proximity_125_150: 85, proximity_150plus: 116, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37 },
+  30: { proximity_u50: 24, proximity_50_75: 40, proximity_75_100: 56, proximity_100_125: 70, proximity_125_150: 95, proximity_150plus: 125, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38 },
+};
+
+function getBenchmark(handicap) {
+  const brackets = [0, 5, 10, 15, 20, 25, 30];
+  const nearest = brackets.reduce((a, b) => Math.abs(b - handicap) < Math.abs(a - handicap) ? b : a);
+  return HANDICAP_BENCHMARKS[nearest];
+}
+
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -447,7 +463,7 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach, officialHandicap }) {
   const [showHoles, setShowHoles] = useState(false);
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -537,6 +553,11 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
     prompt += `Penalties: ${penalties}\n`;
     if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
     if (avgPutts) prompt += `Avg putts per hole: ${avgPutts}\n`;
+    const whsIndex = officialHandicap != null ? officialHandicap : null;
+    if (whsIndex != null) {
+      const bm = getBenchmark(whsIndex);
+      prompt += `\nBenchmarks for a ${Math.round(whsIndex)} handicap player: avg proximity under 50yds=${bm.proximity_u50}ft, scrambling=${bm.scrambling}%, GIR=${bm.gir}%, fairways=${bm.fairways}%, putts/round=${bm.putts_per_round}\n`;
+    }
     if (bandData.length) {
       prompt += `\nDo not comment on GIR from under 50 yards — it is not a meaningful metric at that distance. Use avg first putt distance as the measure of proximity and quality of approach play.\n`;
       prompt += `\nApproach breakdown:\n`;
@@ -1742,6 +1763,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         roundComplete={roundComplete}
         onFinishRound={handleFinishRound}
         hasCoach={hasCoach}
+        officialHandicap={officialHandicap}
       />
     );
   }
