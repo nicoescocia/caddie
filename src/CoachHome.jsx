@@ -1,6 +1,22 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
+const HANDICAP_BENCHMARKS = {
+  0:  { proximity_u50: 11, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
+  5:  { proximity_u50: 13, proximity_50_75: 21, proximity_75_100: 28, proximity_100_125: 33, proximity_125_150: 40, proximity_150plus: 63, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33 },
+  10: { proximity_u50: 15, proximity_50_75: 24, proximity_75_100: 32, proximity_100_125: 40, proximity_125_150: 50, proximity_150plus: 72, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34 },
+  15: { proximity_u50: 18, proximity_50_75: 28, proximity_75_100: 38, proximity_100_125: 50, proximity_125_150: 65, proximity_150plus: 92, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35 },
+  20: { proximity_u50: 20, proximity_50_75: 32, proximity_75_100: 44, proximity_100_125: 56, proximity_125_150: 75, proximity_150plus: 109, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36 },
+  25: { proximity_u50: 22, proximity_50_75: 36, proximity_75_100: 50, proximity_100_125: 62, proximity_125_150: 85, proximity_150plus: 116, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37 },
+  30: { proximity_u50: 24, proximity_50_75: 40, proximity_75_100: 56, proximity_100_125: 70, proximity_125_150: 95, proximity_150plus: 125, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38 },
+};
+
+function getBenchmark(handicap) {
+  const brackets = [0, 5, 10, 15, 20, 25, 30];
+  const nearest = brackets.reduce((a, b) => Math.abs(b - handicap) < Math.abs(a - handicap) ? b : a);
+  return HANDICAP_BENCHMARKS[nearest];
+}
+
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -943,7 +959,14 @@ OUTPUT FORMAT
         return roundSummaries[i] + approachLine + puttLine;
       });
 
-      const enhancedPrompt = `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:\n\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${enhancedSummaries.join("\n")}`;
+      const mostRecent = last5[last5.length - 1];
+      const whsIndex = mostRecent.whs_index != null ? mostRecent.whs_index : student.official_handicap;
+      let benchmarkLine = "";
+      if (whsIndex != null) {
+        const bm = getBenchmark(whsIndex);
+        benchmarkLine = `\nPlayer benchmarks (${Math.round(whsIndex)} handicap): proximity under 50yds=${bm.proximity_u50}ft, 50-75yds=${bm.proximity_50_75}ft, 75-100yds=${bm.proximity_75_100}ft, 100-125yds=${bm.proximity_100_125}ft, 125-150yds=${bm.proximity_125_150}ft, 150+yds=${bm.proximity_150plus}ft, scrambling=${bm.scrambling}%, GIR=${bm.gir}%, fairways=${bm.fairways}%, putts/round=${bm.putts_per_round}\n`;
+      }
+      const enhancedPrompt = `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:${benchmarkLine}\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${enhancedSummaries.join("\n")}`;
 
       try {
         const result = await callAI(enhancedPrompt);
