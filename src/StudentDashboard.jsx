@@ -354,7 +354,8 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
 
   // Table 1 data
   const approachBands = [
-    { key: "Under 50", label: "Under 50" },
+    { key: "Under 25", label: "Under 25 yds" },
+    { key: "25–50",    label: "25–50 yds" },
     { key: "50–75",    label: "50–75" },
     { key: "75–100",   label: "75–100" },
     { key: "100–125",  label: "100–125" },

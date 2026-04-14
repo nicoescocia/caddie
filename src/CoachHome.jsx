@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
 const HANDICAP_BENCHMARKS = {
-  0:  { proximity_u50: 11, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
-  5:  { proximity_u50: 13, proximity_50_75: 21, proximity_75_100: 28, proximity_100_125: 33, proximity_125_150: 40, proximity_150plus: 63, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33 },
-  10: { proximity_u50: 15, proximity_50_75: 24, proximity_75_100: 32, proximity_100_125: 40, proximity_125_150: 50, proximity_150plus: 72, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34 },
-  15: { proximity_u50: 18, proximity_50_75: 28, proximity_75_100: 38, proximity_100_125: 50, proximity_125_150: 65, proximity_150plus: 92, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35 },
-  20: { proximity_u50: 20, proximity_50_75: 32, proximity_75_100: 44, proximity_100_125: 56, proximity_125_150: 75, proximity_150plus: 109, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36 },
-  25: { proximity_u50: 22, proximity_50_75: 36, proximity_75_100: 50, proximity_100_125: 62, proximity_125_150: 85, proximity_150plus: 116, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37 },
-  30: { proximity_u50: 24, proximity_50_75: 40, proximity_75_100: 56, proximity_100_125: 70, proximity_125_150: 95, proximity_150plus: 125, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38 },
+  0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
+  5:  { proximity_u25: 10, proximity_25_50: 17, proximity_50_75: 21, proximity_75_100: 28, proximity_100_125: 33, proximity_125_150: 40, proximity_150plus: 63, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33 },
+  10: { proximity_u25: 12, proximity_25_50: 20, proximity_50_75: 24, proximity_75_100: 32, proximity_100_125: 40, proximity_125_150: 50, proximity_150plus: 72, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34 },
+  15: { proximity_u25: 14, proximity_25_50: 24, proximity_50_75: 28, proximity_75_100: 38, proximity_100_125: 50, proximity_125_150: 65, proximity_150plus: 92, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35 },
+  20: { proximity_u25: 16, proximity_25_50: 28, proximity_50_75: 32, proximity_75_100: 44, proximity_100_125: 56, proximity_125_150: 75, proximity_150plus: 109, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36 },
+  25: { proximity_u25: 18, proximity_25_50: 32, proximity_50_75: 36, proximity_75_100: 50, proximity_100_125: 62, proximity_125_150: 85, proximity_150plus: 116, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37 },
+  30: { proximity_u25: 20, proximity_25_50: 36, proximity_50_75: 40, proximity_75_100: 56, proximity_100_125: 70, proximity_125_150: 95, proximity_150plus: 125, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38 },
 };
 
 function getBenchmark(handicap) {
@@ -676,7 +676,8 @@ function AnalyticsTab({ sentRounds }) {
 
   // Table 1 — Avg 1st putt by approach band
   const approachBands = [
-    { key: "Under 50", label: "Under 50" },
+    { key: "Under 25", label: "Under 25 yds" },
+    { key: "25–50",    label: "25–50 yds" },
     { key: "50–75",    label: "50–75" },
     { key: "75–100",   label: "75–100" },
     { key: "100–125",  label: "100–125" },
@@ -893,7 +894,8 @@ OUTPUT FORMAT
     const last5Ids = last5.map(r => r.id).sort();
 
     const APPROACH_BANDS = [
-      { key: "Under 50", label: "under 50" },
+      { key: "Under 25", label: "under 25" },
+      { key: "25\u201350",    label: "25\u201350" },
       { key: "50\u201375",    label: "50\u201375" },
       { key: "75\u2013100",   label: "75\u2013100" },
       { key: "100\u2013125",  label: "100\u2013125" },
@@ -964,7 +966,7 @@ OUTPUT FORMAT
       let benchmarkLine = "";
       if (whsIndex != null) {
         const bm = getBenchmark(whsIndex);
-        benchmarkLine = `\nPlayer benchmarks (${Math.round(whsIndex)} handicap): proximity under 50yds=${bm.proximity_u50}ft, 50-75yds=${bm.proximity_50_75}ft, 75-100yds=${bm.proximity_75_100}ft, 100-125yds=${bm.proximity_100_125}ft, 125-150yds=${bm.proximity_125_150}ft, 150+yds=${bm.proximity_150plus}ft, scrambling=${bm.scrambling}%, GIR=${bm.gir}%, fairways=${bm.fairways}%, putts/round=${bm.putts_per_round}\n`;
+        benchmarkLine = `\nPlayer benchmarks (${Math.round(whsIndex)} handicap): proximity under 25yds=${bm.proximity_u25}ft, 25-50yds=${bm.proximity_25_50}ft, 50-75yds=${bm.proximity_50_75}ft, 75-100yds=${bm.proximity_75_100}ft, 100-125yds=${bm.proximity_100_125}ft, 125-150yds=${bm.proximity_125_150}ft, 150+yds=${bm.proximity_150plus}ft, scrambling=${bm.scrambling}%, GIR=${bm.gir}%, fairways=${bm.fairways}%, putts/round=${bm.putts_per_round}\n`;
       }
       const enhancedPrompt = `${SYSTEM_PROMPT}\n\nAnalyse these ${last5.length} rounds from ${student.first_name} ${student.last_name}:${benchmarkLine}\nRounds listed oldest to newest (Round 1 = oldest, Round ${last5.length} = most recent):\n${enhancedSummaries.join("\n")}`;
 
