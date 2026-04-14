@@ -49,7 +49,16 @@ TONE
 - Always encouraging and constructive. Lead with a positive observation before identifying areas for improvement.
 - Be specific — reference actual numbers from the round rather than making generic statements.
 - Prioritise the 1-2 most impactful areas for improvement rather than listing every weakness.
-- End with a forward-looking statement about what improvement in that area would look like.`;
+- End with a forward-looking statement about what improvement in that area would look like.
+
+BENCHMARKS AND COMPARISONS
+- When evaluating proximity (avg first putt distance), always compare against the player's handicap benchmark. A reading worse than benchmark for their handicap is a concern; better than benchmark is a strength. Never describe a proximity figure as good or solid without checking it against the benchmark.
+- When evaluating scrambling (up & down %), always compare against the player's handicap benchmark.
+- When evaluating GIR %, fairways hit %, and putts per round, always compare against the player's handicap benchmark.
+- Do not comment on GIR from under 50 yards — it is not meaningful at that distance.
+
+PENALTIES
+- Penalty shots are a primary scoring concern. If a player has 2 or more penalties in a round, this must be identified as a key focus area. Do not bury penalties as a secondary observation.`;
 
 const DELAYS = [0, 2000, 4000]; // ms to wait before attempt 0, 1, 2
 
