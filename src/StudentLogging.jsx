@@ -342,7 +342,9 @@ function emptyHole(par) {
 }
 function holeFromRow(row) {
   return {
-    score: row.score, putts: row.putts, fairway: row.fairway,
+    // picked_up holes store net double bogey in score (null for rounds saved before this was introduced)
+    score: row.picked_up && row.score != null ? row.score : row.score,
+    putts: row.putts, fairway: row.fairway,
     approach: row.approach, shotsInside50: row.shots_inside_50,
     putt1: row.putt1, putt2: row.putt2, putt3: row.putt3 || null,
     penalty: row.penalty || "None", sgReason: row.sg_reason || null,
@@ -1526,7 +1528,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     const hi   = holes[idx];
     const payload = {
       round_id: rid, hole_number: hi.n, par: hi.par, stroke_index: hi.idx || null,
-      score: hole.dna ? null : hole.pickedUp ? null : hole.score,
+      score: hole.dna ? null : hole.pickedUp ? netDoubleBogey(hi.par, hi.idx, parseInt(handicap, 10) || 0, holes.length) : hole.score,
       putts: hole.dna ? null : hole.pickedUp ? null : hole.putts,
       gir: hole.dna || hole.pickedUp ? false : calcGIR(hole.score, hole.putts, hi.par),
       fairway: hole.dna || hole.pickedUp ? null : hole.fairway,
