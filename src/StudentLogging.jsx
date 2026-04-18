@@ -655,8 +655,34 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
       if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
       prompt += `Total putts: ${totalPutts} (avg ${avgPutts}/hole)\n`;
       prompt += `3-putts: ${tpCount} (${tpPct}%)\n`;
+      if (tpCount > 0) {
+        const threePuttDetails = statHoles.filter(h => {
+          const hd = holeData[holes.indexOf(h)];
+          return hd.putts >= 3 && hd.putt1;
+        });
+        if (threePuttDetails.length > 0) {
+          prompt += `3-putt detail: ${threePuttDetails.map(h => {
+            const hd = holeData[holes.indexOf(h)];
+            return `hole ${h.n} (first putt ${parseFt(hd.putt1)}ft)`;
+          }).join(", ")}\n`;
+        }
+      }
+      const missedShortPutts = statHoles.filter(h => {
+        const hd = holeData[holes.indexOf(h)];
+        return hd.putt2 && parseFt(hd.putt2) <= 3;
+      });
+      if (missedShortPutts.length > 0) {
+        prompt += `Missed short putts (\u22643ft second putt): ${missedShortPutts.map(h => {
+          const hd = holeData[holes.indexOf(h)];
+          return `hole ${h.n} (${parseFt(hd.putt2)}ft)`;
+        }).join(", ")}\n`;
+      }
       if (scramblePct !== null) prompt += `Scrambling: ${scramblePct}% (${upAndDown}/${missedGIR.length} up & down)\n`;
       prompt += `Penalties: ${penalties}\n`;
+      const pickedUpHoles = attempted.filter(h => holeData[holes.indexOf(h)]?.pickedUp);
+      if (pickedUpHoles.length > 0) {
+        prompt += `Picked up on: ${pickedUpHoles.map(h => `hole ${h.n} (par ${h.par})`).join(", ")}\n`;
+      }
       if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
       if (avgPutts) prompt += `Avg putts per hole: ${avgPutts}\n`;
       const whsIndex = officialHandicap != null ? officialHandicap : null;
