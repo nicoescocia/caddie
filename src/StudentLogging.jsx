@@ -527,13 +527,11 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
   const bandData = BAND_KEYS.map(key => {
     const bh = statHoles.filter(h => holeData[holes.indexOf(h)].approach === key);
     if (!bh.length) return null;
-    const bGIR = bh.filter(h => calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
     const bP1  = bh.map(h => parseFt(holeData[holes.indexOf(h)].putt1)).filter(v => v !== null);
     const bP1Valid = bh.filter(h => holeData[holes.indexOf(h)].putt1);
     return {
       label:      BAND_LABELS[key],
       count:      bh.length,
-      girPct:     Math.round(bGIR.length / bh.length * 100),
       avgPutts:   (bh.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0) / bh.length).toFixed(2),
       avgPutt1:   bP1.length ? (bP1.reduce((a, b) => a + b, 0) / bP1.length).toFixed(1) : "—",
       putt1Count: bP1Valid.length,
@@ -993,7 +991,6 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
                 <tr>
                   <th style={{textAlign:"left"}}>Distance</th>
                   <th>Holes</th>
-                  <th>GIR%</th>
                   <th>Avg putts</th>
                   <th>Avg 1st</th>
                 </tr>
@@ -1003,7 +1000,6 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
                   <tr key={b.label}>
                     <td style={{textAlign:"left",fontWeight:600,fontSize:12}}>{b.label}</td>
                     <td>{b.count}</td>
-                    <td>{b.girPct}%</td>
                     <td>{b.avgPutts}</td>
                     <td>{b.avgPutt1 !== "—" ? b.avgPutt1 + " ft" : "—"}</td>
                   </tr>
