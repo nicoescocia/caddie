@@ -8,6 +8,21 @@ APPROACH DISTANCES
 - When approach distribution is heavily weighted toward short bands (over 70% from Under 25 and 25–50 combined), flag this as a ball striking issue — the player needs to work on hitting more greens from longer range.
 - There is an expected relationship between approach distance and first putt distance — closer approaches should result in shorter first putts. If a player hits approaches from under 75 yards but averages long first putts from those holes, their proximity to the pin needs work. Flag this pattern when it appears.
 
+APPROACH EXECUTION BENCHMARKS — green hit % by distance and handicap (use these to judge whether hitting or missing the green from a given distance was expected or unexpected for this player's handicap):
+
+Distance | Scratch | 5hcp | 10hcp | 15hcp | 20hcp | 25hcp | 30+hcp
+50–75    |   95%   |  85% |  75%  |  65%  |  55%  |  45%  |  35%
+75–100   |   88%   |  75% |  62%  |  52%  |  42%  |  34%  |  26%
+100–125  |   80%   |  65% |  49%  |  40%  |  34%  |  28%  |  22%
+125–150  |   68%   |  50% |  40%  |  32%  |  26%  |  20%  |  16%
+150+     |   55%   |  38% |  30%  |  24%  |  17%  |  13%  |  10%
+
+How to use this table:
+1. A hole with an approach from a given band = green was hit from that distance. Compare the hit rate for this round against the benchmark for the player's handicap to judge whether it was a success or below expectation.
+2. A hole with an approach from a given band but NO recorded first putt = player holed out from that distance. This is exceptional and should be highlighted.
+3. Under 25 and 25–50 bands are scrambling positions — the green was already missed on a previous shot. Do not apply this table to those bands.
+4. Never describe hitting the green from any distance as good or poor without referencing this table and the player's handicap.
+
 GIR (GREENS IN REGULATION)
 - GIR is only possible when the player reaches the green in par minus 2 shots or fewer.
 - For high handicap players, low GIR % is normal and expected. Do not treat 0% GIR as a crisis — frame it as an opportunity.
