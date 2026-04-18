@@ -465,12 +465,13 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach, officialHandicap }) {
+function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach, officialHandicap }) {
   const [showHoles, setShowHoles] = useState(false);
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [hcpEditing, setHcpEditing] = useState(false);
   const [hcpInput, setHcpInput]     = useState("");
+  const [historicalContext, setHistoricalContext] = useState(null);
 
   const loggedHoles  = holes.filter(h => savedHoles.has(h.n));
   const attempted    = loggedHoles.filter(h => !holeData[holes.indexOf(h)].dna);
@@ -539,39 +540,190 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, handicap, onH
     };
   }).filter(Boolean);
 
+  async function fetchHistoricalContext() {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return {};
+
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+    const [{ data: recentRounds }, { data: top5Rounds }] = await Promise.all([
+      supabase.from("rounds")
+        .select("id, course_id, total_score, total_par, total_putts, holes_played, created_at, whs_index, handicap")
+        .eq("student_id", authUser.id)
+        .not("total_score", "is", null)
+        .eq("sent_to_coach", true)
+        .gte("created_at", twoMonthsAgo.toISOString())
+        .order("created_at", { ascending: false }),
+      supabase.from("rounds")
+        .select("id, course_id, total_score, total_par, total_putts, holes_played, created_at, whs_index, handicap")
+        .eq("student_id", authUser.id)
+        .not("total_score", "is", null)
+        .eq("sent_to_coach", true)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+
+    const allRounds = (recentRounds || []).length >= (top5Rounds || []).length
+      ? (recentRounds || [])
+      : (top5Rounds || []);
+
+    if (allRounds.length === 0) return {};
+
+    // Overall recent form across all courses
+    let vsParSum = 0, puttsSum = 0, validCount = 0;
+    for (const r of allRounds) {
+      if (!r.total_score || !r.holes_played || r.total_par == null) continue;
+      vsParSum += (r.total_score - r.total_par) / r.holes_played;
+      if (r.total_putts != null) puttsSum += r.total_putts / r.holes_played;
+      validCount++;
+    }
+    const avgVsParPerHole = validCount ? vsParSum / validCount : null;
+    const avgPuttsPerHole = validCount ? puttsSum / validCount : null;
+
+    // Per-hole stats for current course only
+    const sameCourseRounds = allRounds.filter(r => r.course_id === courseId);
+    let struggles = [], strengths = [], recurringPickups = [];
+
+    if (sameCourseRounds.length >= 3) {
+      const { data: allHoles } = await supabase
+        .from("round_holes")
+        .select("round_id, hole_number, score, picked_up, par")
+        .in("round_id", sameCourseRounds.map(r => r.id));
+
+      if (allHoles && allHoles.length > 0) {
+        const holeMap = {};
+        for (const h of allHoles) {
+          if (!holeMap[h.hole_number]) holeMap[h.hole_number] = [];
+          holeMap[h.hole_number].push(h);
+        }
+
+        for (const [holeNumStr, history] of Object.entries(holeMap)) {
+          const holeNum = parseInt(holeNumStr);
+          const total = history.length;
+          if (total < 3) continue;
+
+          const pickups = history.filter(h => h.picked_up).length;
+          const scoredRows = history.filter(h => !h.picked_up && h.score != null);
+          const avgScore = scoredRows.length >= 3
+            ? scoredRows.reduce((s, h) => s + h.score, 0) / scoredRows.length
+            : null;
+          const par = history[0].par;
+
+          const todayHole = holes.find(h => h.n === holeNum);
+          const todayIdx  = todayHole ? holes.indexOf(todayHole) : -1;
+          const todayHd   = todayIdx >= 0 ? holeData[todayIdx] : null;
+          const todayScore = todayHd && !todayHd.pickedUp && !todayHd.dna ? todayHd.score : null;
+
+          if (pickups / total >= 0.3) {
+            recurringPickups.push({ hole: holeNum, par, pickups, total });
+          }
+
+          if (avgScore !== null && todayScore !== null) {
+            const holeDiff = todayScore - avgScore;
+            if (holeDiff > 1.5) {
+              struggles.push({ hole: holeNum, par, todayScore, avgScore: avgScore.toFixed(1), count: scoredRows.length, diff: holeDiff, pickups, total });
+            } else if (holeDiff < -1.5) {
+              strengths.push({ hole: holeNum, par, todayScore, avgScore: avgScore.toFixed(1), count: scoredRows.length, diff: holeDiff });
+            }
+          }
+        }
+
+        struggles.sort((a, b) => b.diff - a.diff);
+        if (struggles.length > 4) struggles = struggles.slice(0, 4);
+        strengths.sort((a, b) => a.diff - b.diff);
+        if (strengths.length > 3) strengths = strengths.slice(0, 3);
+      }
+    }
+
+    return { roundCount: allRounds.length, avgVsParPerHole, avgPuttsPerHole, struggles, strengths, recurringPickups };
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!isPremium || !(roundComplete || sent) || attempted.length < 3 || aiText !== null || aiLoading) return;
+    if (!isPremium || !(roundComplete || sent) || attempted.length < 3 || aiText !== null || aiLoading || historicalContext !== null) return;
     setAiLoading(true);
-    const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
-    const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
-    let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be encouraging, specific, and constructive. 3–4 sentences, no preamble.\n\n`;
-    prompt += `Course: ${courseName}\nScore: ${totalScore} (${diff >= 0 ? "+" : ""}${diff} vs par)\n`;
-    prompt += `GIR: ${girCount}/${attempted.length} (${girPct}%)\n`;
-    if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
-    prompt += `Total putts: ${totalPutts} (avg ${avgPutts}/hole)\n`;
-    prompt += `3-putts: ${tpCount} (${tpPct}%)\n`;
-    if (scramblePct !== null) prompt += `Scrambling: ${scramblePct}% (${upAndDown}/${missedGIR.length} up & down)\n`;
-    prompt += `Penalties: ${penalties}\n`;
-    if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
-    if (avgPutts) prompt += `Avg putts per hole: ${avgPutts}\n`;
-    const whsIndex = officialHandicap != null ? officialHandicap : null;
-    if (whsIndex != null) {
-      const bm = getBenchmark(whsIndex);
-      prompt += `\nBenchmarks for a ${Math.round(whsIndex)} handicap player: avg proximity under 25yds=${bm.proximity_u25}ft, 25-50yds=${bm.proximity_25_50}ft, scrambling=${bm.scrambling}%, GIR=${bm.gir}%, fairways=${bm.fairways}%, putts/round=${bm.putts_per_round}\n`;
+
+    async function run() {
+      const ctx = await fetchHistoricalContext();
+      setHistoricalContext(ctx);
+
+      const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
+      const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
+      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be encouraging, specific, and constructive. 3–4 sentences, no preamble.\n\n`;
+      prompt += `Course: ${courseName}\nScore: ${totalScore} (${diff >= 0 ? "+" : ""}${diff} vs par)\n`;
+      prompt += `GIR: ${girCount}/${attempted.length} (${girPct}%)\n`;
+      if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
+      prompt += `Total putts: ${totalPutts} (avg ${avgPutts}/hole)\n`;
+      prompt += `3-putts: ${tpCount} (${tpPct}%)\n`;
+      if (scramblePct !== null) prompt += `Scrambling: ${scramblePct}% (${upAndDown}/${missedGIR.length} up & down)\n`;
+      prompt += `Penalties: ${penalties}\n`;
+      if (avgPutt1) prompt += `Avg first putt: ${avgPutt1} ft\n`;
+      if (avgPutts) prompt += `Avg putts per hole: ${avgPutts}\n`;
+      const whsIndex = officialHandicap != null ? officialHandicap : null;
+      if (whsIndex != null) {
+        const bm = getBenchmark(whsIndex);
+        prompt += `\nBenchmarks for a ${Math.round(whsIndex)} handicap player: avg proximity under 25yds=${bm.proximity_u25}ft, 25-50yds=${bm.proximity_25_50}ft, scrambling=${bm.scrambling}%, GIR=${bm.gir}%, fairways=${bm.fairways}%, putts/round=${bm.putts_per_round}\n`;
+      }
+      if (bandData.length) {
+        prompt += `\nDo not comment on GIR from under 50 yards — it is not a meaningful metric at that distance. Use avg first putt distance as the measure of proximity and quality of approach play.\n`;
+        prompt += `\nApproach breakdown:\n`;
+        bandData.forEach(b => {
+          const putt1Part = b.putt1Count >= 2 ? `, avg first putt ${b.avgPutt1}ft` : "";
+          prompt += `  ${b.label} yds: ${b.count} hole${b.count !== 1 ? "s" : ""}${putt1Part}\n`;
+        });
+      }
+
+      if (ctx.roundCount) {
+        const todayVsParPerHole = attempted.length ? diff / attempted.length : null;
+        const todayPuttsPerHole = statHoles.length ? totalPutts / statHoles.length : null;
+
+        if (ctx.avgVsParPerHole != null) {
+          prompt += `\nRecent form (last ${ctx.roundCount} rounds, all courses): avg vs par/hole ${ctx.avgVsParPerHole >= 0 ? "+" : ""}${ctx.avgVsParPerHole.toFixed(2)}, avg putts/hole ${ctx.avgPuttsPerHole != null ? ctx.avgPuttsPerHole.toFixed(2) : "n/a"}\n`;
+          if (todayVsParPerHole != null) {
+            const scoringDiff = todayVsParPerHole - ctx.avgVsParPerHole;
+            const scoringLabel = Math.abs(scoringDiff) < 0.1 ? "similar to" : scoringDiff < 0 ? "better than" : "worse than";
+            let todayLine = `Today vs recent form: scoring ${scoringLabel} recent average (${todayVsParPerHole >= 0 ? "+" : ""}${todayVsParPerHole.toFixed(2)} vs par/hole today vs ${ctx.avgVsParPerHole >= 0 ? "+" : ""}${ctx.avgVsParPerHole.toFixed(2)} average)`;
+            if (todayPuttsPerHole != null && ctx.avgPuttsPerHole != null) {
+              const puttsDiff = todayPuttsPerHole - ctx.avgPuttsPerHole;
+              const puttsLabel = Math.abs(puttsDiff) < 0.1 ? "similar putting" : puttsDiff < 0 ? "better putting" : "worse putting";
+              todayLine += `, ${puttsLabel} (${todayPuttsPerHole.toFixed(2)} vs ${ctx.avgPuttsPerHole.toFixed(2)} avg)`;
+            }
+            prompt += todayLine + "\n";
+          }
+        }
+
+        const hasStandouts = ctx.struggles.length > 0 || ctx.strengths.length > 0 || ctx.recurringPickups.length > 0;
+        if (hasStandouts) {
+          prompt += `\nHole standouts today (this course):\n`;
+          const listedHoles = new Set();
+          for (const s of ctx.struggles) {
+            listedHoles.add(s.hole);
+            const pickupNote = s.pickups > 0 ? `, picked up ${s.pickups} of ${s.total} rounds` : "";
+            prompt += `Hole ${s.hole} (par ${s.par}): scored ${s.todayScore} today, personal avg ${s.avgScore} over ${s.count} rounds here${pickupNote}\n`;
+          }
+          for (const s of ctx.strengths) {
+            listedHoles.add(s.hole);
+            prompt += `Hole ${s.hole} (par ${s.par}): scored ${s.todayScore} today, personal avg ${s.avgScore} over ${s.count} rounds here\n`;
+          }
+          for (const p of ctx.recurringPickups) {
+            if (!listedHoles.has(p.hole)) {
+              prompt += `Hole ${p.hole} (par ${p.par}): recurring pick-up hole (${p.pickups} of last ${p.total} rounds)\n`;
+            }
+          }
+        }
+      }
+
+      try {
+        const t = await callAI(prompt);
+        setAiText(t);
+      } catch {
+        setAiText("Analysis unavailable.");
+      }
+      setAiLoading(false);
     }
-    if (bandData.length) {
-      prompt += `\nDo not comment on GIR from under 50 yards — it is not a meaningful metric at that distance. Use avg first putt distance as the measure of proximity and quality of approach play.\n`;
-      prompt += `\nApproach breakdown:\n`;
-      bandData.forEach(b => {
-        const putt1Part = b.putt1Count >= 2 ? `, avg first putt ${b.avgPutt1}ft` : "";
-        prompt += `  ${b.label} yds: ${b.count} hole${b.count !== 1 ? "s" : ""}${putt1Part}\n`;
-      });
-    }
-    callAI(prompt)
-      .then(t => { setAiText(t); setAiLoading(false); })
-      .catch(() => { setAiText("Analysis unavailable."); setAiLoading(false); });
-  }, [isPremium, roundComplete, sent]); // eslint-disable-line react-hooks/exhaustive-deps
+    run();
+  }, [isPremium, roundComplete, sent, historicalContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -1750,6 +1902,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         savedHoles={savedHoles}
         holes={holes}
         courseName={courseName}
+        courseId={courseId}
         onEditHole={editHole}
         handicap={handicap}
         onHandicapUpdate={handleHandicapUpdate}
