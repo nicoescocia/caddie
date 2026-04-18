@@ -647,6 +647,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
     async function run() {
       const ctx = await fetchHistoricalContext();
       setHistoricalContext(ctx);
+      console.log("HISTORICAL CONTEXT:", JSON.stringify(ctx, null, 2));
 
       const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
       const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
@@ -714,6 +715,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
         }
       }
 
+      console.log("AI PROMPT:", prompt);
       try {
         const t = await callAI(prompt);
         setAiText(t);
