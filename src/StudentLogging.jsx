@@ -651,7 +651,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
 
       const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
       const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
-      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be encouraging, specific, and constructive. 3–4 sentences, no preamble.\n\n`;
+      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be honest and constructive — do not lead with positives if the overall round was poor. 4–5 sentences, no preamble. You must follow these rules:\n1. Always start by contextualising the overall score against the student's recent form. If today was significantly worse than their average, say so directly.\n2. Call out any hole standouts by hole number and score — both struggles and highlights.\n3. Identify the single biggest factor that most impacted today's score — use the data to determine this, do not default to fairways or GIR.\n4. End with one specific, actionable focus area.\n5. Never describe a stat as good or solid without first checking it against the benchmark and recent form data provided.\n\n`;
       prompt += `Course: ${courseName}\nScore: ${totalScore} (${diff >= 0 ? "+" : ""}${diff} vs par)\n`;
       prompt += `GIR: ${girCount}/${attempted.length} (${girPct}%)\n`;
       if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
