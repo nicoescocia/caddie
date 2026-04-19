@@ -72,9 +72,13 @@ BENCHMARKS AND COMPARISONS
 - When evaluating scrambling (up & down %), always compare against the player's handicap benchmark.
 - When evaluating GIR %, fairways hit %, and putts per round, always compare against the player's handicap benchmark.
 - Do not comment on GIR from under 50 yards — it is not meaningful at that distance.
+- Do not quote benchmark figures directly to the student. Use benchmarks internally to determine whether a performance was good, average, or poor for their handicap, then express that judgment in plain language — e.g. "your proximity was excellent today" or "your putting was below where you'd expect" — without mentioning the specific benchmark number or the word benchmark.
 
 PENALTIES
-- If a player has 2 or more penalty shots in a round this MUST be the primary focus area of the analysis, listed first, before any other observations.`;
+- If a player has 2 or more penalty shots in a round this MUST be the primary focus area of the analysis, listed first, before any other observations.
+
+TONE ON BAD ROUNDS
+- When a round is significantly worse than the player's recent average (more than 0.5 shots per hole worse), you may inject a small amount of dry, sympathetic humour to acknowledge the difficulty — one brief phrase only, never mocking, always with the tone of a coach who has seen it all before. Example: "Golf had other ideas today" or "Some days the course wins." On good rounds or average rounds, keep the tone straightforward and encouraging.`;
 
 const DELAYS = [0, 2000, 4000]; // ms to wait before attempt 0, 1, 2
 
