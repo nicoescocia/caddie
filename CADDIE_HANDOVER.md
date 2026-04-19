@@ -1,6 +1,6 @@
 # Caddie — Handover Document
 
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-19
 
 ---
 
@@ -96,7 +96,7 @@ AdminDashboard requires `REACT_APP_SUPABASE_SERVICE_KEY` set as a Vercel env var
 | round_id | uuid | FK → `rounds.id` |
 | hole_number | int | |
 | par | int | |
-| score | int | |
+| score | int | null for `dna = true` holes; stores net double bogey for `picked_up = true` holes (computed at log time from par, stroke index, and handicap) |
 | putts | int | |
 | putt1 | text | first putt distance, e.g. `"12"`, `"20+"`, `"<3"` |
 | putt2 | text | second putt distance |
@@ -231,17 +231,20 @@ Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed 
 | `scripts/migrate-official-handicap.js` | One-off migration script for `official_handicap` column |
 | `scripts/add-profile-columns.js` | One-off migration script for new profile columns |
 | `scripts/add-ai-cache.js` | Migration script — adds `rounds.ai_analysis` column and creates `ai_cache` table |
+| `scripts/migrate-approach-bands.js` | Migration script — migrates old `'Under 50'` approach values to `'25–50'`; dry-run by default, pass `--apply` to execute |
 
 ---
 
 ## Key Definitions
 
 ### Approach bands
-Stored in `round_holes.approach`. Values use **en-dash** format: `"Under 50"`, `"50–75"`, `"75–100"`, `"100–125"`, `"125–150"`, `"150+"`.
+Stored in `round_holes.approach`. Values use **en-dash** format: `"Under 25"`, `"25–50"`, `"50–75"`, `"75–100"`, `"100–125"`, `"125–150"`, `"150+"`.
 
-`StudentLogging.jsx` now writes en-dash values (fixed 2026-04-11). Older rounds logged before that fix have hyphen values (`"50-75"`) and will not match analytics filters — there is no backfill for historical data.
+The former `"Under 50"` band was split into `"Under 25"` and `"25–50"` (2026-04-19). `scripts/migrate-approach-bands.js` migrates any remaining `"Under 50"` DB values to `"25–50"`.
 
-Analytics in both `CoachHome.jsx` and `StudentDashboard.jsx` filter with en-dash keys.
+Older rounds logged before 2026-04-11 have hyphen values (`"50-75"`) in the DB and will not match analytics filters — there is no backfill for those.
+
+Analytics in both `CoachHome.jsx` and `StudentDashboard.jsx` filter with en-dash keys. `APPROACH_BANDS` arrays in all three files (`StudentLogging.jsx`, `CoachHome.jsx`, `StudentDashboard.jsx`) must stay in sync.
 
 ### `parseFt(v)` — first putt distance parser
 All three files (`CoachHome.jsx`, `CoachDashboard.jsx`, `StudentDashboard.jsx`) now use the same implementation (aligned 2026-04-11):
@@ -278,8 +281,28 @@ Both `AnalyticsTab` (CoachHome) and `StudentAnalytics` (StudentDashboard) defaul
 
 **Multi-round pattern analysis** (`CoachHome` → `RoundHistory`): Before calling the API, checks `ai_cache` for a row matching `(coach_id, student_id, cache_type='patterns')`. If found, compares the stored `round_ids` (sorted) against the current last-5 sent round IDs (sorted). An exact match serves the cached content. Any mismatch (e.g. a new round was sent) triggers a fresh API call. On success, upserts to `ai_cache` using the unique constraint `(coach_id, student_id, cache_type)`. On failure, shows the error string and writes nothing.
 
+### `HANDICAP_BENCHMARKS`
+A lookup table defined at module level in both `StudentLogging.jsx` and `CoachHome.jsx`. Keyed by handicap bracket (0, 5, 10, 15, 20, 25, 30). Fields include `proximity_u25`, `proximity_25_50`, `proximity_50_75`, `proximity_75_100`, `proximity_100_125`, `proximity_125_150`, `proximity_150plus`, `scrambling`, `gir`, `fairways`, `putts_per_round`. `getBenchmark(handicap)` finds the nearest bracket. Used to inject a benchmark line into AI prompts — the model uses these internally to judge performance but must not quote the numbers to the player.
+
+### AI prompt content — per-round student analysis (`StudentLogging` / `OverviewScreen`)
+The AI prompt includes:
+- Round summary stats (score, putts, GIR, fairways, etc.)
+- Approach breakdown by band: count, GIR hits (for bands ≥50 yds), avg first putt distance
+- 3-putt detail: count, per-hole breakdown with first putt distance if recorded
+- Missed short putts (putt2 ≤ 3ft AND putts ≥ 3)
+- Scrambling %, penalties, any picked-up holes today
+- Historical context (fetched lazily on AI trigger): avg vs par per hole, avg putts per hole across last 2 months / 5 rounds; hole struggles/strengths/recurring pick-ups if ≥ 3 same-course rounds available
+- Handicap benchmark line injected from `HANDICAP_BENCHMARKS`
+
+### AI prompt content — multi-round coach pattern analysis (`CoachHome` / `RoundHistory`)
+The AI prompt includes for each of the last 5 sent rounds:
+- Score vs par, putts, GIR, fairways, stableford, wind, conditions, student note
+- Approach distribution by band (count per band)
+- Avg first putt distance per band
+- Handicap benchmark line from `HANDICAP_BENCHMARKS` using `whs_index` (falling back to `official_handicap`)
+
 ### AI model
-All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome pattern analysis / overview) or 1000 (CoachDashboard round detail). `/api/ai.js` injects a detailed golf system prompt covering approach interpretation, GIR, putting, scrambling, Stableford, and tone guidelines.
+All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome pattern analysis / overview) or 1000 (CoachDashboard round detail). `/api/ai.js` injects a detailed golf system prompt covering approach interpretation, GIR, putting, scrambling, Stableford, benchmark usage, penalty framing, and tone guidelines (including mandatory dry humour opener on bad rounds).
 
 ### Email notifications
 `/api/notify-coach.js` is called fire-and-forget (`fetch(...).catch(() => {})`) when a student sends a round. It sends one email per coach via Resend. Requires `RESEND_API_KEY` in Vercel env vars. If the key is absent the function returns `{ ok: true }` silently. Currently sends from `onboarding@resend.dev` (Resend sandbox) — a custom domain must be configured in Resend before going to production.
@@ -288,7 +311,9 @@ All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome 
 
 ## Known Issues / Gotchas
 
-**Approach band hyphen/en-dash mismatch (historical data only)**: `StudentLogging.jsx` was fixed (2026-04-11) to write en-dash values. Rounds logged before that date have hyphen values (`"50-75"`) in the DB and will not appear in analytics approach tables. No backfill has been done.
+**Approach band hyphen/en-dash mismatch (historical data only)**: Rounds logged before 2026-04-11 have hyphen values (`"50-75"`) in the DB and will not appear in analytics approach tables. No backfill has been done for those. Rounds with `"Under 50"` values (logged between 2026-04-11 and the band split on 2026-04-19) can be migrated via `scripts/migrate-approach-bands.js --apply`.
+
+**Picked-up holes had null score before 2026-04-19**: `round_holes.score` was written as `null` for picked-up holes. Fixed to store net double bogey (par + 2 + handicap strokes). Rounds saved before this fix may have an incorrect `total_score` if pick-ups were involved — no backfill has been done.
 
 **`parseFt` inconsistency resolved**: All three files now use the same implementation as of 2026-04-11. No longer a source of divergence.
 
@@ -347,8 +372,11 @@ Caddie is in private beta at Greenock Golf Club. There is no public signup. Stud
 - [x] Duplicate account prevention via invite — `CaddieAuth.jsx` checks Supabase auth error message and `identities.length === 0` to block re-registration with an existing email
 - [x] Per-round AI analysis caching — `rounds.ai_analysis` stores putting + short game JSON; CoachDashboard reads cache before calling API
 - [x] Multi-round pattern analysis caching — `ai_cache` table stores pattern analysis keyed by `(coach_id, student_id, cache_type)`; invalidated when sent round IDs change
-- [ ] **AI retry with backoff on 529 errors** — the AI endpoint can return 529 (overloaded); no retry logic exists; failed calls silently show "Analysis unavailable"
-- [ ] **Student-facing AI analysis caching** — StudentLogging's AI round summary uses the same API but has no caching layer; add a similar pattern to `rounds.ai_analysis` or a separate field
+- [x] AI retry with backoff on 529 errors — `/api/ai.js` retries up to 3 times with 0 / 2s / 4s delays on 529 overloaded responses; other errors fail immediately
+- [ ] **Student-facing AI analysis caching** — StudentLogging's AI round summary regenerates on every view; add caching (e.g. a `student_ai_analysis` column on `rounds`) so it is computed once and read on repeat views
+- [ ] **Penalty categorisation** — `round_holes.penalty` is currently free text; replace with a structured selector (Lost ball off tee, Lost ball fairway/rough, OB, Lateral hazard, Unplayable lie) to enable meaningful penalty analysis in AI prompts
+- [ ] **Pick-up reason selector** — during logging, player picks up but no reason is captured; add a reason selector (e.g. Taking max, Conceded, Other) for richer historical data
+- [ ] **Stripe integration** — premium is currently granted manually by admin; build a payment flow so students can self-serve upgrade
 - [ ] Handicap tracking over time (chart exists; needs more rounds with `whs_index` populated)
 - [ ] Invite link expiry / single-use enforcement
 - [ ] Round editing after send (currently locked once sent to coach)
