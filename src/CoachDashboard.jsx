@@ -188,7 +188,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       (h.putt1 ? `, 1st putt ${h.putt1}` : "") +
       (h.putt2 ? `, 2nd putt ${h.putt2}` : "") +
       (h.fairway ? `, fairway ${h.fairway}` : "") +
-      (Array.isArray(h.penalty) ? h.penalty.length > 0 : h.penalty && h.penalty !== "None") ? `, penalty ${Array.isArray(h.penalty) ? h.penalty.join(", ") : h.penalty}` : "")
+      ((Array.isArray(h.penalty) ? h.penalty.length > 0 : h.penalty && h.penalty !== "None") ? `, penalty ${Array.isArray(h.penalty) ? h.penalty.join(", ") : h.penalty}` : "")
     ).join("\n");
 
     const tp    = holeRows.filter(h => h.putts >= 3).length;
