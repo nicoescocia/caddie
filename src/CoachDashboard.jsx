@@ -188,7 +188,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       (h.putt1 ? `, 1st putt ${h.putt1}` : "") +
       (h.putt2 ? `, 2nd putt ${h.putt2}` : "") +
       (h.fairway ? `, fairway ${h.fairway}` : "") +
-      (h.penalty && h.penalty !== "None" ? `, penalty ${h.penalty}` : "")
+      (Array.isArray(h.penalty) ? h.penalty.length > 0 : h.penalty && h.penalty !== "None") ? `, penalty ${Array.isArray(h.penalty) ? h.penalty.join(", ") : h.penalty}` : "")
     ).join("\n");
 
     const tp    = holeRows.filter(h => h.putts >= 3).length;
@@ -431,7 +431,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                   <div style={{textAlign:"center",fontWeight:h.putts>=3?700:400,color:h.putts>=3?"var(--red)":"inherit"}}>{h.dna || h.pickedUp ? "—" : h.putts}{h.putts>=3&&!h.dna&&!h.pickedUp?" ⚠️":""}</div>
                   <div style={{textAlign:"center"}}>{h.dna ? "—" : h.gir ? "✅" : "❌"}</div>
                   <div style={{fontSize:11}}>{fwCell}</div>
-                  <div style={{fontSize:12,color:h.penalty&&h.penalty!=="None"?"var(--orange)":"var(--text-dim)"}}>{h.penalty||"None"}</div>
+                  <div style={{fontSize:12,color:(Array.isArray(h.penalty)?h.penalty.length>0:h.penalty&&h.penalty!=="None")?"var(--orange)":"var(--text-dim)"}}>{Array.isArray(h.penalty)?(h.penalty.length>0?h.penalty.join(", "):"None"):(h.penalty||"None")}</div>
                 </div>
               );
             })}

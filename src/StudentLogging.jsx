@@ -497,7 +497,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
   const totalPutts   = statHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
   const avgPutts     = statHoles.length ? (totalPutts / statHoles.length).toFixed(1) : null;
   const tpCount      = statHoles.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
-  const penalties    = loggedHoles.filter(h => holeData[holes.indexOf(h)].penalty.length > 0).length;
+  const penalties    = loggedHoles.reduce((s, h) => s + holeData[holes.indexOf(h)].penalty.length, 0);
   const missedGIR    = statHoles.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
   const upAndDown    = missedGIR.filter(h => holeData[holes.indexOf(h)].putts <= 1 && holeData[holes.indexOf(h)].score !== null).length;
   const scramblePct  = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
