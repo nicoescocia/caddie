@@ -1750,7 +1750,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       dna: hole.dna || false,
     };
     if (savedHoles.has(hi.n)) {
-      await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
+      const { error: updateError } = await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
+      if (updateError) console.error("upsertHole update error:", JSON.stringify(updateError));
     } else {
       await supabase.from("round_holes").insert([payload]);
       setSavedHoles(prev => new Set([...prev, hi.n]));
