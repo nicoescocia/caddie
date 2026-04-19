@@ -341,6 +341,7 @@ function emptyHole(par) {
   return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: [], pickupReason: [], pickupNote: "", pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
+  console.log("RAW PENALTY FROM DB:", row.hole_number, typeof row.penalty, JSON.stringify(row.penalty));
   let penalty = [];
   if (Array.isArray(row.penalty)) penalty = row.penalty;
   else if (row.penalty && row.penalty !== "None") penalty = [row.penalty];
