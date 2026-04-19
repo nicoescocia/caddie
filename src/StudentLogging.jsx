@@ -1756,6 +1756,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       setRoundId(rid);
     }
     await upsertHole(rid, cur);
+    setShowPenaltyPicker(false);
     setSaving(false);
 
     // After saving: advance to next hole in both new and edit mode
@@ -2227,6 +2228,9 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         {!d.pickedUp && !d.dna && <div className="sec">
           {showPenaltyPicker ? (
             <>
+              <div style={{display:"flex",justifyContent:"flex-end",marginBottom:6}}>
+                <span onClick={() => setShowPenaltyPicker(false)} style={{fontSize:12,color:"var(--text-dim)",cursor:"pointer"}}>✕ close</span>
+              </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {["Lost ball (tee)","Lost ball (fairway)","OOB","Hazard","Unplayable"].map(label => {
                   const count = d.penalty.filter(v => v === label).length;
@@ -2248,7 +2252,6 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                   );
                 })}
               </div>
-              <button onClick={() => setShowPenaltyPicker(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:11,border:"1.5px solid var(--green-light)",background:"#E8F4EE",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Done</button>
             </>
           ) : d.penalty.length > 0 ? (
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
