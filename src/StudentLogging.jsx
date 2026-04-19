@@ -1167,7 +1167,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [sent, setSent]             = useState(false);
   const [roundComplete, setRoundComplete] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [penaltyOpen, setPenaltyOpen] = useState(false);
+  const [showPenaltyPicker, setShowPenaltyPicker] = useState(false);
   const [hasCoach, setHasCoach]     = useState(false);
   const [coachIds, setCoachIds]     = useState([]);
   const [studentName, setStudentName] = useState("");
@@ -1335,6 +1335,8 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }
     loadCourses();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setShowPenaltyPicker(false); }, [cur]);
 
   // ── Course picker screen — must be before all other guards ──
   if (view === "course_picker") {
@@ -2223,40 +2225,40 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         )}
 
         {!d.pickedUp && !d.dna && <div className="sec">
-          {penaltyOpen ? (
+          {showPenaltyPicker ? (
             <>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {["Lost ball (tee)","Lost ball (fairway)","OOB","Hazard","Unplayable"].map(label => {
                   const count = d.penalty.filter(v => v === label).length;
                   return (
-                    <div key={label} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                      <span className="pl" style={{fontSize:13,color:count > 0 ? "var(--text)" : "var(--text-mid)",fontWeight:count > 0 ? 700 : 400,flex:1}}>{label}</span>
-                      <div className="stepper" style={{maxWidth:130}}>
-                        <button className="step-btn" disabled={count === 0} onClick={() => {
-                          const idx = d.penalty.lastIndexOf(label);
-                          update({ penalty: d.penalty.filter((_, i) => i !== idx) });
-                        }}>-</button>
-                        <div style={{minWidth:28,textAlign:"center",fontSize:16,fontWeight:700,color:count > 0 ? "var(--orange)" : "var(--text-dim)"}}>{count}</div>
-                        <button className="step-btn" onClick={() => update({ penalty: [...d.penalty, label] })}>+</button>
-                      </div>
+                    <div key={label} style={{display:"flex",alignItems:"center",gap:0,borderRadius:20,overflow:"hidden",border:count > 0 ? "1.5px solid var(--green)" : "1.5px solid var(--border)"}}>
+                      <button
+                        onClick={() => update({ penalty: [...d.penalty, label] })}
+                        style={{padding:"7px 11px",background:count > 0 ? "var(--green)" : "white",color:count > 0 ? "white" : "var(--text-mid)",border:"none",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:count > 0 ? 700 : 400,cursor:"pointer",whiteSpace:"nowrap"}}
+                      >
+                        {label}{count > 0 ? ` ×${count}` : ""}
+                      </button>
+                      {count > 0 && (
+                        <button
+                          onClick={() => { const idx = d.penalty.lastIndexOf(label); update({ penalty: d.penalty.filter((_, i) => i !== idx) }); }}
+                          style={{padding:"7px 8px 7px 2px",background:"var(--green)",color:"white",border:"none",fontFamily:"'Outfit',sans-serif",fontSize:12,cursor:"pointer",lineHeight:1}}
+                        >✕</button>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <button onClick={() => setPenaltyOpen(false)} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:11,border:"1.5px solid var(--green-light)",background:"#E8F4EE",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Done</button>
+              <button onClick={() => setShowPenaltyPicker(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:11,border:"1.5px solid var(--green-light)",background:"#E8F4EE",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Done</button>
             </>
           ) : d.penalty.length > 0 ? (
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-              <span style={{fontSize:13,color:"var(--orange)",fontWeight:700}}>
-                {d.penalty.length} {d.penalty.length === 1 ? "penalty" : "penalties"}:{" "}
-                {Object.entries(d.penalty.reduce((acc, v) => { acc[v] = (acc[v] || 0) + 1; return acc; }, {}))
-                  .map(([k, n]) => `${k}${n > 1 ? ` ×${n}` : ""}`)
-                  .join(", ")}
-              </span>
-              <button onClick={() => setPenaltyOpen(true)} style={{border:"none",background:"none",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",padding:0}}>Edit</button>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              {Object.entries(d.penalty.reduce((acc, v) => { acc[v] = (acc[v] || 0) + 1; return acc; }, {})).map(([k, n]) => (
+                <span key={k} className="chip pen">{k}{n > 1 ? ` ×${n}` : ""}</span>
+              ))}
+              <button onClick={() => setShowPenaltyPicker(true)} style={{border:"none",background:"none",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>Edit</button>
             </div>
           ) : (
-            <button onClick={() => setPenaltyOpen(true)} style={{width:"100%",padding:"11px",borderRadius:11,border:"1.5px dashed var(--border)",background:"white",color:"var(--text-mid)",fontFamily:"'Outfit',sans-serif",fontSize:14,cursor:"pointer"}}>＋ Add penalty stroke</button>
+            <button onClick={() => setShowPenaltyPicker(true)} style={{border:"none",background:"none",color:"var(--text-dim)",fontFamily:"'Outfit',sans-serif",fontSize:13,cursor:"pointer",padding:0}}>＋ Add penalty</button>
           )}
         </div>}
 
