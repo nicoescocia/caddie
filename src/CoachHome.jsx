@@ -922,7 +922,7 @@ OUTPUT FORMAT
       // Fetch per-hole data for approach and putt enrichment
       const { data: allHoles } = await supabase
         .from("round_holes")
-        .select("round_id, approach, putt1, dna, picked_up")
+        .select("round_id, hole_number, approach, putt1, dna, picked_up, penalty")
         .in("round_id", last5.map(r => r.id));
 
       const holesByRound = {};
@@ -958,7 +958,18 @@ OUTPUT FORMAT
           .filter(Boolean);
         if (puttParts.length > 0) puttLine = `\n  Avg 1st putt: ${puttParts.join(", ")}`;
 
-        return roundSummaries[i] + approachLine + puttLine;
+        const penTypeCounts = {};
+        (holesByRound[r.id] || []).forEach(h => {
+          const types = Array.isArray(h.penalty) ? h.penalty
+            : (h.penalty && h.penalty !== "None" ? [h.penalty] : []);
+          types.forEach(t => { penTypeCounts[t] = (penTypeCounts[t] || 0) + 1; });
+        });
+        const penEntries = Object.entries(penTypeCounts).filter(([, n]) => n > 0);
+        const penaltyLine = penEntries.length > 0
+          ? `\n  Penalties: ${penEntries.map(([k, n]) => `${k} ×${n}`).join(", ")}`
+          : "";
+
+        return roundSummaries[i] + approachLine + puttLine + penaltyLine;
       });
 
       const mostRecent = last5[last5.length - 1];
