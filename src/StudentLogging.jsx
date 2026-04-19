@@ -341,7 +341,6 @@ function emptyHole(par) {
   return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: [], pickupReason: [], pickupNote: "", pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
-  console.log("RAW PENALTY FROM DB:", row.hole_number, typeof row.penalty, JSON.stringify(row.penalty));
   let penalty = [];
   if (Array.isArray(row.penalty)) penalty = row.penalty;
   else if (row.penalty && row.penalty !== "None") penalty = [row.penalty];
@@ -1750,8 +1749,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       dna: hole.dna || false,
     };
     if (savedHoles.has(hi.n)) {
-      const { error: updateError } = await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
-      if (updateError) console.error("upsertHole update error:", JSON.stringify(updateError));
+      await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
     } else {
       await supabase.from("round_holes").insert([payload]);
       setSavedHoles(prev => new Set([...prev, hi.n]));
