@@ -338,16 +338,20 @@ function calcGIR(score, putts, par) {
   return (score - putts) <= (par - 2);
 }
 function emptyHole(par) {
-  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: "None", pickedUp: false, dna: false };
+  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: [], pickupReason: [], pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
+  let penalty = [];
+  if (Array.isArray(row.penalty)) penalty = row.penalty;
+  else if (row.penalty && row.penalty !== "None") penalty = [row.penalty];
   return {
     // picked_up holes store net double bogey in score (null for rounds saved before this was introduced)
     score: row.picked_up && row.score != null ? row.score : row.score,
     putts: row.putts, fairway: row.fairway,
     approach: row.approach, shotsInside50: row.shots_inside_50,
     putt1: row.putt1, putt2: row.putt2, putt3: row.putt3 || null,
-    penalty: row.penalty || "None", sgReason: row.sg_reason || null,
+    penalty, pickupReason: Array.isArray(row.pickup_reason) ? row.pickup_reason : [],
+    sgReason: row.sg_reason || null,
     pickedUp: row.picked_up || false, dna: row.dna || false,
   };
 }
@@ -492,7 +496,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
   const totalPutts   = statHoles.reduce((s, h) => s + (holeData[holes.indexOf(h)].putts || 0), 0);
   const avgPutts     = statHoles.length ? (totalPutts / statHoles.length).toFixed(1) : null;
   const tpCount      = statHoles.filter(h => holeData[holes.indexOf(h)].putts >= 3).length;
-  const penalties    = loggedHoles.filter(h => { const p = holeData[holes.indexOf(h)].penalty; return p && p !== "None"; }).length;
+  const penalties    = loggedHoles.filter(h => holeData[holes.indexOf(h)].penalty.length > 0).length;
   const missedGIR    = statHoles.filter(h => !calcGIR(holeData[holes.indexOf(h)].score, holeData[holes.indexOf(h)].putts, h.par));
   const upAndDown    = missedGIR.filter(h => holeData[holes.indexOf(h)].putts <= 1 && holeData[holes.indexOf(h)].score !== null).length;
   const scramblePct  = missedGIR.length ? Math.round(upAndDown / missedGIR.length * 100) : null;
@@ -982,7 +986,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
                               {is3putt
                                 ? <span className="chip tp">3-putt</span>
                                 : <span className="chip putts">{hd.putts === 0 ? "Chip-in" : hd.putts + " putt" + (hd.putts !== 1 ? "s" : "")}</span>}
-                              {hd.penalty && hd.penalty !== "None" && <span className="chip pen">{hd.penalty}</span>}
+                              {hd.penalty && hd.penalty.length > 0 && <span className="chip pen">{hd.penalty.join(", ")}</span>}
                             </>
                       }
                     </div>
@@ -1713,9 +1717,10 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       putt1: hole.dna || hole.pickedUp ? null : hole.putt1,
       putt2: hole.dna || hole.pickedUp ? null : hole.putt2,
       putt3: hole.dna || hole.pickedUp ? null : hole.putt3 || null,
-      penalty: hole.dna || hole.pickedUp ? "None" : hole.penalty || "None",
+      penalty: hole.dna || hole.pickedUp ? null : (hole.penalty.length > 0 ? hole.penalty : null),
       sg_reason: hole.dna || hole.pickedUp ? null : hole.sgReason || null,
       picked_up: hole.pickedUp || false,
+      pickup_reason: hole.pickedUp && hole.pickupReason.length > 0 ? hole.pickupReason : null,
       dna: hole.dna || false,
     };
     if (savedHoles.has(hi.n)) {
@@ -2215,18 +2220,36 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         )}
 
         {!d.pickedUp && !d.dna && <div className="sec">
-          <div className="sec-label">Penalty strokes</div>
-          <div className="pen-grid">
-            {[
-              {icon:"checkmark",label:"None",type:"none"},
-              {icon:"OOB",label:"OOB",type:"pen"},
-              {icon:"Haz",label:"Hazard",type:"pen"},
-              {icon:"Unp",label:"Unplayable",type:"pen"},
-            ].map(p => (
-              <button key={p.label} className={"pen-btn " + ((d.penalty || "None") === p.label ? (p.type === "none" ? "sel-none" : "sel-pen") : "")} onClick={() => update({ penalty: p.label })}>
-                <span className="pl">{p.label}</span>
-              </button>
-            ))}
+          <div className="sec-label">Penalty strokes {d.penalty.length > 0 && <span style={{color:"var(--orange)",fontWeight:700}}>({d.penalty.length})</span>}</div>
+          <div className="pen-grid" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
+            {["Lost ball (tee)","Lost ball (fairway)","OOB","Hazard","Unplayable"].map(label => {
+              const sel = d.penalty.includes(label);
+              return (
+                <button key={label} className={"pen-btn " + (sel ? "sel-pen" : "")} onClick={() => {
+                  const next = sel ? d.penalty.filter(v => v !== label) : [...d.penalty, label];
+                  update({ penalty: next });
+                }}>
+                  <span className="pl">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>}
+
+        {d.pickedUp && <div className="sec">
+          <div className="sec-label">Pick-up reason <span style={{color:"var(--text-dim)",fontWeight:400}}>(optional)</span></div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {["Lost ball","Score too high","Running out of time","Injury/other"].map(label => {
+              const sel = d.pickupReason.includes(label);
+              return (
+                <button key={label} className={"pen-btn " + (sel ? "sel-pen" : "")} style={{flex:"0 0 auto",padding:"9px 12px"}} onClick={() => {
+                  const next = sel ? d.pickupReason.filter(v => v !== label) : [...d.pickupReason, label];
+                  update({ pickupReason: next });
+                }}>
+                  <span className="pl">{label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>}
 
