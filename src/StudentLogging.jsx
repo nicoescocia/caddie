@@ -1167,6 +1167,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [sent, setSent]             = useState(false);
   const [roundComplete, setRoundComplete] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [hasCoach, setHasCoach]     = useState(false);
   const [coachIds, setCoachIds]     = useState([]);
   const [studentName, setStudentName] = useState("");
@@ -2222,25 +2223,41 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         )}
 
         {!d.pickedUp && !d.dna && <div className="sec">
-          <div className="sec-label">Penalty strokes {d.penalty.length > 0 && <span style={{color:"var(--orange)",fontWeight:700}}>({d.penalty.length})</span>}</div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {["Lost ball (tee)","Lost ball (fairway)","OOB","Hazard","Unplayable"].map(label => {
-              const count = d.penalty.filter(v => v === label).length;
-              return (
-                <div key={label} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                  <span className="pl" style={{fontSize:13,color:count > 0 ? "var(--text)" : "var(--text-mid)",fontWeight:count > 0 ? 700 : 400,flex:1}}>{label}</span>
-                  <div className="stepper" style={{maxWidth:130}}>
-                    <button className="step-btn" disabled={count === 0} onClick={() => {
-                      const idx = d.penalty.lastIndexOf(label);
-                      update({ penalty: d.penalty.filter((_, i) => i !== idx) });
-                    }}>-</button>
-                    <div style={{minWidth:28,textAlign:"center",fontSize:16,fontWeight:700,color:count > 0 ? "var(--orange)" : "var(--text-dim)"}}>{count}</div>
-                    <button className="step-btn" onClick={() => update({ penalty: [...d.penalty, label] })}>+</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {penaltyOpen ? (
+            <>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {["Lost ball (tee)","Lost ball (fairway)","OOB","Hazard","Unplayable"].map(label => {
+                  const count = d.penalty.filter(v => v === label).length;
+                  return (
+                    <div key={label} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                      <span className="pl" style={{fontSize:13,color:count > 0 ? "var(--text)" : "var(--text-mid)",fontWeight:count > 0 ? 700 : 400,flex:1}}>{label}</span>
+                      <div className="stepper" style={{maxWidth:130}}>
+                        <button className="step-btn" disabled={count === 0} onClick={() => {
+                          const idx = d.penalty.lastIndexOf(label);
+                          update({ penalty: d.penalty.filter((_, i) => i !== idx) });
+                        }}>-</button>
+                        <div style={{minWidth:28,textAlign:"center",fontSize:16,fontWeight:700,color:count > 0 ? "var(--orange)" : "var(--text-dim)"}}>{count}</div>
+                        <button className="step-btn" onClick={() => update({ penalty: [...d.penalty, label] })}>+</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={() => setPenaltyOpen(false)} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:11,border:"1.5px solid var(--green-light)",background:"#E8F4EE",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Done</button>
+            </>
+          ) : d.penalty.length > 0 ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span style={{fontSize:13,color:"var(--orange)",fontWeight:700}}>
+                {d.penalty.length} {d.penalty.length === 1 ? "penalty" : "penalties"}:{" "}
+                {Object.entries(d.penalty.reduce((acc, v) => { acc[v] = (acc[v] || 0) + 1; return acc; }, {}))
+                  .map(([k, n]) => `${k}${n > 1 ? ` ×${n}` : ""}`)
+                  .join(", ")}
+              </span>
+              <button onClick={() => setPenaltyOpen(true)} style={{border:"none",background:"none",color:"var(--green)",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",padding:0}}>Edit</button>
+            </div>
+          ) : (
+            <button onClick={() => setPenaltyOpen(true)} style={{width:"100%",padding:"11px",borderRadius:11,border:"1.5px dashed var(--border)",background:"white",color:"var(--text-mid)",fontFamily:"'Outfit',sans-serif",fontSize:14,cursor:"pointer"}}>＋ Add penalty stroke</button>
+          )}
         </div>}
 
         {d.pickedUp && <div className="sec">
