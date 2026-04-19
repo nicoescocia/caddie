@@ -669,7 +669,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
       }
       const missedShortPutts = statHoles.filter(h => {
         const hd = holeData[holes.indexOf(h)];
-        return hd.putt2 && parseFt(hd.putt2) <= 3;
+        return hd.putt2 && parseFt(hd.putt2) <= 3 && hd.putts >= 3;
       });
       if (missedShortPutts.length > 0) {
         prompt += `Missed short putts (\u22643ft second putt): ${missedShortPutts.map(h => {
