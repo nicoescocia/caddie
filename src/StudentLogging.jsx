@@ -338,7 +338,7 @@ function calcGIR(score, putts, par) {
   return (score - putts) <= (par - 2);
 }
 function emptyHole(par) {
-  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: [], pickupReason: [], pickedUp: false, dna: false };
+  return { score: par, putts: null, fairway: null, approach: null, shotsInside50: null, sgReason: null, putt1: null, putt2: null, putt3: null, penalty: [], pickupReason: [], pickupNote: "", pickedUp: false, dna: false };
 }
 function holeFromRow(row) {
   let penalty = [];
@@ -351,6 +351,7 @@ function holeFromRow(row) {
     approach: row.approach, shotsInside50: row.shots_inside_50,
     putt1: row.putt1, putt2: row.putt2, putt3: row.putt3 || null,
     penalty, pickupReason: Array.isArray(row.pickup_reason) ? row.pickup_reason : [],
+    pickupNote: row.pickup_note || "",
     sgReason: row.sg_reason || null,
     pickedUp: row.picked_up || false, dna: row.dna || false,
   };
@@ -1721,6 +1722,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       sg_reason: hole.dna || hole.pickedUp ? null : hole.sgReason || null,
       picked_up: hole.pickedUp || false,
       pickup_reason: hole.pickedUp && hole.pickupReason.length > 0 ? hole.pickupReason : null,
+      pickup_note: hole.pickedUp && hole.pickupNote ? hole.pickupNote : null,
       dna: hole.dna || false,
     };
     if (savedHoles.has(hi.n)) {
@@ -2221,16 +2223,21 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
         {!d.pickedUp && !d.dna && <div className="sec">
           <div className="sec-label">Penalty strokes {d.penalty.length > 0 && <span style={{color:"var(--orange)",fontWeight:700}}>({d.penalty.length})</span>}</div>
-          <div className="pen-grid" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {["Lost ball (tee)","Lost ball (fairway)","OOB","Hazard","Unplayable"].map(label => {
-              const sel = d.penalty.includes(label);
+              const count = d.penalty.filter(v => v === label).length;
               return (
-                <button key={label} className={"pen-btn " + (sel ? "sel-pen" : "")} onClick={() => {
-                  const next = sel ? d.penalty.filter(v => v !== label) : [...d.penalty, label];
-                  update({ penalty: next });
-                }}>
-                  <span className="pl">{label}</span>
-                </button>
+                <div key={label} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <span className="pl" style={{fontSize:13,color:count > 0 ? "var(--text)" : "var(--text-mid)",fontWeight:count > 0 ? 700 : 400,flex:1}}>{label}</span>
+                  <div className="stepper" style={{maxWidth:130}}>
+                    <button className="step-btn" disabled={count === 0} onClick={() => {
+                      const idx = d.penalty.lastIndexOf(label);
+                      update({ penalty: d.penalty.filter((_, i) => i !== idx) });
+                    }}>-</button>
+                    <div style={{minWidth:28,textAlign:"center",fontSize:16,fontWeight:700,color:count > 0 ? "var(--orange)" : "var(--text-dim)"}}>{count}</div>
+                    <button className="step-btn" onClick={() => update({ penalty: [...d.penalty, label] })}>+</button>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -2239,7 +2246,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
         {d.pickedUp && <div className="sec">
           <div className="sec-label">Pick-up reason <span style={{color:"var(--text-dim)",fontWeight:400}}>(optional)</span></div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {["Lost ball","Score too high","Running out of time","Injury/other"].map(label => {
+            {["Lost ball (tee)","Lost ball (fairway)","Score too high","Running out of time","Injury/other"].map(label => {
               const sel = d.pickupReason.includes(label);
               return (
                 <button key={label} className={"pen-btn " + (sel ? "sel-pen" : "")} style={{flex:"0 0 auto",padding:"9px 12px"}} onClick={() => {
@@ -2251,6 +2258,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
               );
             })}
           </div>
+          <input
+            type="text"
+            placeholder="Add a note (optional)"
+            value={d.pickupNote}
+            onChange={e => update({ pickupNote: e.target.value })}
+            style={{marginTop:10,width:"100%",boxSizing:"border-box",border:"1.5px solid var(--border)",borderRadius:11,padding:"10px 12px",fontFamily:"'Outfit',sans-serif",fontSize:14,color:"var(--text)",background:"white",outline:"none"}}
+          />
         </div>}
 
         <div className="bottom-btns">
