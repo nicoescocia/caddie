@@ -683,7 +683,27 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
         }).join(", ")}\n`;
       }
       if (scramblePct !== null) prompt += `Scrambling: ${scramblePct}% (${upAndDown}/${missedGIR.length} up & down)\n`;
-      prompt += `Penalties: ${penalties}\n`;
+      {
+        const penTypeCounts = {};
+        const penByHole = [];
+        loggedHoles.forEach(h => {
+          const hd = holeData[holes.indexOf(h)];
+          const types = Array.isArray(hd.penalty) ? hd.penalty
+            : (hd.penalty && hd.penalty !== "None" ? [hd.penalty] : []);
+          if (types.length > 0) {
+            types.forEach(t => { penTypeCounts[t] = (penTypeCounts[t] || 0) + 1; });
+            penByHole.push(`hole ${h.n} (${types.join(", ")})`);
+          }
+        });
+        const penTypeEntries = Object.entries(penTypeCounts).filter(([, n]) => n > 0);
+        if (penTypeEntries.length === 0) {
+          prompt += `Penalties: 0\n`;
+        } else {
+          const summary = penTypeEntries.map(([k, n]) => `${k} ×${n}`).join(", ");
+          prompt += `Penalties: ${penalties} total — ${summary}\n`;
+          prompt += `Penalty detail: ${penByHole.join(", ")}\n`;
+        }
+      }
       const pickedUpHoles = attempted.filter(h => holeData[holes.indexOf(h)]?.pickedUp);
       if (pickedUpHoles.length > 0) {
         prompt += `Picked up on: ${pickedUpHoles.map(h => `hole ${h.n} (par ${h.par})`).join(", ")}\n`;
