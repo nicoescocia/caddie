@@ -90,6 +90,29 @@ TONE ON BAD ROUNDS
 - This rule applies to student-facing analysis only — never use humour in coach-facing analysis. Coach analysis should always be professional and direct.
 - When a round is significantly worse than the player's recent average (more than 0.5 shots per hole worse), you MUST open with a single short dry humorous phrase before continuing with the analysis. This is not optional. Examples: "Golf had other ideas today.", "Some days the course wins.", "Not one for the highlight reel, but every round teaches something." Keep it brief — one sentence only, then move straight into the analysis. On good rounds or average rounds, keep the tone straightforward and encouraging.`;
 
+const PRE_LESSON_SYSTEM_PROMPT = `You are an assistant helping a golf coach prepare for a lesson. Write in third person about the student. Be concise, specific, and professional — no preamble. Structure your response as three short sections: 1) Recent form summary (2-3 sentences on scoring trend and key stats), 2) Primary focus areas (2-3 bullet points on the biggest patterns or issues from recent rounds), 3) Suggested lesson structure (1-2 sentences on what to prioritise in the session).`;
+
+function buildPreLessonPrompt({ studentName, rounds }) {
+  let prompt = `Pre-lesson brief for ${studentName}.\n\n`;
+  if (!rounds || rounds.length === 0) {
+    prompt += "No recent round data available.\n";
+    return prompt;
+  }
+  prompt += "Recent rounds:\n";
+  rounds.forEach((r, i) => {
+    prompt += `Round ${i + 1} (${r.date}, ${r.holesPlayed} holes):`;
+    if (r.score != null)         prompt += ` Score ${r.score}`;
+    if (r.vsParPerHole != null)  prompt += ` (${r.vsParPerHole >= 0 ? "+" : ""}${r.vsParPerHole}/hole vs par)`;
+    if (r.girPct != null)        prompt += `, GIR ${r.girPct}%`;
+    if (r.fairwayPct != null)    prompt += `, Fairways ${r.fairwayPct}%`;
+    if (r.avgPutts != null)      prompt += `, Putts/hole ${r.avgPutts}`;
+    if (r.scramblingPct != null) prompt += `, Scrambling ${r.scramblingPct}%`;
+    if (r.penaltyCount)          prompt += `, Penalties ${r.penaltyCount}${r.penaltyTypes ? ` (${r.penaltyTypes})` : ""}`;
+    prompt += "\n";
+  });
+  return prompt;
+}
+
 const DELAYS = [0, 2000, 4000]; // ms to wait before attempt 0, 1, 2
 
 export default async function handler(req, res) {
@@ -99,6 +122,16 @@ export default async function handler(req, res) {
   }
 
   try {
+    const isPreLesson = req.body.type === "pre_lesson_brief";
+    const systemPrompt = isPreLesson ? PRE_LESSON_SYSTEM_PROMPT : SYSTEM_PROMPT;
+    const requestBody = isPreLesson
+      ? {
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 600,
+          messages: [{ role: "user", content: buildPreLessonPrompt(req.body) }],
+        }
+      : { ...req.body };
+
     let lastData;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (DELAYS[attempt] > 0) {
@@ -112,7 +145,7 @@ export default async function handler(req, res) {
           "x-api-key": process.env.ANTHROPIC_API_KEY,
           "anthropic-version": "2023-06-01",
         },
-        body: JSON.stringify({ ...req.body, system: SYSTEM_PROMPT }),
+        body: JSON.stringify({ ...requestBody, system: systemPrompt }),
       });
 
       const data = await response.json();
