@@ -1,6 +1,6 @@
 # Caddie — Handover Document
 
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-20
 
 ---
 
@@ -100,13 +100,17 @@ AdminDashboard requires `REACT_APP_SUPABASE_SERVICE_KEY` set as a Vercel env var
 | putts | int | |
 | putt1 | text | first putt distance, e.g. `"12"`, `"20+"`, `"<3"` |
 | putt2 | text | second putt distance |
+| putt3 | text | third putt distance (full putt tracking mode only) |
 | gir | bool | greens in regulation |
-| fairway | text | `'left'`, `'right'`, `'yes'`, `'miss'` |
-| approach | text | distance band — en-dash format e.g. `"50–75"` (see Approach bands below) |
+| fairway | text | par 4/5: `'yes'`, `'left'`, `'right'`; par 3 miss direction: `'left'`, `'short'`, `'right'`, `'long'` |
+| approach | text | distance band — en-dash format e.g. `"50–75"` (see Approach bands below); auto-set from course yardage for par 3 GIR holes |
 | shots_inside_50 | int | number of shots played inside 50 yards on this hole |
-| penalty | text | `'None'` or description e.g. `'OB'`, `'Hazard'` |
+| sg_reason | text | short game miss reason (free text, optional) |
+| penalty | text[] | array of penalty types — one entry per penalty stroke e.g. `['Lost ball (tee)', 'Lost ball (tee)', 'OOB']`; null if no penalties. Valid types: `Lost ball (tee)`, `Lost ball (fairway)`, `OOB`, `Hazard`, `Unplayable`. Legacy rows may contain a plain string. |
 | dna | bool | did not attempt (incomplete hole) |
 | picked_up | bool | player picked up; scores as net double bogey |
+| pickup_reason | text[] | optional reasons for pick-up; valid values: `Lost ball (tee)`, `Lost ball (fairway)`, `Score too high`, `Running out of time`, `Injury/other`; null if not set |
+| pickup_note | text | optional free-text note for picked-up hole; null if not set |
 | stroke_index | int | SI stored at time of logging; may be null for older rounds |
 
 ### `courses`
@@ -232,6 +236,7 @@ Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed 
 | `scripts/add-profile-columns.js` | One-off migration script for new profile columns |
 | `scripts/add-ai-cache.js` | Migration script — adds `rounds.ai_analysis` column and creates `ai_cache` table |
 | `scripts/migrate-approach-bands.js` | Migration script — migrates old `'Under 50'` approach values to `'25–50'`; dry-run by default, pass `--apply` to execute |
+| `scripts/add-pickup-note.js` | Migration script — adds `pickup_note text` column to `round_holes`; prints required SQL (must be run in Supabase SQL editor), then verifies with `--apply` |
 
 ---
 
@@ -284,13 +289,30 @@ Both `AnalyticsTab` (CoachHome) and `StudentAnalytics` (StudentDashboard) defaul
 ### `HANDICAP_BENCHMARKS`
 A lookup table defined at module level in both `StudentLogging.jsx` and `CoachHome.jsx`. Keyed by handicap bracket (0, 5, 10, 15, 20, 25, 30). Fields include `proximity_u25`, `proximity_25_50`, `proximity_50_75`, `proximity_75_100`, `proximity_100_125`, `proximity_125_150`, `proximity_150plus`, `scrambling`, `gir`, `fairways`, `putts_per_round`. `getBenchmark(handicap)` finds the nearest bracket. Used to inject a benchmark line into AI prompts — the model uses these internally to judge performance but must not quote the numbers to the player.
 
+### Penalty field
+`round_holes.penalty` is a `text[]` column. Each penalty stroke is stored as one array entry — the same type may appear multiple times e.g. `['Lost ball (tee)', 'Lost ball (tee)', 'OOB']` = 3 penalty strokes. Null means no penalties. Valid types: `Lost ball (tee)`, `Lost ball (fairway)`, `OOB`, `Hazard`, `Unplayable`.
+
+Legacy rows (pre-2026-04-20) may contain a plain string. All client code normalises via: `Array.isArray(row.penalty) ? row.penalty : (row.penalty && row.penalty !== "None" ? [row.penalty] : [])`.
+
+Counting total strokes: sum `penalty.length` across all holes. Counting holes with any penalty: filter `penalty.length > 0`.
+
+### Pick-up reason and note
+`round_holes.pickup_reason` is a `text[]` column (nullable). `round_holes.pickup_note` is a `text` column (nullable). Both are only written when `picked_up = true`. Valid pickup reasons: `Lost ball (tee)`, `Lost ball (fairway)`, `Score too high`, `Running out of time`, `Injury/other`. These fields were added 2026-04-20; `pickup_note` requires `ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS pickup_note text` (see `scripts/add-pickup-note.js`).
+
+### Par 3 logging
+**Miss direction**: stored in the `fairway` field using values `'left'`, `'short'`, `'right'`, `'long'`. The normal fairway hit/miss UI (`'yes'`/`'left'`/`'right'`) is only shown for par 4/5 holes. Par 3s show a 4-option miss direction selector when GIR is false.
+
+**Auto-approach**: when a par 3 hole is hit in regulation (GIR = true), `approach` is automatically set to the band matching `course_holes.yardage` via `yardageToBand()`. The approach selector is hidden for par 3 GIR holes. For par 3 missed GIR the approach selector shows normally so the player can record their chip/pitch distance.
+
+**CoachDashboard**: a dedicated "Par 3 performance" section shows GIR rate for par 3s and a miss direction breakdown bar chart (Left/Short/Right/Long), separate from the fairway miss section which is now explicitly labelled "(par 4 & 5)".
+
 ### AI prompt content — per-round student analysis (`StudentLogging` / `OverviewScreen`)
 The AI prompt includes:
 - Round summary stats (score, putts, GIR, fairways, etc.)
 - Approach breakdown by band: count, GIR hits (for bands ≥50 yds), avg first putt distance
 - 3-putt detail: count, per-hole breakdown with first putt distance if recorded
 - Missed short putts (putt2 ≤ 3ft AND putts ≥ 3)
-- Scrambling %, penalties, any picked-up holes today
+- Scrambling %, penalty breakdown by type with total stroke count, any picked-up holes today
 - Historical context (fetched lazily on AI trigger): avg vs par per hole, avg putts per hole across last 2 months / 5 rounds; hole struggles/strengths/recurring pick-ups if ≥ 3 same-course rounds available
 - Handicap benchmark line injected from `HANDICAP_BENCHMARKS`
 
@@ -299,7 +321,11 @@ The AI prompt includes for each of the last 5 sent rounds:
 - Score vs par, putts, GIR, fairways, stableford, wind, conditions, student note
 - Approach distribution by band (count per band)
 - Avg first putt distance per band
+- Penalty breakdown by type (e.g. `Lost ball (tee) ×2, OOB ×1`) — omitted if no penalties
 - Handicap benchmark line from `HANDICAP_BENCHMARKS` using `whs_index` (falling back to `official_handicap`)
+
+### AI prompt content — per-round coach analysis (`CoachDashboard`)
+Per-hole lines include picked-up hole annotation (`PICKED UP`, pickup reasons, pickup note) and penalty types inline. A round-level penalty summary line is appended: `Total penalties: Lost ball (tee) ×2, OOB ×1 (3 penalty strokes)`.
 
 ### AI model
 All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome pattern analysis / overview) or 1000 (CoachDashboard round detail). `/api/ai.js` injects a detailed golf system prompt covering approach interpretation, GIR, putting, scrambling, Stableford, benchmark usage, penalty framing, and tone guidelines (including mandatory dry humour opener on bad rounds).
@@ -339,6 +365,10 @@ All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome 
 
 **`scripts/add-ai-cache.js` requires manual SQL**: The migration script cannot execute DDL via the Supabase service role key (PostgREST does not support DDL). It prints the required SQL when `exec_sql` RPC is absent, then verifies schema state via SELECT. Run SQL in the Supabase SQL editor, then re-run the script to confirm.
 
+**Silent save failures in `upsertHole`**: If the payload passed to the Supabase upsert includes a column that does not yet exist in `round_holes`, Supabase returns HTTP 400 but the React code does not surface the error to the user — the hole appears saved but is silently lost or not updated. This happened on 2026-04-20 when `pickup_note` was added to the payload before the DB column was created. Rule: always run the DB migration (Supabase SQL editor) before deploying any payload change that references a new column.
+
+**Student AI analysis regenerates on every view**: `StudentLogging`'s per-round AI summary is called fresh each time the overview screen is shown. There is no caching on the student side (unlike CoachDashboard which caches to `rounds.ai_analysis`). Repeated views of the same completed round each consume API tokens.
+
 ---
 
 ## Monetisation
@@ -373,9 +403,15 @@ Caddie is in private beta at Greenock Golf Club. There is no public signup. Stud
 - [x] Per-round AI analysis caching — `rounds.ai_analysis` stores putting + short game JSON; CoachDashboard reads cache before calling API
 - [x] Multi-round pattern analysis caching — `ai_cache` table stores pattern analysis keyed by `(coach_id, student_id, cache_type)`; invalidated when sent round IDs change
 - [x] AI retry with backoff on 529 errors — `/api/ai.js` retries up to 3 times with 0 / 2s / 4s delays on 529 overloaded responses; other errors fail immediately
+- [x] **Penalty categorisation** — `round_holes.penalty` now stores a `text[]` with structured types (Lost ball (tee), Lost ball (fairway), OOB, Hazard, Unplayable); chip-tap UI in StudentLogging; penalty breakdown in all AI prompts
+- [x] **Pick-up reason selector** — `pickup_reason text[]` and `pickup_note text` added to `round_holes`; multi-select UI in StudentLogging; annotation in CoachDashboard AI prompt
+- [x] **Coach-side penalty visibility** — CoachDashboard scorecard shows abbreviated badge chips (LB(T), OOB, HAZ, etc.) per hole; AI prompt includes per-hole penalty types and round-level summary
+- [x] **Par 3 miss direction logging** — when par 3 GIR is false, a Left/Short/Right/Long selector is shown; direction stored in `round_holes.fairway`; auto-approach set from course yardage when GIR is true
+- [x] **Par 3 performance section in CoachDashboard** — new section in Short game card showing GIR rate for par 3s and miss direction breakdown; fairway miss section explicitly labelled "(par 4 & 5)"
 - [ ] **Student-facing AI analysis caching** — StudentLogging's AI round summary regenerates on every view; add caching (e.g. a `student_ai_analysis` column on `rounds`) so it is computed once and read on repeat views
-- [ ] **Penalty categorisation** — `round_holes.penalty` is currently free text; replace with a structured selector (Lost ball off tee, Lost ball fairway/rough, OB, Lateral hazard, Unplayable lie) to enable meaningful penalty analysis in AI prompts
-- [ ] **Pick-up reason selector** — during logging, player picks up but no reason is captured; add a reason selector (e.g. Taking max, Conceded, Other) for richer historical data
+- [ ] **Par 3 performance section in StudentDashboard** — CoachDashboard has par 3 stats; StudentDashboard analytics does not yet show par 3 GIR rate or miss direction breakdown
+- [ ] **Settings toggle for par 3 miss direction** — some students may not want to record miss direction on par 3s; consider a StudentSettings toggle to hide the selector
+- [ ] **Silent save error handling in `upsertHole`** — the function does not surface Supabase 400 errors to the user; add error detection and a visible toast/alert so data loss is not silent
 - [ ] **Stripe integration** — premium is currently granted manually by admin; build a payment flow so students can self-serve upgrade
 - [ ] Handicap tracking over time (chart exists; needs more rounds with `whs_index` populated)
 - [ ] Invite link expiry / single-use enforcement
