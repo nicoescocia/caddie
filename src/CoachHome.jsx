@@ -133,6 +133,39 @@ const css = `
   .rsc-val.bad { color:var(--red); }
   .rsc-lbl { font-size:10px; color:var(--text-dim); margin-top:3px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
 
+  /* Lesson cards & form */
+  .log-lesson-btn { background:none; border:1.5px dashed var(--gold); color:var(--gold); border-radius:12px; padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; cursor:pointer; width:100%; margin-bottom:12px; transition:all .15s; }
+  .log-lesson-btn:hover { background:rgba(201,168,76,0.08); }
+  .lesson-card { background:#FEFBF3; border:1.5px solid var(--gold); border-left:4px solid var(--gold); border-radius:16px; padding:16px 18px; margin-bottom:10px; cursor:pointer; transition:all .2s; }
+  .lesson-card:hover { transform:translateY(-1px); box-shadow:var(--shadow); }
+  .lesson-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .lesson-card-title { font-size:14px; font-weight:700; color:var(--text); }
+  .lesson-card-date { font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .lesson-preview { font-size:13px; color:var(--text-mid); line-height:1.5; margin-top:8px; }
+  .lesson-indicators { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .lesson-indicator { font-size:11px; color:#8A6A10; background:rgba(201,168,76,0.15); border-radius:6px; padding:2px 8px; font-weight:600; }
+  .lesson-full { margin-top:12px; border-top:1px solid rgba(201,168,76,0.3); padding-top:12px; }
+  .lesson-section { margin-bottom:10px; }
+  .lesson-section-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:4px; }
+  .lesson-section-text { font-size:13px; color:var(--text-mid); line-height:1.6; white-space:pre-line; }
+  .lesson-edit-btn { background:none; border:1px solid var(--border); border-radius:8px; padding:4px 12px; font-family:'Outfit',sans-serif; font-size:12px; color:var(--text-dim); cursor:pointer; flex-shrink:0; transition:all .15s; }
+  .lesson-edit-btn:hover { border-color:var(--gold); color:var(--gold); }
+  .lesson-context { background:var(--bg); border-radius:10px; padding:10px 12px; margin-top:10px; }
+  .lesson-context-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:6px; }
+  .lesson-context-row { font-size:12px; color:var(--text-mid); margin-bottom:3px; }
+  .lesson-form { background:#FEFBF3; border:1.5px solid var(--gold); border-radius:16px; padding:16px 18px; margin-bottom:12px; }
+  .lesson-form-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px; }
+  .lesson-form-field { margin-bottom:12px; }
+  .lesson-form-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:4px; display:block; }
+  .lesson-form-input { width:100%; border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Outfit',sans-serif; font-size:13px; color:var(--text); background:white; transition:border-color .15s; }
+  .lesson-form-input:focus { outline:none; border-color:var(--gold); }
+  .lesson-form-textarea { width:100%; border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Outfit',sans-serif; font-size:13px; color:var(--text); background:white; resize:vertical; min-height:72px; transition:border-color .15s; }
+  .lesson-form-textarea:focus { outline:none; border-color:var(--gold); }
+  .lesson-form-actions { display:flex; gap:8px; }
+  .lesson-save-btn { background:var(--green-dark); color:white; border:none; border-radius:10px; padding:10px 20px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  .lesson-save-btn:disabled { opacity:.6; }
+  .lesson-cancel-btn { background:none; border:1.5px solid var(--border); color:var(--text-dim); border-radius:10px; padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px; cursor:pointer; }
+
   .loading-wrap { display:flex; align-items:center; justify-content:center; padding:80px; }
   .spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
@@ -822,7 +855,7 @@ function AnalyticsTab({ sentRounds }) {
   );
 }
 
-function RoundHistory({ student, rounds, coachId, onSelectRound, onBack, onSignOut, onHome }) {
+function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectRound, onBack, onSignOut, onHome }) {
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
   const rounds9Count  = scored.filter(r => r.holes_played === 9).length;
@@ -830,6 +863,78 @@ function RoundHistory({ student, rounds, coachId, onSelectRound, onBack, onSignO
   const [activeStatTab, setActiveStatTab] = useState(() => rounds9Count > rounds18Count ? 9 : 18);
   const [aiPatterns, setAiPatterns] = useState(null);
   const [mainView, setMainView] = useState("trends");
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [editingLesson, setEditingLesson] = useState(null);
+  const [expandedLesson, setExpandedLesson] = useState(null);
+  const [lessonForm, setLessonForm] = useState({ date: "", notes: "", drills: "", homework: "" });
+  const [savingLesson, setSavingLesson] = useState(false);
+
+  function openNewLesson() {
+    setEditingLesson(null);
+    setLessonForm({ date: new Date().toISOString().slice(0, 10), notes: "", drills: "", homework: "" });
+    setShowLessonForm(true);
+  }
+  function openEditLesson(e, lesson) {
+    e.stopPropagation();
+    setEditingLesson(lesson);
+    setLessonForm({ date: lesson.lesson_date, notes: lesson.notes || "", drills: lesson.drills || "", homework: lesson.homework || "" });
+    setShowLessonForm(true);
+  }
+  function cancelLesson() { setShowLessonForm(false); setEditingLesson(null); }
+  function updateForm(field, value) { setLessonForm(prev => ({ ...prev, [field]: value })); }
+
+  function computeRoundContext() {
+    const lastLessonDate = lessons && lessons.length > 0 ? lessons[0]?.lesson_date : null;
+    const recent = lastLessonDate
+      ? sentRounds.filter(r => r.created_at > lastLessonDate)
+      : sentRounds;
+    return recent.slice(0, 3).map(r => {
+      const hp  = r.holes_played || 9;
+      const par = getCoursePar(r);
+      return {
+        date:            new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        course:          r.courses?.name || null,
+        total_score:     r.total_score ?? null,
+        holes_played:    hp,
+        vs_par_per_hole: r.total_score ? +((r.total_score - par) / hp).toFixed(2) : null,
+        gir_pct:         r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+        fairway_pct:     r.fw_holes > 0 ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
+        avg_putts:       r.total_putts != null ? +(r.total_putts / hp).toFixed(2) : null,
+        scrambling_pct:  r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null,
+        penalty_count:   null,
+      };
+    });
+  }
+
+  async function saveLesson() {
+    setSavingLesson(true);
+    const round_context = editingLesson ? editingLesson.round_context : computeRoundContext();
+    if (editingLesson) {
+      await supabase.from("lessons").update({
+        lesson_date: lessonForm.date,
+        notes:       lessonForm.notes || null,
+        drills:      lessonForm.drills || null,
+        homework:    lessonForm.homework || null,
+      }).eq("id", editingLesson.id);
+    } else {
+      await supabase.from("lessons").insert({
+        coach_id:      coachId,
+        student_id:    student.id,
+        lesson_date:   lessonForm.date,
+        notes:         lessonForm.notes || null,
+        drills:        lessonForm.drills || null,
+        homework:      lessonForm.homework || null,
+        round_context,
+      });
+    }
+    const { data: refreshed } = await supabase.from("lessons").select("*")
+      .eq("coach_id", coachId).eq("student_id", student.id)
+      .order("lesson_date", { ascending: false });
+    setLessons(refreshed || []);
+    setShowLessonForm(false);
+    setEditingLesson(null);
+    setSavingLesson(false);
+  }
 
   const diffs   = scored.map(r => r.total_score - getCoursePar(r));
   const avgDiff = diffs.length ? Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length) : null;
@@ -1075,43 +1180,134 @@ OUTPUT FORMAT
               </div>
             )}
 
-            <div className="section-label">Round history</div>
-            {sentRounds.map(r => {
-              const diff = parDiff(r.total_score, r);
-              return (
-                <div className="round-card" key={r.id} onClick={() => onSelectRound(r)}>
-                  <div className="round-card-top">
-                    <div>
-                      <div className="round-card-date" style={{fontWeight:700,color:"var(--text)",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
-                        {r.courses?.name || "Golf Course"}
-                        {r.historical && <span style={{background:"#EEF0FF",color:"#4A5FBD",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6}}>Historical</span>}
+            <div className="section-label">Round &amp; lesson history</div>
+
+            {showLessonForm ? (
+              <div className="lesson-form">
+                <div className="lesson-form-title">{editingLesson ? "Edit lesson" : "Log lesson"}</div>
+                <div className="lesson-form-field">
+                  <label className="lesson-form-label">Date</label>
+                  <input type="date" className="lesson-form-input" value={lessonForm.date} onChange={e => updateForm("date", e.target.value)} />
+                </div>
+                <div className="lesson-form-field">
+                  <label className="lesson-form-label">Notes</label>
+                  <textarea className="lesson-form-textarea" placeholder="Observations from the lesson..." value={lessonForm.notes} onChange={e => updateForm("notes", e.target.value)} />
+                </div>
+                <div className="lesson-form-field">
+                  <label className="lesson-form-label">Drills</label>
+                  <textarea className="lesson-form-textarea" placeholder="Drills assigned..." value={lessonForm.drills} onChange={e => updateForm("drills", e.target.value)} />
+                </div>
+                <div className="lesson-form-field">
+                  <label className="lesson-form-label">Homework</label>
+                  <textarea className="lesson-form-textarea" placeholder="Homework set..." value={lessonForm.homework} onChange={e => updateForm("homework", e.target.value)} />
+                </div>
+                <div className="lesson-form-actions">
+                  <button className="lesson-save-btn" onClick={saveLesson} disabled={savingLesson || !lessonForm.date}>{savingLesson ? "Saving…" : "Save"}</button>
+                  <button className="lesson-cancel-btn" onClick={cancelLesson}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button className="log-lesson-btn" onClick={openNewLesson}>+ Log lesson</button>
+            )}
+
+            {[
+              ...sentRounds.map(r => ({ type: "round", date: r.created_at, data: r })),
+              ...(lessons || []).map(l => ({ type: "lesson", date: l.lesson_date + "T23:59:59", data: l })),
+            ].sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => {
+              if (item.type === "round") {
+                const r    = item.data;
+                const diff = parDiff(r.total_score, r);
+                return (
+                  <div className="round-card" key={"r-" + r.id} onClick={() => onSelectRound(r)}>
+                    <div className="round-card-top">
+                      <div>
+                        <div className="round-card-date" style={{fontWeight:700,color:"var(--text)",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+                          {r.courses?.name || "Golf Course"}
+                          {r.historical && <span style={{background:"#EEF0FF",color:"#4A5FBD",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6}}>Historical</span>}
+                        </div>
+                        <div className="round-card-course">{fmtDate(r.created_at)} · {r.attempted_holes != null && r.attempted_holes !== r.holes_played ? `${r.attempted_holes}/${r.holes_played} holes` : `${r.holes_played} holes`}</div>
                       </div>
-                      <div className="round-card-course">{fmtDate(r.created_at)} · {r.attempted_holes != null && r.attempted_holes !== r.holes_played ? `${r.attempted_holes}/${r.holes_played} holes` : `${r.holes_played} holes`}</div>
+                      <div className="round-score-block">
+                        <div className="round-score-num">{r.total_score ?? "—"}</div>
+                        {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
+                        {r.handicap != null && (
+                          <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                            Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - (r.prorated_hcp ?? r.handicap)}` : ""}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="round-score-block">
-                      <div className="round-score-num">{r.total_score ?? "—"}</div>
-                      {r.total_score && <div className={"round-score-par " + diff.cls}>{diff.text}</div>}
-                      {r.handicap != null && (
-                        <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                          Course Hcp {Number(r.handicap).toFixed(1)}{r.total_score ? ` · Net ${r.total_score - (r.prorated_hcp ?? r.handicap)}` : ""}
+                    <div className="round-stats-row">
+                      <div className="round-stat-chip">
+                        <div className={"rsc-val " + (r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.55 ? "ok" : r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.attempted_holes ?? r.holes_played}` : "—"}</div>
+                        <div className="rsc-lbl">GIR</div>
+                      </div>
+                      <div className="round-stat-chip">
+                        <div className={"rsc-val " + (r.fw_holes > 0 ? (r.fw_hit/r.fw_holes >= 0.6 ? "ok" : r.fw_hit/r.fw_holes >= 0.4 ? "warn" : "bad") : "")}>{r.fw_hit != null && r.fw_holes != null ? `${r.fw_hit}/${r.fw_holes}` : "—"}</div>
+                        <div className="rsc-lbl">Fairways</div>
+                      </div>
+                      <div className="round-stat-chip">
+                        <div className={"rsc-val " + (r.three_putt_count === 0 ? "ok" : r.three_putt_count <= 1 ? "warn" : "bad")}>{r.three_putt_count != null ? r.three_putt_count : "—"}</div>
+                        <div className="rsc-lbl">3-putts</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Lesson card
+              const l           = item.data;
+              const isExpanded  = expandedLesson === l.id;
+              const lessonDate  = new Date(l.lesson_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+              const notesPreview = l.notes ? (l.notes.length > 100 ? l.notes.slice(0, 100) + "…" : l.notes) : null;
+              return (
+                <div className="lesson-card" key={"l-" + l.id} onClick={() => setExpandedLesson(isExpanded ? null : l.id)}>
+                  <div className="lesson-card-header">
+                    <div>
+                      <div className="lesson-card-title">📋 Lesson</div>
+                      <div className="lesson-card-date">{lessonDate}</div>
+                    </div>
+                    <button className="lesson-edit-btn" onClick={e => openEditLesson(e, l)}>Edit</button>
+                  </div>
+                  {notesPreview && !isExpanded && <div className="lesson-preview">{notesPreview}</div>}
+                  {(l.drills || l.homework) && !isExpanded && (
+                    <div className="lesson-indicators">
+                      {l.drills   && <span className="lesson-indicator">📝 Drills</span>}
+                      {l.homework && <span className="lesson-indicator">🏠 Homework</span>}
+                    </div>
+                  )}
+                  {isExpanded && (
+                    <div className="lesson-full">
+                      {l.notes && (
+                        <div className="lesson-section">
+                          <div className="lesson-section-label">Notes</div>
+                          <div className="lesson-section-text">{l.notes}</div>
+                        </div>
+                      )}
+                      {l.drills && (
+                        <div className="lesson-section">
+                          <div className="lesson-section-label">📝 Drills</div>
+                          <div className="lesson-section-text">{l.drills}</div>
+                        </div>
+                      )}
+                      {l.homework && (
+                        <div className="lesson-section">
+                          <div className="lesson-section-label">🏠 Homework</div>
+                          <div className="lesson-section-text">{l.homework}</div>
+                        </div>
+                      )}
+                      {l.round_context && l.round_context.length > 0 && (
+                        <div className="lesson-context">
+                          <div className="lesson-context-title">Rounds at time of lesson</div>
+                          {l.round_context.map((rc, i) => (
+                            <div className="lesson-context-row" key={i}>
+                              {rc.date}{rc.total_score ? ` · ${rc.total_score} (${rc.vs_par_per_hole >= 0 ? "+" : ""}${rc.vs_par_per_hole}/hole)` : ""}{rc.gir_pct != null ? ` · GIR ${rc.gir_pct}%` : ""}{rc.fairway_pct != null ? ` · FW ${rc.fairway_pct}%` : ""}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-                  </div>
-                  <div className="round-stats-row">
-                    <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.55 ? "ok" : r.gir_count/(r.attempted_holes ?? r.holes_played) >= 0.33 ? "warn" : "bad")}>{r.gir_count != null ? `${r.gir_count}/${r.attempted_holes ?? r.holes_played}` : "—"}</div>
-                      <div className="rsc-lbl">GIR</div>
-                    </div>
-                    <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.fw_holes > 0 ? (r.fw_hit/r.fw_holes >= 0.6 ? "ok" : r.fw_hit/r.fw_holes >= 0.4 ? "warn" : "bad") : "")}>{r.fw_hit != null && r.fw_holes != null ? `${r.fw_hit}/${r.fw_holes}` : "—"}</div>
-                      <div className="rsc-lbl">Fairways</div>
-                    </div>
-                    <div className="round-stat-chip">
-                      <div className={"rsc-val " + (r.three_putt_count === 0 ? "ok" : r.three_putt_count <= 1 ? "warn" : "bad")}>{r.three_putt_count != null ? r.three_putt_count : "—"}</div>
-                      <div className="rsc-lbl">3-putts</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -1130,6 +1326,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
   const [studentStats, setStudentStats] = useState({});
   const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
   const [studentRounds, setStudentRounds] = useState([]);
+  const [studentLessons, setStudentLessons] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [loadingRounds, setLoadingRounds] = useState(initialScreen === "history");
 
@@ -1211,13 +1408,19 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
 
       // If returning from round detail, reload the history for the selected student
       if (initialScreen === "history" && initialStudent) {
-        const { data: rounds } = await supabase
-          .from("rounds").select("*, courses(name)")
-          .eq("student_id", initialStudent.id)
-          .eq("sent_to_coach", true)
-          .order("created_at", { ascending: false });
+        const [{ data: rounds }, { data: lessons }] = await Promise.all([
+          supabase.from("rounds").select("*, courses(name)")
+            .eq("student_id", initialStudent.id)
+            .eq("sent_to_coach", true)
+            .order("created_at", { ascending: false }),
+          supabase.from("lessons").select("*")
+            .eq("coach_id", user.id)
+            .eq("student_id", initialStudent.id)
+            .order("lesson_date", { ascending: false }),
+        ]);
         const enriched = await enrichRounds(rounds || []);
         setStudentRounds(enriched);
+        setStudentLessons(lessons || []);
         setLoadingRounds(false);
       }
     }
@@ -1228,15 +1431,19 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
     setSelectedStudent(student);
     setLoadingRounds(true);
     setScreen("history");
-    const { data } = await supabase
-      .from("rounds")
-      .select("*, courses(name)")
-      .eq("student_id", student.id)
-      .eq("sent_to_coach", true)
-      .order("created_at", { ascending: false });
-
+    const [{ data }, { data: lessons }] = await Promise.all([
+      supabase.from("rounds").select("*, courses(name)")
+        .eq("student_id", student.id)
+        .eq("sent_to_coach", true)
+        .order("created_at", { ascending: false }),
+      supabase.from("lessons").select("*")
+        .eq("coach_id", user.id)
+        .eq("student_id", student.id)
+        .order("lesson_date", { ascending: false }),
+    ]);
     const enriched = await enrichRounds(data || []);
     setStudentRounds(enriched);
+    setStudentLessons(lessons || []);
     setLoadingRounds(false);
   }
 
@@ -1272,6 +1479,8 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
         coachId={user.id}
         onHome={() => setScreen("students")}
         rounds={studentRounds}
+        lessons={studentLessons}
+        setLessons={setStudentLessons}
         onSelectRound={r => onSelectRound(r, selectedStudent)}
         onBack={() => setScreen("students")}
         onSignOut={onSignOut}
