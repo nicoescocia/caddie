@@ -174,6 +174,12 @@ const css = `
   .lesson-complete-btn { background:var(--green-dark); color:white; border:none; border-radius:8px; padding:7px 14px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:700; cursor:pointer; }
   .lesson-delete-btn { background:none; border:1px solid rgba(201,64,64,0.3); color:var(--red); border-radius:8px; padding:7px 14px; font-family:'Outfit',sans-serif; font-size:12px; cursor:pointer; transition:border-color .15s; }
   .lesson-delete-btn:hover { border-color:var(--red); }
+  .upcoming-lesson-mini { display:flex; align-items:center; justify-content:space-between; background:#FEFBF3; border-left:3px solid var(--gold); border-radius:10px; padding:10px 14px; margin-bottom:8px; gap:8px; }
+  .upcoming-mini-left { display:flex; flex-direction:column; gap:1px; }
+  .upcoming-mini-name { font-size:13px; font-weight:600; color:var(--text); }
+  .upcoming-mini-date { font-size:12px; color:var(--text-dim); }
+  .upcoming-mini-view { font-size:12px; font-weight:700; color:var(--gold); background:none; border:none; cursor:pointer; padding:0; font-family:'Outfit',sans-serif; white-space:nowrap; }
+  .upcoming-mini-view:hover { text-decoration:underline; }
   .schedule-panel-btn { display:flex; align-items:center; gap:8px; background:white; border:1.5px solid var(--gold); color:var(--gold); border-radius:12px; padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; cursor:pointer; margin-bottom:16px; transition:all .15s; width:100%; }
   .schedule-panel-btn:hover { background:rgba(201,168,76,0.08); }
   .schedule-panel { background:#FEFBF3; border:1.5px solid var(--gold); border-radius:16px; padding:16px 18px; margin-bottom:16px; }
@@ -235,6 +241,18 @@ function fmtDateShort(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function fmtDateWeekday(iso) {
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function fmtTime(t) {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  const suffix = h >= 12 ? "pm" : "am";
+  const hour   = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, "0")}${suffix}`;
+}
+
 function parDiff(score, round) {
   const par = getCoursePar(round);
   const d = score - par;
@@ -256,6 +274,19 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   const [briefPreview, setBriefPreview]   = useState(null);
   const [briefLoading, setBriefLoading]   = useState(false);
   const [scheduleContext, setScheduleContext] = useState(null);
+  const [upcomingLessons, setUpcomingLessons] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("lessons")
+        .select("*")
+        .eq("coach_id", user.id)
+        .eq("status", "upcoming")
+        .order("lesson_date", { ascending: true });
+      setUpcomingLessons(data || []);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateSchedule(field, value) { setScheduleForm(prev => ({ ...prev, [field]: value })); }
 
@@ -368,6 +399,15 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
         .order("lesson_date", { ascending: false });
       setStudentLessons(refreshed || []);
     }
+
+    // Refresh upcoming lessons list
+    const { data: refreshedUpcoming } = await supabase
+      .from("lessons")
+      .select("*")
+      .eq("coach_id", user.id)
+      .eq("status", "upcoming")
+      .order("lesson_date", { ascending: true });
+    setUpcomingLessons(refreshedUpcoming || []);
 
     setShowSchedule(false);
     setScheduleForm({ studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "" });
@@ -494,6 +534,26 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
               </div>
             ) : (
               <button className="schedule-panel-btn" onClick={() => setShowSchedule(true)}>📅 Schedule lesson</button>
+            )}
+            {upcomingLessons.length > 0 && (
+              <>
+                <div className="section-label">Upcoming lessons</div>
+                {upcomingLessons.map(l => {
+                  const s = students.find(st => st.id === l.student_id);
+                  const studentName = s ? `${s.first_name} ${s.last_name}` : "Student";
+                  const dateStr = fmtDateWeekday(l.lesson_date);
+                  const timeStr = fmtTime(l.lesson_time);
+                  return (
+                    <div className="upcoming-lesson-mini" key={l.id}>
+                      <div className="upcoming-mini-left">
+                        <div className="upcoming-mini-name">{studentName}</div>
+                        <div className="upcoming-mini-date">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</div>
+                      </div>
+                      <button className="upcoming-mini-view" onClick={() => s && onSelectStudent(s)}>View →</button>
+                    </div>
+                  );
+                })}
+              </>
             )}
             <div className="section-label">Your students</div>
             {students.map(s => {
