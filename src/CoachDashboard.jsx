@@ -340,11 +340,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     d: `Converted ${scrambMade} of ${under50GIRMisses.length} up-and-down chances (1 chip + 1 putt from inside 50 yds).${multiChip > 0 ? ` ${multiChip} holes required 2+ chips.` : ""}`,
     s: "Drill: chip to within 3ft from rough/fringe"
   });
-  if (focusAreas.length === 0) focusAreas.push({
-    p: "p1", t: "Solid round overall",
-    d: "No major patterns detected. Continue building consistency.",
-    s: "Maintain current practice routine"
-  });
+  const focusAreasReady = focusAreas.length > 0 || aiPutting !== null;
 
   const studentName = student ? `${student.first_name} ${student.last_name}` : "Student";
   const roundDate   = new Date(round.created_at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
@@ -489,16 +485,28 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           <div className="ccard">
             <div className="cc-title">Session focus areas</div>
             <div className="focus-list">
-              {focusAreas.slice(0, 3).map((a, i) => (
-                <div className="focus-item" key={i}>
-                  <div className={`fp ${a.p}`}>{a.p.replace("p", "")}</div>
-                  <div>
-                    <div className="ft">{a.t}</div>
-                    <div className="fd">{a.d}</div>
-                    <div className="fs">{a.s}</div>
-                  </div>
-                </div>
-              ))}
+              {!focusAreasReady
+                ? <div style={{fontSize:13,color:"var(--text-dim)",padding:"8px 0"}}>Analysing session…</div>
+                : focusAreas.length > 0
+                  ? focusAreas.slice(0, 3).map((a, i) => (
+                      <div className="focus-item" key={i}>
+                        <div className={`fp ${a.p}`}>{a.p.replace("p", "")}</div>
+                        <div>
+                          <div className="ft">{a.t}</div>
+                          <div className="fd">{a.d}</div>
+                          <div className="fs">{a.s}</div>
+                        </div>
+                      </div>
+                    ))
+                  : <div className="focus-item">
+                      <div className="fp p1">1</div>
+                      <div>
+                        <div className="ft">Solid round overall</div>
+                        <div className="fd">No major patterns detected. Continue building consistency.</div>
+                        <div className="fs">Maintain current practice routine</div>
+                      </div>
+                    </div>
+              }
             </div>
             <div className="note-box">
               <div className="note-lbl" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
