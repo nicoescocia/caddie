@@ -1061,6 +1061,9 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
   const [editingCompletedLesson, setEditingCompletedLesson] = useState(null);
   const [editForm, setEditForm] = useState({ notes: "", drills: "" });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [editingUpcomingLesson, setEditingUpcomingLesson] = useState(null);
+  const [upcomingEditForm, setUpcomingEditForm] = useState({ date: "", time: "" });
+  const [savingUpcomingEdit, setSavingUpcomingEdit] = useState(false);
 
   async function saveComplete(lessonId) {
     await supabase.from("lessons").update({
@@ -1080,6 +1083,20 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
     if (!window.confirm("Delete this lesson?")) return;
     await supabase.from("lessons").delete().eq("id", lessonId);
     setLessons(prev => prev.filter(x => x.id !== lessonId));
+  }
+
+  async function saveUpcomingEdit(lessonId) {
+    setSavingUpcomingEdit(true);
+    await supabase.from("lessons").update({
+      lesson_date: upcomingEditForm.date,
+      lesson_time: upcomingEditForm.time || null,
+    }).eq("id", lessonId);
+    const { data: refreshed } = await supabase.from("lessons").select("*")
+      .eq("coach_id", coachId).eq("student_id", student.id)
+      .order("lesson_date", { ascending: false });
+    setLessons(refreshed || []);
+    setEditingUpcomingLesson(null);
+    setSavingUpcomingEdit(false);
   }
 
   async function saveEditedLesson(lessonId) {
@@ -1397,18 +1414,24 @@ OUTPUT FORMAT
               const lessonDate  = new Date(l.lesson_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
               if (isUpcoming) {
+                const isEditingUpcoming = editingUpcomingLesson === l.id;
                 const prepPreview = l.prep_notes ? (l.prep_notes.length > 100 ? l.prep_notes.slice(0, 100) + "…" : l.prep_notes) : null;
                 return (
-                  <div className="lesson-card" key={"l-" + l.id} onClick={() => setExpandedLesson(isExpanded ? null : l.id)}>
+                  <div className="lesson-card" key={"l-" + l.id} onClick={() => !isEditingUpcoming && setExpandedLesson(isExpanded ? null : l.id)}>
                     <div className="lesson-card-header">
                       <div>
                         <div className="lesson-card-title">📅 Upcoming lesson</div>
                         <div className="lesson-card-date">{lessonDate}{l.lesson_time ? ` · ${l.lesson_time}` : ""}</div>
                       </div>
-                      <button className="lesson-delete-btn" onClick={e => { e.stopPropagation(); deleteLesson(l.id); }}>Delete</button>
+                      <div style={{display:"flex", gap:6}}>
+                        {!isEditingUpcoming && (
+                          <button className="lesson-edit-btn" onClick={e => { e.stopPropagation(); setEditingUpcomingLesson(l.id); setUpcomingEditForm({ date: l.lesson_date, time: l.lesson_time || "" }); setExpandedLesson(l.id); }}>Edit</button>
+                        )}
+                        <button className="lesson-delete-btn" onClick={e => { e.stopPropagation(); deleteLesson(l.id); }}>Delete</button>
+                      </div>
                     </div>
                     {prepPreview && !isExpanded && <div className="lesson-preview">{prepPreview}</div>}
-                    {isExpanded && (
+                    {isExpanded && !isEditingUpcoming && (
                       <div className="lesson-full">
                         {l.prep_notes && (
                           <div className="lesson-section">
@@ -1425,7 +1448,7 @@ OUTPUT FORMAT
                         {!isCompleting && (
                           <div className="lesson-action-row">
                             <button className="lesson-complete-btn" onClick={e => { e.stopPropagation(); setCompletingLesson(l.id); setCompleteForm({ session_notes: "", drills: "" }); }}>
-                              Mark as complete
+                              Log session notes
                             </button>
                           </div>
                         )}
@@ -1445,6 +1468,22 @@ OUTPUT FORMAT
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+                    {isEditingUpcoming && (
+                      <div onClick={e => e.stopPropagation()}>
+                        <div className="lesson-form-field" style={{marginTop:12}}>
+                          <label className="lesson-form-label">Date</label>
+                          <input type="date" className="lesson-form-input" value={upcomingEditForm.date} onChange={e => setUpcomingEditForm(prev => ({ ...prev, date: e.target.value }))} />
+                        </div>
+                        <div className="lesson-form-field">
+                          <label className="lesson-form-label">Time</label>
+                          <input type="time" className="lesson-form-input" value={upcomingEditForm.time} onChange={e => setUpcomingEditForm(prev => ({ ...prev, time: e.target.value }))} />
+                        </div>
+                        <div className="lesson-form-actions">
+                          <button className="lesson-save-btn" onClick={e => { e.stopPropagation(); saveUpcomingEdit(l.id); }} disabled={savingUpcomingEdit || !upcomingEditForm.date}>{savingUpcomingEdit ? "Saving…" : "Save"}</button>
+                          <button className="lesson-cancel-btn" onClick={e => { e.stopPropagation(); setEditingUpcomingLesson(null); }}>Cancel</button>
+                        </div>
                       </div>
                     )}
                   </div>
