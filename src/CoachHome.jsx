@@ -276,11 +276,10 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
               const hasNew = stats.newRounds > 0;
               const thisMonth = stats.thisMonth || 0;
               const last = stats.lastRoundDate;
-              const { avgNetVsPar9, avgNetVsPar18 } = stats;
-              function fmtNetVsPar(v) {
-                if (v == null) return null;
-                const s = v.toFixed(1);
-                return v > 0 ? "+" + s : s;
+              const { avgVsParPerHole, trendDiff } = stats;
+              function fmtAvgPerHole(v) {
+                if (v == null) return "—";
+                return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
               }
               return (
                 <div className="student-card" key={s.id} onClick={() => onSelectStudent(s)}>
@@ -296,24 +295,17 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                     </div>
                   </div>
                   <div className="student-stats">
-                    {avgNetVsPar18 != null && (
-                      <div className="s-stat">
-                        <div className="s-stat-val" style={{fontSize:17}}>{fmtNetVsPar(avgNetVsPar18)}</div>
-                        <div className="s-stat-lbl">Net par (18h)</div>
+                    <div className="s-stat">
+                      <div className="s-stat-val" style={{fontSize:17, display:"flex", alignItems:"center", gap:4}}>
+                        <span>{fmtAvgPerHole(avgVsParPerHole)}</span>
+                        {trendDiff != null && (
+                          <span style={{fontSize:12, fontWeight:600, color: trendDiff < 0 ? "#2e7d32" : "#c62828"}}>
+                            {trendDiff < 0 ? "▼" : "▲"} {Math.abs(trendDiff).toFixed(1)}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    {avgNetVsPar9 != null && (
-                      <div className="s-stat">
-                        <div className="s-stat-val" style={{fontSize:17}}>{fmtNetVsPar(avgNetVsPar9)}</div>
-                        <div className="s-stat-lbl">Net par (9h)</div>
-                      </div>
-                    )}
-                    {avgNetVsPar18 == null && avgNetVsPar9 == null && (
-                      <div className="s-stat">
-                        <div className="s-stat-val">—</div>
-                        <div className="s-stat-lbl">Net vs par</div>
-                      </div>
-                    )}
+                      <div className="s-stat-lbl">Avg/hole</div>
+                    </div>
                     <div className="s-stat">
                       <div className="s-stat-val">{thisMonth}</div>
                       <div className="s-stat-lbl">This month</div>
@@ -1167,21 +1159,27 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
         // Current handicap = most recent round that has one
         const currentHcp = pRounds.find(r => r.handicap != null)?.handicap ?? null;
 
-        // Avg net vs par, split by 9-hole and 18-hole
-        const scored9  = scored.filter(r => (r.holes_played || 9) <= 9 && r.handicap != null);
-        const scored18 = scored.filter(r => (r.holes_played || 9) > 9  && r.handicap != null);
-        const avgNetVsPar9  = scored9.length
-          ? scored9.reduce((s, r) => s + ((r.total_score - r.handicap) - getCoursePar(r)), 0) / scored9.length
+        // Avg gross vs par per hole — last 30 days, or last 5 rounds if none in that window
+        const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const sixtyDaysAgo  = new Date(now - 60 * 24 * 60 * 60 * 1000).toISOString();
+        const curPeriod  = scored.filter(r => r.created_at >= thirtyDaysAgo);
+        const curRounds  = curPeriod.length > 0 ? curPeriod : scored.slice(0, 5);
+        const prevRounds = scored.filter(r => r.created_at >= sixtyDaysAgo && r.created_at < thirtyDaysAgo);
+        const avgVsParPerHole = curRounds.length
+          ? curRounds.reduce((s, r) => s + (r.total_score - getCoursePar(r)) / (r.holes_played || 9), 0) / curRounds.length
           : null;
-        const avgNetVsPar18 = scored18.length
-          ? scored18.reduce((s, r) => s + ((r.total_score - r.handicap) - getCoursePar(r)), 0) / scored18.length
+        const prevAvgVsParPerHole = prevRounds.length >= 2
+          ? prevRounds.reduce((s, r) => s + (r.total_score - getCoursePar(r)) / (r.holes_played || 9), 0) / prevRounds.length
+          : null;
+        const trendDiff = (curPeriod.length >= 2 && prevRounds.length >= 2 && avgVsParPerHole != null && prevAvgVsParPerHole != null)
+          ? avgVsParPerHole - prevAvgVsParPerHole
           : null;
 
         stats[p.id] = {
           totalRounds:    pRounds.length,
           currentHcp,
-          avgNetVsPar9,
-          avgNetVsPar18,
+          avgVsParPerHole,
+          trendDiff,
           lastRoundDate:  pRounds[0]?.created_at || null,
           thisMonth:      pRounds.filter(r => r.created_at >= monthStart).length,
           newRounds:      pRounds.filter(r => {
