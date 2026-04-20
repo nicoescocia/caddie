@@ -276,7 +276,8 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
               const hasNew = stats.newRounds > 0;
               const thisMonth = stats.thisMonth || 0;
               const last = stats.lastRoundDate;
-              const { avgVsParPerHole, trendDiff } = stats;
+              const { avgVsParPerHole, trendDiff, hcpTrend } = stats;
+              const currentHcp = stats.currentHcp;
               function fmtAvgPerHole(v) {
                 if (v == null) return "—";
                 return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
@@ -291,7 +292,6 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                     </div>
                     <div className="student-meta">
                       {last ? `Last round: ${fmtDateShort(last)}` : "No rounds yet"}
-                      {s.official_handicap != null && <span style={{marginLeft:6}}>· Hcp {Number(s.official_handicap).toFixed(1)}</span>}
                     </div>
                   </div>
                   <div className="student-stats">
@@ -305,6 +305,17 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                         )}
                       </div>
                       <div className="s-stat-lbl">Avg/hole</div>
+                    </div>
+                    <div className="s-stat">
+                      <div className="s-stat-val" style={{fontSize:17, display:"flex", alignItems:"center", gap:4}}>
+                        <span>{currentHcp != null ? currentHcp : (s.official_handicap != null ? Number(s.official_handicap).toFixed(1) : "—")}</span>
+                        {hcpTrend != null && (
+                          <span style={{fontSize:12, fontWeight:600, color: hcpTrend < 0 ? "#2e7d32" : "#c62828"}}>
+                            {hcpTrend < 0 ? "▼" : "▲"} {Math.abs(hcpTrend).toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="s-stat-lbl">Hcp</div>
                     </div>
                     <div className="s-stat">
                       <div className="s-stat-val">{thisMonth}</div>
@@ -1142,7 +1153,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       // Load rounds for all students to compute stats
       const { data: allRounds } = await supabase
         .from("rounds")
-        .select("id, student_id, total_score, handicap, holes_played, total_par, course_id, sent_to_coach, created_at")
+        .select("id, student_id, total_score, handicap, whs_index, holes_played, total_par, course_id, sent_to_coach, created_at")
         .in("student_id", ids)
         .eq("sent_to_coach", true)
         .order("created_at", { ascending: false });
@@ -1175,11 +1186,17 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
           ? avgVsParPerHole - prevAvgVsParPerHole
           : null;
 
+        // WHS index trend — most recent round in last 30 days vs most recent in 30–60 days
+        const curWhs  = pRounds.find(r => r.created_at >= thirtyDaysAgo && r.whs_index != null)?.whs_index ?? null;
+        const prevWhs = pRounds.find(r => r.created_at >= sixtyDaysAgo && r.created_at < thirtyDaysAgo && r.whs_index != null)?.whs_index ?? null;
+        const hcpTrend = (curWhs != null && prevWhs != null) ? curWhs - prevWhs : null;
+
         stats[p.id] = {
           totalRounds:    pRounds.length,
           currentHcp,
           avgVsParPerHole,
           trendDiff,
+          hcpTrend,
           lastRoundDate:  pRounds[0]?.created_at || null,
           thisMonth:      pRounds.filter(r => r.created_at >= monthStart).length,
           newRounds:      pRounds.filter(r => {
