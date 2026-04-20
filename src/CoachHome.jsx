@@ -165,6 +165,22 @@ const css = `
   .lesson-save-btn { background:var(--green-dark); color:white; border:none; border-radius:10px; padding:10px 20px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
   .lesson-save-btn:disabled { opacity:.6; }
   .lesson-cancel-btn { background:none; border:1.5px solid var(--border); color:var(--text-dim); border-radius:10px; padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px; cursor:pointer; }
+  .lesson-card.completed { background:#F0F4F0; border-color:var(--green-mid); border-left-color:var(--green-mid); }
+  .lesson-card.completed:hover { border-color:var(--green); }
+  .lesson-ai-box { background:linear-gradient(135deg,#FEFBF3,#FFF8E8); border:1px solid rgba(201,168,76,0.35); border-radius:10px; padding:12px 14px; margin-top:10px; }
+  .lesson-ai-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--gold); margin-bottom:6px; }
+  .lesson-ai-text { font-size:13px; color:var(--text-mid); line-height:1.7; white-space:pre-line; }
+  .lesson-action-row { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .lesson-complete-btn { background:var(--green-dark); color:white; border:none; border-radius:8px; padding:7px 14px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:700; cursor:pointer; }
+  .lesson-delete-btn { background:none; border:1px solid rgba(201,64,64,0.3); color:var(--red); border-radius:8px; padding:7px 14px; font-family:'Outfit',sans-serif; font-size:12px; cursor:pointer; transition:border-color .15s; }
+  .lesson-delete-btn:hover { border-color:var(--red); }
+  .schedule-panel-btn { display:flex; align-items:center; gap:8px; background:white; border:1.5px solid var(--gold); color:var(--gold); border-radius:12px; padding:10px 16px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; cursor:pointer; margin-bottom:16px; transition:all .15s; width:100%; }
+  .schedule-panel-btn:hover { background:rgba(201,168,76,0.08); }
+  .schedule-panel { background:#FEFBF3; border:1.5px solid var(--gold); border-radius:16px; padding:16px 18px; margin-bottom:16px; }
+  .schedule-panel-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px; }
+  .schedule-select { width:100%; border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Outfit',sans-serif; font-size:13px; color:var(--text); background:white; transition:border-color .15s; -webkit-appearance:none; appearance:none; }
+  .schedule-select:focus { outline:none; border-color:var(--gold); }
+  .schedule-saving-note { font-size:12px; color:var(--text-dim); margin-top:8px; }
 
   .loading-wrap { display:flex; align-items:center; justify-content:center; padding:80px; }
   .spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
@@ -228,10 +244,112 @@ function parDiff(score, round) {
 }
 
 // ── STUDENT LIST (coach home) ──
-function StudentList({ coachProfile, user, students, studentStats, onSelectStudent, onSignOut, onProfile }) {
+function StudentList({ coachProfile, user, students, studentStats, selectedStudent, setStudentLessons, onSelectStudent, onSignOut, onProfile }) {
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "",
+  });
+
+  function updateSchedule(field, value) { setScheduleForm(prev => ({ ...prev, [field]: value })); }
+
+  async function saveScheduledLesson() {
+    if (!scheduleForm.studentId || !scheduleForm.date) return;
+    setScheduleSaving(true);
+    const student = students.find(s => s.id === scheduleForm.studentId);
+    const studentName = student ? `${student.first_name} ${student.last_name}` : "Student";
+
+    // 1. Insert lesson row
+    const { data: newLesson, error } = await supabase.from("lessons").insert({
+      coach_id:   user.id,
+      student_id: scheduleForm.studentId,
+      lesson_date: scheduleForm.date,
+      lesson_time: scheduleForm.time || null,
+      prep_notes:  scheduleForm.prepNotes || null,
+      status:      "upcoming",
+    }).select().single();
+    if (error || !newLesson) { setScheduleSaving(false); return; }
+
+    // 2. Fetch + enrich last 3 sent rounds for this student
+    const { data: rawRounds } = await supabase
+      .from("rounds").select("*, courses(name)")
+      .eq("student_id", scheduleForm.studentId)
+      .eq("sent_to_coach", true)
+      .order("created_at", { ascending: false })
+      .limit(3);
+    const enriched = await enrichRounds(rawRounds || []);
+
+    // 3. Build round_context and AI rounds array
+    const round_context = enriched.map(r => {
+      const hp = r.holes_played || 9;
+      const par = getCoursePar(r);
+      return {
+        date:            new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        course:          r.courses?.name || null,
+        total_score:     r.total_score ?? null,
+        holes_played:    hp,
+        vs_par_per_hole: r.total_score ? +((r.total_score - par) / hp).toFixed(2) : null,
+        gir_pct:         r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+        fairway_pct:     r.fw_holes > 0 ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
+        avg_putts:       r.total_putts != null ? +(r.total_putts / hp).toFixed(2) : null,
+        scrambling_pct:  r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null,
+        penalty_count:   null,
+      };
+    });
+
+    // 4. Call AI for pre-lesson brief
+    let ai_brief = null;
+    try {
+      const aiRes = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "pre_lesson_brief",
+          studentName,
+          rounds: round_context.map(rc => ({
+            date:          rc.date,
+            course:        rc.course,
+            score:         rc.total_score,
+            holesPlayed:   rc.holes_played,
+            vsParPerHole:  rc.vs_par_per_hole,
+            girPct:        rc.gir_pct,
+            fairwayPct:    rc.fairway_pct,
+            avgPutts:      rc.avg_putts,
+            scramblingPct: rc.scrambling_pct,
+            penaltyCount:  null,
+            penaltyTypes:  null,
+          })),
+        }),
+      });
+      const aiData = await aiRes.json();
+      ai_brief = aiData.content?.map(c => c.text || "").join("") || null;
+    } catch {}
+
+    // 5. Save ai_brief + round_context
+    await supabase.from("lessons").update({ ai_brief, round_context }).eq("id", newLesson.id);
+
+    // 6. Fire-and-forget notify (student notification — best effort)
+    fetch("/api/notify-coach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coachId: user.id, studentName, lessonDate: scheduleForm.date, lessonTime: scheduleForm.time }),
+    }).catch(() => {});
+
+    // 7. Refresh studentLessons if viewing this student's history
+    if (selectedStudent?.id === scheduleForm.studentId) {
+      const { data: refreshed } = await supabase.from("lessons").select("*")
+        .eq("coach_id", user.id).eq("student_id", scheduleForm.studentId)
+        .order("lesson_date", { ascending: false });
+      setStudentLessons(refreshed || []);
+    }
+
+    setShowSchedule(false);
+    setScheduleForm({ studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "" });
+    setScheduleSaving(false);
+  }
 
   async function generateInvite() {
     const coachId = user?.id || coachProfile?.id;
@@ -303,6 +421,43 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
           </div>
         ) : (
           <>
+            {showSchedule ? (
+              <div className="schedule-panel">
+                <div className="schedule-panel-title">📅 Schedule lesson</div>
+                <div className="lesson-form-field">
+                  <label className="lesson-form-label">Student</label>
+                  <select className="schedule-select" value={scheduleForm.studentId} onChange={e => updateSchedule("studentId", e.target.value)}>
+                    <option value="">Select student…</option>
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="lesson-form-field" style={{display:"flex", gap:10}}>
+                  <div style={{flex:1}}>
+                    <label className="lesson-form-label">Date</label>
+                    <input type="date" className="lesson-form-input" value={scheduleForm.date} onChange={e => updateSchedule("date", e.target.value)} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <label className="lesson-form-label">Time</label>
+                    <input type="time" className="lesson-form-input" value={scheduleForm.time} onChange={e => updateSchedule("time", e.target.value)} />
+                  </div>
+                </div>
+                <div className="lesson-form-field">
+                  <label className="lesson-form-label">Prep notes</label>
+                  <textarea className="lesson-form-textarea" placeholder="What to focus on in this lesson..." value={scheduleForm.prepNotes} onChange={e => updateSchedule("prepNotes", e.target.value)} />
+                </div>
+                <div className="lesson-form-actions">
+                  <button className="lesson-save-btn" onClick={saveScheduledLesson} disabled={scheduleSaving || !scheduleForm.studentId || !scheduleForm.date}>
+                    {scheduleSaving ? "Saving…" : "Save lesson"}
+                  </button>
+                  <button className="lesson-cancel-btn" onClick={() => setShowSchedule(false)}>Cancel</button>
+                </div>
+                {scheduleSaving && <div className="schedule-saving-note">Generating pre-lesson brief…</div>}
+              </div>
+            ) : (
+              <button className="schedule-panel-btn" onClick={() => setShowSchedule(true)}>📅 Schedule lesson</button>
+            )}
             <div className="section-label">Your students</div>
             {students.map(s => {
               const stats = studentStats[s.id] || {};
@@ -868,6 +1023,28 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
   const [expandedLesson, setExpandedLesson] = useState(null);
   const [lessonForm, setLessonForm] = useState({ date: "", notes: "", drills: "", homework: "" });
   const [savingLesson, setSavingLesson] = useState(false);
+  const [completingLesson, setCompletingLesson] = useState(null);
+  const [completeForm, setCompleteForm] = useState({ session_notes: "", drills: "" });
+
+  async function saveComplete(lessonId) {
+    await supabase.from("lessons").update({
+      status: "completed",
+      notes:  completeForm.session_notes || null,
+      drills: completeForm.drills || null,
+    }).eq("id", lessonId);
+    const { data: refreshed } = await supabase.from("lessons").select("*")
+      .eq("coach_id", coachId).eq("student_id", student.id)
+      .order("lesson_date", { ascending: false });
+    setLessons(refreshed || []);
+    setCompletingLesson(null);
+    setExpandedLesson(null);
+  }
+
+  async function deleteLesson(lessonId) {
+    if (!window.confirm("Delete this lesson?")) return;
+    await supabase.from("lessons").delete().eq("id", lessonId);
+    setLessons(prev => prev.filter(x => x.id !== lessonId));
+  }
 
   function openNewLesson() {
     setEditingLesson(null);
@@ -1257,17 +1434,79 @@ OUTPUT FORMAT
 
               // Lesson card
               const l           = item.data;
+              const isUpcoming  = l.status === "upcoming";
               const isExpanded  = expandedLesson === l.id;
+              const isCompleting = completingLesson === l.id;
               const lessonDate  = new Date(l.lesson_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+              if (isUpcoming) {
+                const prepPreview = l.prep_notes ? (l.prep_notes.length > 100 ? l.prep_notes.slice(0, 100) + "…" : l.prep_notes) : null;
+                return (
+                  <div className="lesson-card" key={"l-" + l.id} onClick={() => setExpandedLesson(isExpanded ? null : l.id)}>
+                    <div className="lesson-card-header">
+                      <div>
+                        <div className="lesson-card-title">📅 Upcoming lesson</div>
+                        <div className="lesson-card-date">{lessonDate}{l.lesson_time ? ` · ${l.lesson_time}` : ""}</div>
+                      </div>
+                      <button className="lesson-delete-btn" onClick={e => { e.stopPropagation(); deleteLesson(l.id); }}>Delete</button>
+                    </div>
+                    {prepPreview && !isExpanded && <div className="lesson-preview">{prepPreview}</div>}
+                    {isExpanded && (
+                      <div className="lesson-full">
+                        {l.prep_notes && (
+                          <div className="lesson-section">
+                            <div className="lesson-section-label">Prep notes</div>
+                            <div className="lesson-section-text">{l.prep_notes}</div>
+                          </div>
+                        )}
+                        {l.ai_brief && (
+                          <div className="lesson-ai-box">
+                            <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
+                            <div className="lesson-ai-text">{l.ai_brief}</div>
+                          </div>
+                        )}
+                        {!isCompleting && (
+                          <div className="lesson-action-row">
+                            <button className="lesson-complete-btn" onClick={e => { e.stopPropagation(); setCompletingLesson(l.id); setCompleteForm({ session_notes: "", drills: "" }); }}>
+                              Mark as complete
+                            </button>
+                          </div>
+                        )}
+                        {isCompleting && (
+                          <div onClick={e => e.stopPropagation()}>
+                            <div className="lesson-form-field" style={{marginTop:12}}>
+                              <label className="lesson-form-label">Session notes</label>
+                              <textarea className="lesson-form-textarea" placeholder="What did you work on..." value={completeForm.session_notes} onChange={e => setCompleteForm(prev => ({ ...prev, session_notes: e.target.value }))} />
+                            </div>
+                            <div className="lesson-form-field">
+                              <label className="lesson-form-label">Drills assigned</label>
+                              <textarea className="lesson-form-textarea" placeholder="Drills assigned..." value={completeForm.drills} onChange={e => setCompleteForm(prev => ({ ...prev, drills: e.target.value }))} />
+                            </div>
+                            <div className="lesson-form-actions">
+                              <button className="lesson-save-btn" onClick={e => { e.stopPropagation(); saveComplete(l.id); }}>Save</button>
+                              <button className="lesson-cancel-btn" onClick={e => { e.stopPropagation(); setCompletingLesson(null); }}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Completed lesson
               const notesPreview = l.notes ? (l.notes.length > 100 ? l.notes.slice(0, 100) + "…" : l.notes) : null;
               return (
-                <div className="lesson-card" key={"l-" + l.id} onClick={() => setExpandedLesson(isExpanded ? null : l.id)}>
+                <div className="lesson-card completed" key={"l-" + l.id} onClick={() => setExpandedLesson(isExpanded ? null : l.id)}>
                   <div className="lesson-card-header">
                     <div>
                       <div className="lesson-card-title">📋 Lesson</div>
                       <div className="lesson-card-date">{lessonDate}</div>
                     </div>
-                    <button className="lesson-edit-btn" onClick={e => openEditLesson(e, l)}>Edit</button>
+                    <div style={{display:"flex", gap:6}}>
+                      <button className="lesson-edit-btn" onClick={e => openEditLesson(e, l)}>Edit</button>
+                      <button className="lesson-delete-btn" onClick={e => { e.stopPropagation(); deleteLesson(l.id); }}>Delete</button>
+                    </div>
                   </div>
                   {notesPreview && !isExpanded && <div className="lesson-preview">{notesPreview}</div>}
                   {(l.drills || l.homework) && !isExpanded && (
@@ -1494,6 +1733,8 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       user={user}
       students={students}
       studentStats={studentStats}
+      selectedStudent={selectedStudent}
+      setStudentLessons={setStudentLessons}
       onSelectStudent={handleSelectStudent}
       onSignOut={onSignOut}
       onProfile={onProfile}
