@@ -456,6 +456,17 @@ function netDoubleBogey(par, si, hcp, holesCount) {
   return par + 2 + shots;
 }
 
+function yardageToBand(yds) {
+  if (!yds || yds <= 0) return null;
+  if (yds < 25)  return "Under 25";
+  if (yds < 50)  return "25–50";
+  if (yds < 75)  return "50–75";
+  if (yds < 100) return "75–100";
+  if (yds < 125) return "100–125";
+  if (yds < 150) return "125–150";
+  return "150+";
+}
+
 // ── TOP BAR ──
 function TopBar({ onSignOut, rightBtn, onHome }) {
   return (
@@ -1358,6 +1369,21 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
 
   useEffect(() => { setShowPenaltyPicker(false); }, [cur]);
 
+  // Auto-set approach band from yardage for par 3 GIR holes
+  useEffect(() => {
+    if (!holes.length || !holeData.length) return;
+    const h = holes[cur];
+    const d = holeData[cur];
+    if (!h || !d) return;
+    const isPar3GIR = h.par === 3 && calcGIR(d.score, d.putts, h.par);
+    if (isPar3GIR) {
+      const band = yardageToBand(h.yds);
+      if (band && d.approach !== band) {
+        setHoleData(prev => { const next = [...prev]; next[cur] = { ...next[cur], approach: band }; return next; });
+      }
+    }
+  }, [cur, holeData, holes]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Course picker screen — must be before all other guards ──
   if (view === "course_picker") {
     async function handleFlag() {
@@ -2168,6 +2194,19 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {!d.pickedUp && !d.dna && h.par === 3 && !par3GIR && d.putts !== null && (
+          <div className="sec">
+            <div className="sec-label">Miss direction</div>
+            <div className="tap-grid c4" style={{gridTemplateColumns:"repeat(4,1fr)"}}>
+              {[{v:"left",lbl:"Left"},{v:"short",lbl:"Short"},{v:"right",lbl:"Right"},{v:"long",lbl:"Long"}].map(o => (
+                <button key={o.v} className={"tap-btn " + (d.fairway === o.v ? "sel" : "")} onClick={() => update({ fairway: o.v })}>
+                  <span className="tv">{o.lbl}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
