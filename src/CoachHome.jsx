@@ -1122,7 +1122,7 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
   const [editForm, setEditForm] = useState({ notes: "", drills: "" });
   const [savingEdit, setSavingEdit] = useState(false);
   const [editingUpcomingLesson, setEditingUpcomingLesson] = useState(null);
-  const [upcomingEditForm, setUpcomingEditForm] = useState({ date: "", time: "" });
+  const [upcomingEditForm, setUpcomingEditForm] = useState({ date: "", time: "", prepNotes: "" });
   const [savingUpcomingEdit, setSavingUpcomingEdit] = useState(false);
 
   async function saveComplete(lessonId) {
@@ -1150,6 +1150,7 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
     await supabase.from("lessons").update({
       lesson_date: upcomingEditForm.date,
       lesson_time: upcomingEditForm.time || null,
+      prep_notes:  upcomingEditForm.prepNotes || null,
     }).eq("id", lessonId);
     const { data: refreshed } = await supabase.from("lessons").select("*")
       .eq("coach_id", coachId).eq("student_id", student.id)
@@ -1485,7 +1486,7 @@ OUTPUT FORMAT
                       </div>
                       <div style={{display:"flex", gap:6}}>
                         {!isEditingUpcoming && (
-                          <button className="lesson-edit-btn" onClick={e => { e.stopPropagation(); setEditingUpcomingLesson(l.id); setUpcomingEditForm({ date: l.lesson_date, time: l.lesson_time || "" }); setExpandedLesson(l.id); }}>Edit</button>
+                          <button className="lesson-edit-btn" onClick={e => { e.stopPropagation(); setEditingUpcomingLesson(l.id); setUpcomingEditForm({ date: l.lesson_date, time: l.lesson_time || "", prepNotes: l.prep_notes || "" }); setExpandedLesson(l.id); }}>Edit</button>
                         )}
                         <button className="lesson-delete-btn" onClick={e => { e.stopPropagation(); deleteLesson(l.id); }}>Delete</button>
                       </div>
@@ -1539,6 +1540,10 @@ OUTPUT FORMAT
                         <div className="lesson-form-field">
                           <label className="lesson-form-label">Time</label>
                           <input type="time" className="lesson-form-input" value={upcomingEditForm.time} onChange={e => setUpcomingEditForm(prev => ({ ...prev, time: e.target.value }))} />
+                        </div>
+                        <div className="lesson-form-field">
+                          <label className="lesson-form-label">Prep notes</label>
+                          <textarea className="lesson-form-textarea" placeholder="What to focus on in this lesson..." value={upcomingEditForm.prepNotes} onChange={e => setUpcomingEditForm(prev => ({ ...prev, prepNotes: e.target.value }))} />
                         </div>
                         <div className="lesson-form-actions">
                           <button className="lesson-save-btn" onClick={e => { e.stopPropagation(); saveUpcomingEdit(l.id); }} disabled={savingUpcomingEdit || !upcomingEditForm.date}>{savingUpcomingEdit ? "Saving…" : "Save"}</button>
