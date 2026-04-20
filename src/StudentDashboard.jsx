@@ -503,6 +503,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
 
 export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings, onFindCoach }) {
   const [rounds, setRounds]   = useState([]);
+  const [lessons, setLessons] = useState([]);
   const [profile, setProfile] = useState(null);
   const [coaches, setCoaches]             = useState([]);
   const [coachesExpanded, setCoachesExpanded] = useState(false);
@@ -566,13 +567,15 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
 
   useEffect(() => {
     async function load() {
-      const [{ data: prof }, { data: rds }, { data: coachLinks }] = await Promise.all([
+      const [{ data: prof }, { data: rds }, { data: coachLinks }, { data: lessonData }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
+        supabase.from("lessons").select("id, lesson_date, lesson_time, notes, drills, status, coach_id").eq("student_id", user.id).order("lesson_date", { ascending: false }),
       ]);
       setProfile(prof);
       setRounds(rds || []);
+      setLessons(lessonData || []);
       // Resolve coach profiles immediately — before the slow round-holes fetch below.
       // This ensures unlinkCoach()'s setCoaches(filter) is never overwritten by stale data.
       const linkedCoachIds = (coachLinks || []).map(l => l.coach_id);
@@ -1077,14 +1080,44 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           ⛳ Start new round
         </button>
 
-        {rounds.length > 0 && (
+        {(rounds.length > 0 || lessons.length > 0) && (
           <>
-            <div className="section-title">Past rounds</div>
-            {rounds.map(r => {
+            <div className="section-title">Past rounds & lessons</div>
+            {[
+              ...rounds.map(r => ({ type:"round", date:r.created_at, data:r })),
+              ...lessons.map(l => ({ type:"lesson", date:l.lesson_date+"T23:59:59", data:l })),
+            ].sort((a,b) => new Date(b.date)-new Date(a.date)).map(item => {
+              if (item.type === "lesson") {
+                const l = item.data;
+                const coach = coaches.find(c => c.id === l.coach_id);
+                const coachFirst = coach ? coach.first_name : null;
+                const lessonDate = new Date(l.lesson_date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"});
+                const fmtTime = t => { if (!t) return null; const [h,m] = t.split(":").map(Number); return `${h%12||12}:${String(m).padStart(2,"0")}${h>=12?"pm":"am"}`; };
+                if (l.status === "upcoming") return (
+                  <div key={"l-"+l.id} style={{background:"#FEFBF3",border:"1.5px solid var(--gold)",borderLeft:"4px solid var(--gold)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>📅 Upcoming lesson</div>
+                    {coachFirst && <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:6}}>with {coachFirst}</div>}
+                    <div style={{fontSize:13,color:"var(--text-mid)"}}>{lessonDate}{l.lesson_time ? ` · ${fmtTime(l.lesson_time)}` : ""}</div>
+                  </div>
+                );
+                return (
+                  <div key={"l-"+l.id} style={{background:"#F0F4F0",border:"1.5px solid var(--green-mid)",borderLeft:"4px solid var(--green-mid)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>📋 Lesson — {lessonDate}</div>
+                    {l.notes && <div style={{fontSize:13,color:"var(--text-mid)",lineHeight:1.6,marginTop:6,whiteSpace:"pre-line"}}>{l.notes}</div>}
+                    {l.drills && (
+                      <div style={{marginTop:8}}>
+                        <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:3}}>Drills assigned:</div>
+                        <div style={{fontSize:13,color:"var(--text-mid)",lineHeight:1.6,whiteSpace:"pre-line"}}>{l.drills}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              const r = item.data;
               const diff = (r.total_score || 0) - getCoursePar(r);
               const date = new Date(r.created_at).toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" });
               return (
-                <div className="round-card" key={r.id}
+                <div className="round-card" key={"r-"+r.id}
                   style={{flexDirection:"column",alignItems:"stretch",gap:0}}>
                   <div
                     style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,cursor:(r.historical && r.sent_to_coach)?"default":"pointer"}}
