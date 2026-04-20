@@ -308,6 +308,17 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const maxMiss    = Math.max(missL, missR, 1);
   const missedGIR  = attempted.filter(h => !h.gir && !h.picked_up);
   const under50GIRMisses = missedGIR.filter(h => h.approach === "Under 50");
+
+  // Par 3 stats
+  const par3Holes      = attempted.filter(h => h.par === 3);
+  const par3GIR        = par3Holes.filter(h => h.gir).length;
+  const par3Misses     = par3Holes.filter(h => !h.gir && !h.picked_up);
+  const par3MissL      = par3Misses.filter(h => h.fairway === "left").length;
+  const par3MissR      = par3Misses.filter(h => h.fairway === "right").length;
+  const par3MissShort  = par3Misses.filter(h => h.fairway === "short").length;
+  const par3MissLong   = par3Misses.filter(h => h.fairway === "long").length;
+  const par3MaxMiss    = Math.max(par3MissL, par3MissR, par3MissShort, par3MissLong, 1);
+  const par3HasDirs    = par3MissL + par3MissR + par3MissShort + par3MissLong > 0;
   const avgSI    = under50GIRMisses.length
     ? (under50GIRMisses.reduce((s, h) => s + (h.shots_inside_50 || 1), 0) / under50GIRMisses.length).toFixed(1)
     : null;
@@ -639,10 +650,10 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           <div className="ccard">
             <div className="cc-title">Short game &amp; fairway misses</div>
 
-            {/* Miss direction */}
+            {/* Miss direction — par 4 & 5 only */}
             {(missL > 0 || missR > 0) ? (
               <div style={{marginBottom:14}}>
-                <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:8}}>Fairway miss pattern</div>
+                <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:8}}>Fairway miss pattern (par 4 &amp; 5)</div>
                 <div className="miss-bar">
                   <div className="miss-label" style={{color:"var(--sky)"}}>Left</div>
                   <div className="miss-track"><div className="miss-fill left" style={{width: Math.round(missL/maxMiss*100)+"%"}} /></div>
@@ -658,6 +669,33 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
               </div>
             ) : (
               <div style={{fontSize:13,color:"var(--text-dim)",marginBottom:14}}>✅ All fairways hit</div>
+            )}
+
+            {/* Par 3 performance */}
+            {par3Holes.length > 0 && (
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:8}}>Par 3 performance</div>
+                <div style={{fontSize:13,marginBottom:par3HasDirs ? 10 : 0}}>
+                  <strong>{par3GIR}/{par3Holes.length}</strong> greens hit
+                  <span style={{color:"var(--text-dim)",marginLeft:6}}>({par3Holes.length ? Math.round(par3GIR / par3Holes.length * 100) : 0}%)</span>
+                </div>
+                {par3HasDirs && (
+                  <>
+                    {[
+                      { label: "Left",  count: par3MissL,     color: "var(--sky)" },
+                      { label: "Short", count: par3MissShort, color: "var(--text-mid)" },
+                      { label: "Right", count: par3MissR,     color: "var(--orange)" },
+                      { label: "Long",  count: par3MissLong,  color: "var(--text-mid)" },
+                    ].filter(r => r.count > 0).map(r => (
+                      <div key={r.label} className="miss-bar" style={{marginTop:6}}>
+                        <div className="miss-label" style={{color:r.color}}>{r.label}</div>
+                        <div className="miss-track"><div className="miss-fill" style={{width: Math.round(r.count / par3MaxMiss * 100) + "%", background: r.color, height:"100%", borderRadius:4}} /></div>
+                        <div className="miss-count" style={{color:r.color}}>{r.count}</div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
             )}
 
             {/* Short game table */}
