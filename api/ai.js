@@ -87,6 +87,7 @@ PENALTY STROKE COSTS
 5. When a player has 2 or more lost ball or OOB penalties in a round, this must be identified as a primary focus area — these are the most costly penalty types and suggest a significant course management or tee shot accuracy issue.
 
 TONE ON BAD ROUNDS
+- This rule applies to student-facing analysis only — never use humour in coach-facing analysis. Coach analysis should always be professional and direct.
 - When a round is significantly worse than the player's recent average (more than 0.5 shots per hole worse), you MUST open with a single short dry humorous phrase before continuing with the analysis. This is not optional. Examples: "Golf had other ideas today.", "Some days the course wins.", "Not one for the highlight reel, but every round teaches something." Keep it brief — one sentence only, then move straight into the analysis. On good rounds or average rounds, keep the tone straightforward and encouraging.`;
 
 const DELAYS = [0, 2000, 4000]; // ms to wait before attempt 0, 1, 2
