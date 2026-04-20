@@ -181,15 +181,39 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const [noteSaved, setNoteSaved] = useState(false);
 
   const runAI = useCallback(async (holeRows) => {
-    const summary = holeRows.map(h =>
-      `H${h.hole_number} Par${h.par}: score ${h.score}, ${h.putts} putts, GIR ${h.gir ? "yes" : "no"}` +
-      (h.approach ? `, approach ${h.approach}` : "") +
-      (h.shots_inside_50 ? `, shots inside 50yds: ${h.shots_inside_50}` : "") +
-      (h.putt1 ? `, 1st putt ${h.putt1}` : "") +
-      (h.putt2 ? `, 2nd putt ${h.putt2}` : "") +
-      (h.fairway ? `, fairway ${h.fairway}` : "") +
-      ((Array.isArray(h.penalty) ? h.penalty.length > 0 : h.penalty && h.penalty !== "None") ? `, penalty ${Array.isArray(h.penalty) ? h.penalty.join(", ") : h.penalty}` : "")
-    ).join("\n");
+    const summary = holeRows.map(h => {
+      const penTypes = Array.isArray(h.penalty) ? h.penalty : (h.penalty && h.penalty !== "None" ? [h.penalty] : []);
+      const puTypes  = Array.isArray(h.pickup_reason) ? h.pickup_reason : [];
+      const scoreStr = h.picked_up
+        ? `score ${h.score} (net double bogey)`
+        : `score ${h.score}`;
+      const puttsStr = h.picked_up ? "" : `, ${h.putts} putts`;
+      let line = `H${h.hole_number} Par${h.par}: ${scoreStr}${puttsStr}, GIR ${h.gir ? "yes" : "no"}`;
+      if (!h.picked_up && !h.dna) {
+        if (h.approach)       line += `, approach ${h.approach}`;
+        if (h.shots_inside_50) line += `, shots inside 50yds: ${h.shots_inside_50}`;
+        if (h.putt1)          line += `, 1st putt ${h.putt1}`;
+        if (h.putt2)          line += `, 2nd putt ${h.putt2}`;
+        if (h.fairway)        line += `, fairway ${h.fairway}`;
+        if (penTypes.length)  line += `, penalty ${penTypes.join(", ")}`;
+      }
+      if (h.picked_up) {
+        line += puTypes.length ? `, PICKED UP (${puTypes.join(", ")})` : ", PICKED UP";
+        if (h.pickup_note) line += `, note: ${h.pickup_note}`;
+      }
+      return line;
+    }).join("\n");
+
+    const penTotals = {};
+    holeRows.forEach(h => {
+      const types = Array.isArray(h.penalty) ? h.penalty : (h.penalty && h.penalty !== "None" ? [h.penalty] : []);
+      types.forEach(t => { penTotals[t] = (penTotals[t] || 0) + 1; });
+    });
+    const penEntries = Object.entries(penTotals).filter(([, n]) => n > 0);
+    const totalPenStrokes = penEntries.reduce((s, [, n]) => s + n, 0);
+    const penSummaryLine = penEntries.length > 0
+      ? `Total penalties: ${penEntries.map(([k, n]) => `${k} ×${n}`).join(", ")} (${totalPenStrokes} penalty stroke${totalPenStrokes !== 1 ? "s" : ""})\n`
+      : "";
 
     const tp    = holeRows.filter(h => h.putts >= 3).length;
     const tpPct = Math.round(tp / holeRows.length * 100);
@@ -203,8 +227,8 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
 
     try {
       const [r1, r2] = await Promise.all([
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\nAvg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\n${penSummaryLine}Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n${penSummaryLine}\nTwo sentences only, no preamble.`),
       ]);
       setAiPutting(r1);
       setAiSg(r2);
@@ -431,7 +455,31 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                   <div style={{textAlign:"center",fontWeight:h.putts>=3?700:400,color:h.putts>=3?"var(--red)":"inherit"}}>{h.dna || h.pickedUp ? "—" : h.putts}{h.putts>=3&&!h.dna&&!h.pickedUp?" ⚠️":""}</div>
                   <div style={{textAlign:"center"}}>{h.dna ? "—" : h.gir ? "✅" : "❌"}</div>
                   <div style={{fontSize:11}}>{fwCell}</div>
-                  <div style={{fontSize:12,color:(Array.isArray(h.penalty)?h.penalty.length>0:h.penalty&&h.penalty!=="None")?"var(--orange)":"var(--text-dim)"}}>{Array.isArray(h.penalty)?(h.penalty.length>0?h.penalty.join(", "):"None"):(h.penalty||"None")}</div>
+                  <div style={{fontSize:11,display:"flex",flexWrap:"wrap",gap:3,alignItems:"flex-start",flexDirection:"column"}}>
+                    {(() => {
+                      const PEN_ABBR = { "Lost ball (tee)":"LB(T)", "Lost ball (fairway)":"LB(F)", "OOB":"OOB", "Hazard":"HAZ", "Unplayable":"UNPL" };
+                      const PU_ABBR  = { "Lost ball (tee)":"LB(T)", "Lost ball (fairway)":"LB(F)", "Score too high":"STH", "Running out of time":"TIME", "Injury/other":"INJ" };
+                      const penTypes = Array.isArray(h.penalty) ? h.penalty : (h.penalty && h.penalty !== "None" ? [h.penalty] : []);
+                      const puTypes  = Array.isArray(h.pickup_reason) ? h.pickup_reason : [];
+                      if (h.picked_up) {
+                        const badges = puTypes.length > 0
+                          ? Object.entries(puTypes.reduce((a, v) => { a[v]=(a[v]||0)+1; return a; }, {}))
+                              .map(([k, n]) => <span key={k} style={{background:"#EBF4FB",color:"var(--sky)",borderRadius:4,padding:"1px 5px",fontWeight:700,whiteSpace:"nowrap"}}>{PU_ABBR[k]||k}{n>1?`×${n}`:""}</span>)
+                          : [<span key="pu" style={{background:"#EBF4FB",color:"var(--sky)",borderRadius:4,padding:"1px 5px",fontWeight:700}}>PU</span>];
+                        return <>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:3}}>{badges}</div>
+                          {h.pickup_note && <div style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic",marginTop:2}}>{h.pickup_note}</div>}
+                        </>;
+                      }
+                      if (penTypes.length === 0) return null;
+                      const counts = penTypes.reduce((a, v) => { a[v]=(a[v]||0)+1; return a; }, {});
+                      return <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                        {Object.entries(counts).map(([k, n]) => (
+                          <span key={k} style={{background:"#FEF0E8",color:"var(--orange)",borderRadius:4,padding:"1px 5px",fontWeight:700,whiteSpace:"nowrap"}}>{PEN_ABBR[k]||k}{n>1?`×${n}`:""}</span>
+                        ))}
+                      </div>;
+                    })()}
+                  </div>
                 </div>
               );
             })}
