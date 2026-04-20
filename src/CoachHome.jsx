@@ -253,8 +253,86 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   const [scheduleForm, setScheduleForm] = useState({
     studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "",
   });
+  const [briefPreview, setBriefPreview]   = useState(null);
+  const [briefLoading, setBriefLoading]   = useState(false);
+  const [scheduleContext, setScheduleContext] = useState(null);
 
   function updateSchedule(field, value) { setScheduleForm(prev => ({ ...prev, [field]: value })); }
+
+  function closeSchedule() {
+    setShowSchedule(false);
+    setBriefPreview(null);
+    setScheduleContext(null);
+    setBriefLoading(false);
+  }
+
+  useEffect(() => {
+    if (!scheduleForm.studentId || !scheduleForm.date) {
+      setBriefPreview(null);
+      setScheduleContext(null);
+      return;
+    }
+    let cancelled = false;
+    setBriefLoading(true);
+    setBriefPreview(null);
+    (async () => {
+      const student = students.find(s => s.id === scheduleForm.studentId);
+      const studentName = student ? `${student.first_name} ${student.last_name}` : "Student";
+      const { data: rawRounds } = await supabase
+        .from("rounds").select("*, courses(name)")
+        .eq("student_id", scheduleForm.studentId)
+        .eq("sent_to_coach", true)
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (cancelled) return;
+      const enriched = await enrichRounds(rawRounds || []);
+      if (cancelled) return;
+      const ctx = enriched.map(r => {
+        const hp = r.holes_played || 9;
+        const par = getCoursePar(r);
+        return {
+          date:            new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+          course:          r.courses?.name || null,
+          total_score:     r.total_score ?? null,
+          holes_played:    hp,
+          vs_par_per_hole: r.total_score ? +((r.total_score - par) / hp).toFixed(2) : null,
+          gir_pct:         r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
+          fairway_pct:     r.fw_holes > 0 ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
+          avg_putts:       r.total_putts != null ? +(r.total_putts / hp).toFixed(2) : null,
+          scrambling_pct:  r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null,
+          penalty_count:   null,
+        };
+      });
+      if (!cancelled) setScheduleContext(ctx);
+      try {
+        const aiRes = await fetch("/api/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "pre_lesson_brief",
+            studentName,
+            rounds: ctx.map(rc => ({
+              date:          rc.date,
+              course:        rc.course,
+              score:         rc.total_score,
+              holesPlayed:   rc.holes_played,
+              vsParPerHole:  rc.vs_par_per_hole,
+              girPct:        rc.gir_pct,
+              fairwayPct:    rc.fairway_pct,
+              avgPutts:      rc.avg_putts,
+              scramblingPct: rc.scrambling_pct,
+              penaltyCount:  null,
+              penaltyTypes:  null,
+            })),
+          }),
+        });
+        const aiData = await aiRes.json();
+        if (!cancelled) setBriefPreview(aiData.content?.map(c => c.text || "").join("") || null);
+      } catch {}
+      if (!cancelled) setBriefLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [scheduleForm.studentId, scheduleForm.date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveScheduledLesson() {
     if (!scheduleForm.studentId || !scheduleForm.date) return;
@@ -273,72 +351,17 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
     }).select().single();
     if (error || !newLesson) { setScheduleSaving(false); return; }
 
-    // 2. Fetch + enrich last 3 sent rounds for this student
-    const { data: rawRounds } = await supabase
-      .from("rounds").select("*, courses(name)")
-      .eq("student_id", scheduleForm.studentId)
-      .eq("sent_to_coach", true)
-      .order("created_at", { ascending: false })
-      .limit(3);
-    const enriched = await enrichRounds(rawRounds || []);
+    // 2. Save ai_brief + round_context (pre-generated before save)
+    await supabase.from("lessons").update({ ai_brief: briefPreview, round_context: scheduleContext }).eq("id", newLesson.id);
 
-    // 3. Build round_context and AI rounds array
-    const round_context = enriched.map(r => {
-      const hp = r.holes_played || 9;
-      const par = getCoursePar(r);
-      return {
-        date:            new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-        course:          r.courses?.name || null,
-        total_score:     r.total_score ?? null,
-        holes_played:    hp,
-        vs_par_per_hole: r.total_score ? +((r.total_score - par) / hp).toFixed(2) : null,
-        gir_pct:         r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
-        fairway_pct:     r.fw_holes > 0 ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
-        avg_putts:       r.total_putts != null ? +(r.total_putts / hp).toFixed(2) : null,
-        scrambling_pct:  r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null,
-        penalty_count:   null,
-      };
-    });
-
-    // 4. Call AI for pre-lesson brief
-    let ai_brief = null;
-    try {
-      const aiRes = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "pre_lesson_brief",
-          studentName,
-          rounds: round_context.map(rc => ({
-            date:          rc.date,
-            course:        rc.course,
-            score:         rc.total_score,
-            holesPlayed:   rc.holes_played,
-            vsParPerHole:  rc.vs_par_per_hole,
-            girPct:        rc.gir_pct,
-            fairwayPct:    rc.fairway_pct,
-            avgPutts:      rc.avg_putts,
-            scramblingPct: rc.scrambling_pct,
-            penaltyCount:  null,
-            penaltyTypes:  null,
-          })),
-        }),
-      });
-      const aiData = await aiRes.json();
-      ai_brief = aiData.content?.map(c => c.text || "").join("") || null;
-    } catch {}
-
-    // 5. Save ai_brief + round_context
-    await supabase.from("lessons").update({ ai_brief, round_context }).eq("id", newLesson.id);
-
-    // 6. Fire-and-forget notify (student notification — best effort)
+    // 3. Fire-and-forget notify (student notification — best effort)
     fetch("/api/notify-coach", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ coachId: user.id, studentName, lessonDate: scheduleForm.date, lessonTime: scheduleForm.time }),
     }).catch(() => {});
 
-    // 7. Refresh studentLessons if viewing this student's history
+    // 4. Refresh studentLessons if viewing this student's history
     if (selectedStudent?.id === scheduleForm.studentId) {
       const { data: refreshed } = await supabase.from("lessons").select("*")
         .eq("coach_id", user.id).eq("student_id", scheduleForm.studentId)
@@ -348,6 +371,8 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
 
     setShowSchedule(false);
     setScheduleForm({ studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "" });
+    setBriefPreview(null);
+    setScheduleContext(null);
     setScheduleSaving(false);
   }
 
@@ -443,17 +468,29 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                     <input type="time" className="lesson-form-input" value={scheduleForm.time} onChange={e => updateSchedule("time", e.target.value)} />
                   </div>
                 </div>
+                {scheduleForm.studentId && scheduleForm.date && (
+                  <div className="lesson-form-field">
+                    <div className="lesson-ai-box">
+                      <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
+                      {briefLoading
+                        ? <div className="ai-loading"><div className="ai-spinner" />Generating brief…</div>
+                        : briefPreview
+                          ? <div className="lesson-ai-text">{briefPreview}</div>
+                          : <div style={{fontSize:13,color:"var(--text-dim)"}}>No recent rounds available.</div>
+                      }
+                    </div>
+                  </div>
+                )}
                 <div className="lesson-form-field">
                   <label className="lesson-form-label">Prep notes</label>
                   <textarea className="lesson-form-textarea" placeholder="What to focus on in this lesson..." value={scheduleForm.prepNotes} onChange={e => updateSchedule("prepNotes", e.target.value)} />
                 </div>
                 <div className="lesson-form-actions">
-                  <button className="lesson-save-btn" onClick={saveScheduledLesson} disabled={scheduleSaving || !scheduleForm.studentId || !scheduleForm.date}>
+                  <button className="lesson-save-btn" onClick={saveScheduledLesson} disabled={scheduleSaving || briefLoading || !scheduleForm.studentId || !scheduleForm.date}>
                     {scheduleSaving ? "Saving…" : "Save lesson"}
                   </button>
-                  <button className="lesson-cancel-btn" onClick={() => setShowSchedule(false)}>Cancel</button>
+                  <button className="lesson-cancel-btn" onClick={closeSchedule}>Cancel</button>
                 </div>
-                {scheduleSaving && <div className="schedule-saving-note">Generating pre-lesson brief…</div>}
               </div>
             ) : (
               <button className="schedule-panel-btn" onClick={() => setShowSchedule(true)}>📅 Schedule lesson</button>
