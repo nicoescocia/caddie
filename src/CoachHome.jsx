@@ -1055,13 +1055,12 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
   const [activeStatTab, setActiveStatTab] = useState(() => rounds9Count > rounds18Count ? 9 : 18);
   const [aiPatterns, setAiPatterns] = useState(null);
   const [mainView, setMainView] = useState("trends");
-  const [showLessonForm, setShowLessonForm] = useState(false);
-  const [editingLesson, setEditingLesson] = useState(null);
   const [expandedLesson, setExpandedLesson] = useState(null);
-  const [lessonForm, setLessonForm] = useState({ date: "", notes: "", drills: "", homework: "" });
-  const [savingLesson, setSavingLesson] = useState(false);
   const [completingLesson, setCompletingLesson] = useState(null);
   const [completeForm, setCompleteForm] = useState({ session_notes: "", drills: "" });
+  const [editingCompletedLesson, setEditingCompletedLesson] = useState(null);
+  const [editForm, setEditForm] = useState({ notes: "", drills: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function saveComplete(lessonId) {
     await supabase.from("lessons").update({
@@ -1083,71 +1082,18 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectR
     setLessons(prev => prev.filter(x => x.id !== lessonId));
   }
 
-  function openNewLesson() {
-    setEditingLesson(null);
-    setLessonForm({ date: new Date().toISOString().slice(0, 10), notes: "", drills: "", homework: "" });
-    setShowLessonForm(true);
-  }
-  function openEditLesson(e, lesson) {
-    e.stopPropagation();
-    setEditingLesson(lesson);
-    setLessonForm({ date: lesson.lesson_date, notes: lesson.notes || "", drills: lesson.drills || "", homework: lesson.homework || "" });
-    setShowLessonForm(true);
-  }
-  function cancelLesson() { setShowLessonForm(false); setEditingLesson(null); }
-  function updateForm(field, value) { setLessonForm(prev => ({ ...prev, [field]: value })); }
-
-  function computeRoundContext() {
-    const lastLessonDate = lessons && lessons.length > 0 ? lessons[0]?.lesson_date : null;
-    const recent = lastLessonDate
-      ? sentRounds.filter(r => r.created_at > lastLessonDate)
-      : sentRounds;
-    return recent.slice(0, 3).map(r => {
-      const hp  = r.holes_played || 9;
-      const par = getCoursePar(r);
-      return {
-        date:            new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-        course:          r.courses?.name || null,
-        total_score:     r.total_score ?? null,
-        holes_played:    hp,
-        vs_par_per_hole: r.total_score ? +((r.total_score - par) / hp).toFixed(2) : null,
-        gir_pct:         r.attempted_holes ? Math.round(r.gir_count / r.attempted_holes * 100) : null,
-        fairway_pct:     r.fw_holes > 0 ? Math.round(r.fw_hit / r.fw_holes * 100) : null,
-        avg_putts:       r.total_putts != null ? +(r.total_putts / hp).toFixed(2) : null,
-        scrambling_pct:  r.scrambling_opps > 0 ? Math.round(r.scrambling_made / r.scrambling_opps * 100) : null,
-        penalty_count:   null,
-      };
-    });
-  }
-
-  async function saveLesson() {
-    setSavingLesson(true);
-    const round_context = editingLesson ? editingLesson.round_context : computeRoundContext();
-    if (editingLesson) {
-      await supabase.from("lessons").update({
-        lesson_date: lessonForm.date,
-        notes:       lessonForm.notes || null,
-        drills:      lessonForm.drills || null,
-        homework:    lessonForm.homework || null,
-      }).eq("id", editingLesson.id);
-    } else {
-      await supabase.from("lessons").insert({
-        coach_id:      coachId,
-        student_id:    student.id,
-        lesson_date:   lessonForm.date,
-        notes:         lessonForm.notes || null,
-        drills:        lessonForm.drills || null,
-        homework:      lessonForm.homework || null,
-        round_context,
-      });
-    }
+  async function saveEditedLesson(lessonId) {
+    setSavingEdit(true);
+    await supabase.from("lessons").update({
+      notes:  editForm.notes || null,
+      drills: editForm.drills || null,
+    }).eq("id", lessonId);
     const { data: refreshed } = await supabase.from("lessons").select("*")
       .eq("coach_id", coachId).eq("student_id", student.id)
       .order("lesson_date", { ascending: false });
     setLessons(refreshed || []);
-    setShowLessonForm(false);
-    setEditingLesson(null);
-    setSavingLesson(false);
+    setEditingCompletedLesson(null);
+    setSavingEdit(false);
   }
 
   const diffs   = scored.map(r => r.total_score - getCoursePar(r));
@@ -1396,33 +1342,7 @@ OUTPUT FORMAT
 
             <div className="section-label">Round &amp; lesson history</div>
 
-            {showLessonForm ? (
-              <div className="lesson-form">
-                <div className="lesson-form-title">{editingLesson ? "Edit lesson" : "Log lesson"}</div>
-                <div className="lesson-form-field">
-                  <label className="lesson-form-label">Date</label>
-                  <input type="date" className="lesson-form-input" value={lessonForm.date} onChange={e => updateForm("date", e.target.value)} />
-                </div>
-                <div className="lesson-form-field">
-                  <label className="lesson-form-label">Notes</label>
-                  <textarea className="lesson-form-textarea" placeholder="Observations from the lesson..." value={lessonForm.notes} onChange={e => updateForm("notes", e.target.value)} />
-                </div>
-                <div className="lesson-form-field">
-                  <label className="lesson-form-label">Drills</label>
-                  <textarea className="lesson-form-textarea" placeholder="Drills assigned..." value={lessonForm.drills} onChange={e => updateForm("drills", e.target.value)} />
-                </div>
-                <div className="lesson-form-field">
-                  <label className="lesson-form-label">Homework</label>
-                  <textarea className="lesson-form-textarea" placeholder="Homework set..." value={lessonForm.homework} onChange={e => updateForm("homework", e.target.value)} />
-                </div>
-                <div className="lesson-form-actions">
-                  <button className="lesson-save-btn" onClick={saveLesson} disabled={savingLesson || !lessonForm.date}>{savingLesson ? "Saving…" : "Save"}</button>
-                  <button className="lesson-cancel-btn" onClick={cancelLesson}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <button className="log-lesson-btn" onClick={openNewLesson}>+ Log lesson</button>
-            )}
+            {/* Lessons are scheduled from the coach home screen via the Schedule lesson panel */}
 
             {[
               ...sentRounds.map(r => ({ type: "round", date: r.created_at, data: r })),
@@ -1532,16 +1452,19 @@ OUTPUT FORMAT
               }
 
               // Completed lesson
+              const isEditingCompleted = editingCompletedLesson === l.id;
               const notesPreview = l.notes ? (l.notes.length > 100 ? l.notes.slice(0, 100) + "…" : l.notes) : null;
               return (
-                <div className="lesson-card completed" key={"l-" + l.id} onClick={() => setExpandedLesson(isExpanded ? null : l.id)}>
+                <div className="lesson-card completed" key={"l-" + l.id} onClick={() => !isEditingCompleted && setExpandedLesson(isExpanded ? null : l.id)}>
                   <div className="lesson-card-header">
                     <div>
                       <div className="lesson-card-title">📋 Lesson</div>
                       <div className="lesson-card-date">{lessonDate}</div>
                     </div>
                     <div style={{display:"flex", gap:6}}>
-                      <button className="lesson-edit-btn" onClick={e => openEditLesson(e, l)}>Edit</button>
+                      {!isEditingCompleted && (
+                        <button className="lesson-edit-btn" onClick={e => { e.stopPropagation(); setEditingCompletedLesson(l.id); setEditForm({ notes: l.notes || "", drills: l.drills || "" }); setExpandedLesson(l.id); }}>Edit</button>
+                      )}
                       <button className="lesson-delete-btn" onClick={e => { e.stopPropagation(); deleteLesson(l.id); }}>Delete</button>
                     </div>
                   </div>
@@ -1552,7 +1475,7 @@ OUTPUT FORMAT
                       {l.homework && <span className="lesson-indicator">🏠 Homework</span>}
                     </div>
                   )}
-                  {isExpanded && (
+                  {isExpanded && !isEditingCompleted && (
                     <div className="lesson-full">
                       {l.notes && (
                         <div className="lesson-section">
@@ -1582,6 +1505,22 @@ OUTPUT FORMAT
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {isEditingCompleted && (
+                    <div onClick={e => e.stopPropagation()}>
+                      <div className="lesson-form-field" style={{marginTop:12}}>
+                        <label className="lesson-form-label">Session notes</label>
+                        <textarea className="lesson-form-textarea" placeholder="What did you work on..." value={editForm.notes} onChange={e => setEditForm(prev => ({ ...prev, notes: e.target.value }))} />
+                      </div>
+                      <div className="lesson-form-field">
+                        <label className="lesson-form-label">Drills assigned</label>
+                        <textarea className="lesson-form-textarea" placeholder="Drills assigned..." value={editForm.drills} onChange={e => setEditForm(prev => ({ ...prev, drills: e.target.value }))} />
+                      </div>
+                      <div className="lesson-form-actions">
+                        <button className="lesson-save-btn" onClick={e => { e.stopPropagation(); saveEditedLesson(l.id); }} disabled={savingEdit}>{savingEdit ? "Saving…" : "Save"}</button>
+                        <button className="lesson-cancel-btn" onClick={e => { e.stopPropagation(); setEditingCompletedLesson(null); }}>Cancel</button>
+                      </div>
                     </div>
                   )}
                 </div>
