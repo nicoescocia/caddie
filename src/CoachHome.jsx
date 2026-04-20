@@ -296,7 +296,18 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                   </div>
                   <div className="student-stats">
                     <div className="s-stat">
-                      <div className="s-stat-val" style={{fontSize:17, display:"flex", alignItems:"center", gap:4}}>
+                      <div className="s-stat-val" style={{display:"flex", alignItems:"center", gap:4}}>
+                        <span>{currentHcp != null ? Number(currentHcp).toFixed(1) : (s.official_handicap != null ? Number(s.official_handicap).toFixed(1) : "—")}</span>
+                        {hcpTrend != null && (
+                          <span style={{fontSize:12, fontWeight:600, color: hcpTrend < 0 ? "#2e7d32" : "#c62828"}}>
+                            {hcpTrend < 0 ? "▼" : "▲"} {Math.abs(hcpTrend).toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="s-stat-lbl">Hcp</div>
+                    </div>
+                    <div className="s-stat">
+                      <div className="s-stat-val" style={{display:"flex", alignItems:"center", gap:4}}>
                         <span>{fmtAvgPerHole(avgVsParPerHole)}</span>
                         {trendDiff != null && (
                           <span style={{fontSize:12, fontWeight:600, color: trendDiff < 0 ? "#2e7d32" : "#c62828"}}>
@@ -305,17 +316,6 @@ function StudentList({ coachProfile, user, students, studentStats, onSelectStude
                         )}
                       </div>
                       <div className="s-stat-lbl">Avg/hole</div>
-                    </div>
-                    <div className="s-stat">
-                      <div className="s-stat-val" style={{fontSize:17, display:"flex", alignItems:"center", gap:4}}>
-                        <span>{currentHcp != null ? currentHcp : (s.official_handicap != null ? Number(s.official_handicap).toFixed(1) : "—")}</span>
-                        {hcpTrend != null && (
-                          <span style={{fontSize:12, fontWeight:600, color: hcpTrend < 0 ? "#2e7d32" : "#c62828"}}>
-                            {hcpTrend < 0 ? "▼" : "▲"} {Math.abs(hcpTrend).toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="s-stat-lbl">Hcp</div>
                     </div>
                     <div className="s-stat">
                       <div className="s-stat-val">{thisMonth}</div>
