@@ -1,3 +1,4 @@
+
 // Required Vercel environment variables:
 // REACT_APP_SUPABASE_URL      — Supabase project URL
 // REACT_APP_SUPABASE_SERVICE_KEY — Supabase service role key (bypasses RLS)
