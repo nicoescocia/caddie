@@ -103,11 +103,7 @@ export default async function handler(req, res) {
         const thisWeek = scored.filter(r => r.created_at >= sevenDaysAgo);
         if (thisWeek.length === 0) continue;
 
-        // Evaluate each round this week against net par thresholds
-        let hasPlayedWell = false;
-        let hasStruggled  = false;
-        const roundLines  = [];
-
+        // Evaluate each round this week against net par thresholds independently
         for (const r of thisWeek) {
           const netScore    = r.total_score - (r.handicap ?? 0);
           const coursePar   = r.total_par ?? (r.holes_played === 9 ? 32 : 68);
@@ -115,16 +111,9 @@ export default async function handler(req, res) {
           const netVsParStr = (netVsPar >= 0 ? "+" : "") + netVsPar;
           const courseName  = r.courses?.name || "Golf Course";
           const threshold   = r.holes_played === 18 ? 9 : 5;
-          if (netScore <= coursePar)              hasPlayedWell = true;
-          if (netScore >= coursePar + threshold)  hasStruggled  = true;
-          roundLines.push(`${name} - Net ${netScore} (${netVsParStr}) (${courseName}, ${r.holes_played} holes)`);
-        }
-
-        // Priority: played_well > struggled (gone_quiet already handled above)
-        if (hasPlayedWell) {
-          playedWell.push({ roundLines });
-        } else if (hasStruggled) {
-          struggled.push({ roundLines });
+          const line        = `${name} - Net ${netScore} (${netVsParStr}) (${courseName}, ${r.holes_played} holes)`;
+          if (netScore <= coursePar)             playedWell.push({ roundLines: [line] });
+          if (netScore >= coursePar + threshold) struggled.push({ roundLines: [line] });
         }
       }
 
