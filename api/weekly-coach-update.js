@@ -10,20 +10,8 @@ const SUPABASE_SERVICE_KEY = process.env.REACT_APP_SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY    = process.env.RESEND_API_KEY;
 const CRON_SECRET       = process.env.CRON_SECRET;
 
-const COURSE_PAR = {
-  "89e2ad4e-8d5a-4244-8568-b2c8a448a77f": 32, // Wee Course (9 holes)
-  "b1a2c3d4-e5f6-7890-abcd-ef1234567890": 68, // Greenock Golf Club — Big Course (18 holes)
-};
 
-function getCoursePar(round) {
-  if (round.total_par) return round.total_par;
-  return COURSE_PAR[round.course_id] ?? (round.holes_played === 18 ? 68 : 32);
-}
 
-function vsParPerHole(round) {
-  if (!round.total_score) return null;
-  return (round.total_score - getCoursePar(round)) / (round.holes_played || 9);
-}
 
 async function sbFetch(path) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -115,38 +103,20 @@ export default async function handler(req, res) {
         const thisWeek = scored.filter(r => r.created_at >= sevenDaysAgo);
         if (thisWeek.length === 0) continue;
 
-        // recent_avg: avg vs_par_per_hole across last 5 scored rounds
-        const last5     = scored.slice(0, 5);
-        const vpphs     = last5.map(r => vsParPerHole(r)).filter(v => v != null);
-        const recentAvg = vpphs.length ? vpphs.reduce((a, b) => a + b, 0) / vpphs.length : null;
-
-        // best_by_course: lowest vs_par_per_hole ever per course_id
-        const bestByCourse = {};
-        for (const r of scored) {
-          const v = vsParPerHole(r);
-          if (v == null) continue;
-          if (bestByCourse[r.course_id] == null || v < bestByCourse[r.course_id]) {
-            bestByCourse[r.course_id] = v;
-          }
-        }
-
-        // Evaluate each round this week
+        // Evaluate each round this week against net par thresholds
         let hasPlayedWell = false;
         let hasStruggled  = false;
         const roundLines  = [];
 
         for (const r of thisWeek) {
-          const v = vsParPerHole(r);
-          if (v == null) continue;
-          const wellByAvg    = recentAvg != null && v <= recentAvg - 0.2;
-          const wellByCourse = bestByCourse[r.course_id] != null && v <= bestByCourse[r.course_id];
-          if (wellByAvg || wellByCourse) hasPlayedWell = true;
-          if (recentAvg != null && v > recentAvg + 0.2) hasStruggled = true;
           const netScore    = r.total_score - (r.handicap ?? 0);
           const coursePar   = r.total_par ?? (r.holes_played === 9 ? 32 : 68);
           const netVsPar    = netScore - coursePar;
           const netVsParStr = (netVsPar >= 0 ? "+" : "") + netVsPar;
           const courseName  = r.courses?.name || "Golf Course";
+          const threshold   = r.holes_played === 18 ? 9 : 5;
+          if (netScore <= coursePar)              hasPlayedWell = true;
+          if (netScore >= coursePar + threshold)  hasStruggled  = true;
           roundLines.push(`${name} - Net ${netScore} (${netVsParStr}) (${courseName}, ${r.holes_played} holes)`);
         }
 
