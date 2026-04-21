@@ -1,6 +1,6 @@
 # Caddie — Handover Document
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-21
 
 ---
 
@@ -59,7 +59,8 @@ AdminDashboard requires `REACT_APP_SUPABASE_SERVICE_KEY` set as a Vercel env var
 | last_name | text | |
 | role | text | `'student'`, `'coach'`, or `'admin'` |
 | official_handicap | numeric(4,1) | WHS index stored by student |
-| is_premium | bool | unlocks analytics and per-round AI in StudentLogging |
+| is_premium | bool | unlocks analytics and per-round AI in StudentLogging; also gates pre-lesson AI brief for coaches |
+| ai_brief_enabled | bool | coach-only; if false, suppresses AI brief generation even for premium coaches; defaults to true |
 | onboarding_complete | bool | gates StudentOnboarding flow |
 | onboarding_complete_coach | bool | gates CoachOnboarding flow |
 | phone | text | collected during coach onboarding |
@@ -158,6 +159,26 @@ Supports multiple rows per student (multiple coaches). Free students are limited
 
 Unique constraint on `(coach_id, student_id, cache_type)`. Upserted on each successful API call; invalidated when `round_ids` no longer match the current set of sent rounds.
 
+### `lessons`
+| column | type | notes |
+|---|---|---|
+| id | uuid | PK |
+| coach_id | uuid | FK → `profiles.id` |
+| student_id | uuid | FK → `profiles.id` |
+| lesson_date | date | scheduled date of the lesson |
+| lesson_time | text | e.g. `"10:00"` (24h); nullable |
+| prep_notes | text | coach's prep notes; nullable |
+| session_notes | text | notes written after the session completes; nullable |
+| drills | text | drills assigned after the session; nullable |
+| status | text | `'upcoming'` or `'completed'` |
+| ai_brief | text | pre-generated AI brief from recent round data; nullable |
+| round_context | jsonb | snapshot of recent round stats at time of scheduling; nullable |
+| created_at | timestamptz | |
+
+RLS: coaches can insert/update/delete their own lessons (`coach_id = auth.uid()`). Students can select lessons where `student_id = auth.uid()`.
+
+Lesson lifecycle: scheduled as `upcoming` → coach clicks "Log session notes" (filling `session_notes` / `drills`) → status becomes `completed`.
+
 ### `course_flags`
 | column | type | notes |
 |---|---|---|
@@ -230,6 +251,8 @@ Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed 
 | `src/supabaseClient.js` | Supabase client initialisation (anon key) |
 | `api/ai.js` | Vercel serverless function — proxies to Anthropic API, injects golf-specific system prompt |
 | `api/notify-coach.js` | Vercel serverless function — fires email to coach via Resend when student sends a round |
+| `api/weekly-coach-update.js` | Vercel serverless function — weekly digest email to each coach; triggered by Vercel cron, auth-gated by `CRON_SECRET` |
+| `vercel.json` | Vercel cron config — schedules `/api/weekly-coach-update` every Monday at 08:00 UTC |
 | `scripts/seed-test-data.js` | Seeds Jamie & Craig with 12 rounds each |
 | `scripts/setup-demo.js` | Sets demo credentials (jamie@caddie-test.com / craig@caddie-test.com), purges test users |
 | `scripts/migrate-official-handicap.js` | One-off migration script for `official_handicap` column |
@@ -330,6 +353,25 @@ Per-hole lines include picked-up hole annotation (`PICKED UP`, pickup reasons, p
 ### AI model
 All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome pattern analysis / overview) or 1000 (CoachDashboard round detail). `/api/ai.js` injects a detailed golf system prompt covering approach interpretation, GIR, putting, scrambling, Stableford, benchmark usage, penalty framing, and tone guidelines (including mandatory dry humour opener on bad rounds).
 
+### Pre-lesson AI brief
+When a coach schedules a lesson, a `useEffect` in `StudentList` (CoachHome) fires automatically once a student and date are selected. It fetches and enriches the student's last 3 sent rounds, builds a round context snapshot, then calls `/api/ai` with `type: "pre_lesson_brief"`. The result is displayed in the schedule panel before saving. On save, the brief and `round_context` are written to the `lessons` row.
+
+Gated by two flags: `coachProfile.is_premium` (if false, upgrade prompt shown; API not called) and `coachProfile.ai_brief_enabled` (if false, brief suppressed entirely even for premium coaches; togglable in ProfilePage). The `ai_brief_enabled` column requires `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS ai_brief_enabled boolean DEFAULT true`.
+
+### Weekly coach update email
+`/api/weekly-coach-update` sends a digest email to each coach every Monday at 08:00 UTC (Vercel cron defined in `vercel.json`). Auth-gated by `Authorization: Bearer <CRON_SECRET>` header — returns 401 if missing or wrong. Uses the Supabase service role key (`REACT_APP_SUPABASE_SERVICE_KEY`) to bypass RLS and read all coaches, students, and rounds.
+
+Per-student categorisation (evaluated per round this week, not per student):
+- **Played well**: net score (total_score − round.handicap) ≤ course par for that round
+- **Struggled**: net score ≥ course par + 9 (18-hole rounds) or course par + 5 (9-hole rounds)
+- **Gone quiet**: no sent rounds in the last 21 days
+- A round can appear in both played_well and struggled if criteria overlap (no priority rule)
+- A coach is skipped entirely if all three lists are empty
+
+Course par = `round.total_par` if available, else `holes_played === 9 ? 32 : 68`.
+
+Requires `CRON_SECRET` and `RESEND_API_KEY` in Vercel env vars. Sends from `onboarding@resend.dev` (Resend sandbox) — configure custom domain before production.
+
 ### Email notifications
 `/api/notify-coach.js` is called fire-and-forget (`fetch(...).catch(() => {})`) when a student sends a round. It sends one email per coach via Resend. Requires `RESEND_API_KEY` in Vercel env vars. If the key is absent the function returns `{ ok: true }` silently. Currently sends from `onboarding@resend.dev` (Resend sandbox) — a custom domain must be configured in Resend before going to production.
 
@@ -365,7 +407,9 @@ All AI calls use `claude-sonnet-4-20250514` with `max_tokens` of 800 (CoachHome 
 
 **`scripts/add-ai-cache.js` requires manual SQL**: The migration script cannot execute DDL via the Supabase service role key (PostgREST does not support DDL). It prints the required SQL when `exec_sql` RPC is absent, then verifies schema state via SELECT. Run SQL in the Supabase SQL editor, then re-run the script to confirm.
 
-**Silent save failures in `upsertHole`**: If the payload passed to the Supabase upsert includes a column that does not yet exist in `round_holes`, Supabase returns HTTP 400 but the React code does not surface the error to the user — the hole appears saved but is silently lost or not updated. This happened on 2026-04-20 when `pickup_note` was added to the payload before the DB column was created. Rule: always run the DB migration (Supabase SQL editor) before deploying any payload change that references a new column.
+**Save failures in `upsertHole` now visible**: `upsertHole` returns the Supabase error (or null) and `saveHole` checks it. On failure, a red banner appears above the Save button with the message "Failed to save hole — please check your connection and try again." and a Retry button. Advancement to the next hole is blocked until the save succeeds. Rule: always run DB migrations before deploying payload changes that reference new columns — a 400 error will now be visible to the player rather than silent.
+
+**Weekly email requires `CRON_SECRET` and `RESEND_API_KEY` in Vercel env vars**: Without `CRON_SECRET` the endpoint returns 401 for all requests including the Vercel cron trigger. Without `RESEND_API_KEY` no emails are sent (silent skip per coach). Both must be set in the Vercel dashboard under Environment Variables.
 
 **Student AI analysis regenerates on every view**: `StudentLogging`'s per-round AI summary is called fresh each time the overview screen is shown. There is no caching on the student side (unlike CoachDashboard which caches to `rounds.ai_analysis`). Repeated views of the same completed round each consume API tokens.
 
@@ -408,17 +452,25 @@ Caddie is in private beta at Greenock Golf Club. There is no public signup. Stud
 - [x] **Coach-side penalty visibility** — CoachDashboard scorecard shows abbreviated badge chips (LB(T), OOB, HAZ, etc.) per hole; AI prompt includes per-hole penalty types and round-level summary
 - [x] **Par 3 miss direction logging** — when par 3 GIR is false, a Left/Short/Right/Long selector is shown; direction stored in `round_holes.fairway`; auto-approach set from course yardage when GIR is true
 - [x] **Par 3 performance section in CoachDashboard** — new section in Short game card showing GIR rate for par 3s and miss direction breakdown; fairway miss section explicitly labelled "(par 4 & 5)"
+- [x] **Lesson scheduling and history** — coaches can schedule lessons from the coach home screen; lessons appear in student history timeline; upcoming/completed lifecycle with "Log session notes" flow
+- [x] **Student gone quiet alerts** — implemented as part of weekly coach update email (gone quiet = no rounds in 21 days)
+- [x] **upsertHole error handling** — visible red banner with retry button on save failure; hole advancement blocked until save succeeds
+- [x] **AI humour suppression for coach analysis** — dry humour opener only applies to student-facing analysis; coach-facing analysis (pre-lesson brief, pattern analysis) is always professional
+- [x] **Student card stats redesign** — student cards now show Avg vs par/hole with trend arrow, Hcp with trend, and This month round count
+- [ ] **Resend custom domain** — currently sends from `onboarding@resend.dev` (sandbox); blocks production email delivery; configure real domain in Resend dashboard before broader rollout
+- [ ] **Stripe integration** — premium is currently granted manually by admin; build a payment flow so students and coaches can self-serve upgrade
 - [ ] **Student-facing AI analysis caching** — StudentLogging's AI round summary regenerates on every view; add caching (e.g. a `student_ai_analysis` column on `rounds`) so it is computed once and read on repeat views
+- [ ] **Handicap trajectory chart with lesson markers** — overlay scheduled/completed lessons on the WHS index trend chart so coaches can see impact of lessons on handicap progression
+- [ ] **Pre-lesson brief UI refinement** — brief currently shown in a plain text box in the schedule panel; consider richer formatting, ability to edit before saving, and display in student timeline
+- [ ] **Roster-wide insights** (month 6+) — coach home screen summary of patterns across all students (e.g. most common miss, average scoring trend)
+- [ ] **Monthly progress report** — automated monthly email to each student summarising their improvement vs the previous month
+- [ ] **Pre-lesson questions** — students answer 2–3 coach-defined questions before each lesson; answers stored and surfaced in the pre-lesson brief
 - [ ] **Par 3 performance section in StudentDashboard** — CoachDashboard has par 3 stats; StudentDashboard analytics does not yet show par 3 GIR rate or miss direction breakdown
 - [ ] **Settings toggle for par 3 miss direction** — some students may not want to record miss direction on par 3s; consider a StudentSettings toggle to hide the selector
-- [ ] **Silent save error handling in `upsertHole`** — the function does not surface Supabase 400 errors to the user; add error detection and a visible toast/alert so data loss is not silent
-- [ ] **Stripe integration** — premium is currently granted manually by admin; build a payment flow so students can self-serve upgrade
-- [ ] Handicap tracking over time (chart exists; needs more rounds with `whs_index` populated)
 - [ ] Invite link expiry / single-use enforcement
 - [ ] Round editing after send (currently locked once sent to coach)
 - [ ] Mobile PWA / add-to-home-screen manifest
 - [ ] Multi-course support beyond Wee Course and Big Course
-- [ ] Resend custom domain — currently sends from `onboarding@resend.dev` (sandbox); configure real domain before broader rollout
 - [ ] Push notifications (email is done; native push is not)
 
 ---
