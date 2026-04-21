@@ -1191,6 +1191,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [pendingCourse, setPendingCourse] = useState(null);
   const [saving, setSaving]         = useState(false);
+  const [saveError, setSaveError]   = useState(null);
   const [wind, setWind]               = useState(null);
   const [conditions, setConditions]   = useState(null);
   const [temperature, setTemperature] = useState(null);
@@ -1775,11 +1776,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       dna: hole.dna || false,
     };
     if (savedHoles.has(hi.n)) {
-      await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
+      const { error } = await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
+      if (error) return error;
     } else {
-      await supabase.from("round_holes").insert([payload]);
+      const { error } = await supabase.from("round_holes").insert([payload]);
+      if (error) return error;
       setSavedHoles(prev => new Set([...prev, hi.n]));
     }
+    return null;
   }
 
   // Called when pressing "Save hole" or "Next hole"
@@ -1801,8 +1805,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       rid = row.id;
       setRoundId(rid);
     }
-    await upsertHole(rid, cur);
+    const upsertError = await upsertHole(rid, cur);
     setShowPenaltyPicker(false);
+    if (upsertError) {
+      setSaveError("Failed to save hole — please check your connection and try again.");
+      setSaving(false);
+      return;
+    }
+    setSaveError(null);
     setSaving(false);
 
     // After saving: advance to next hole in both new and edit mode
@@ -2348,6 +2358,15 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
           />
         </div>}
 
+        {saveError && (
+          <div style={{background:"#FFF0F0",border:"1.5px solid #C94040",borderRadius:12,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <span style={{fontSize:13,color:"#C94040",fontWeight:600,flex:1}}>{saveError}</span>
+            <button
+              onClick={saveHole}
+              style={{background:"#C94040",color:"white",border:"none",borderRadius:8,padding:"7px 14px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+            >Retry</button>
+          </div>
+        )}
         <div className="bottom-btns">
           <button className="back-btn" disabled={!isEditMode && cur === 0} onClick={goBackInLogging}>
             {isEditMode ? "Cancel" : "Back"}
