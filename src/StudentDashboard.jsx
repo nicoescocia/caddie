@@ -571,7 +571,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
-        supabase.from("lessons").select("id, lesson_date, lesson_time, notes, drills, status, coach_id").eq("student_id", user.id).order("lesson_date", { ascending: false }),
+        supabase.from("lessons").select("id, lesson_date, lesson_time, session_notes, drills, status, coach_id").eq("student_id", user.id).order("lesson_date", { ascending: false }),
       ]);
       setProfile(prof);
       setRounds(rds || []);
@@ -1103,7 +1103,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                 return (
                   <div key={"l-"+l.id} style={{background:"#F0F4F0",border:"1.5px solid var(--green-mid)",borderLeft:"4px solid var(--green-mid)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
                     <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>📋 Lesson — {lessonDate}</div>
-                    {l.notes && <div style={{fontSize:13,color:"var(--text-mid)",lineHeight:1.6,marginTop:6,whiteSpace:"pre-line"}}>{l.notes}</div>}
+                    {l.session_notes && <div style={{fontSize:13,color:"var(--text-mid)",lineHeight:1.6,marginTop:6,whiteSpace:"pre-line"}}>{l.session_notes}</div>}
                     {l.drills && (
                       <div style={{marginTop:8}}>
                         <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--text-dim)",marginBottom:3}}>Drills assigned:</div>
