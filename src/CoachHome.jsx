@@ -277,9 +277,9 @@ function RosterChart({ students, coachId }) {
       const [roundsRes, lessonsRes] = await Promise.all([
         supabase
           .from("rounds")
-          .select("student_id,handicap,created_at")
+          .select("student_id,whs_index,created_at")
           .in("student_id", studentIds)
-          .not("handicap", "is", null)
+          .not("whs_index", "is", null)
           .order("created_at", { ascending: true }),
         supabase
           .from("lessons")
@@ -295,7 +295,7 @@ function RosterChart({ students, coachId }) {
       const byStudent = {};
       for (const r of rounds) {
         if (!byStudent[r.student_id]) byStudent[r.student_id] = [];
-        byStudent[r.student_id].push({ date: r.created_at.slice(0, 10), hcp: r.handicap });
+        byStudent[r.student_id].push({ date: r.created_at.slice(0, 10), hcp: r.whs_index });
       }
 
       const qualified = students.filter(s => (byStudent[s.id] || []).length >= 3);
@@ -448,7 +448,7 @@ function RosterChart({ students, coachId }) {
             <g style={{pointerEvents:"none"}}>
               <rect x={tx} y={ty} width={TW} height={TH} rx={TR} fill="white" stroke="#E2DDD4" strokeWidth={1} />
               <text x={tx + 7} y={ty + 13} fontSize="10" fill="#1C1C1C" fontWeight="600">{tooltip.name}</text>
-              <text x={tx + 7} y={ty + 26} fontSize="9" fill="#666">{tooltip.date} · Hcp {tooltip.hcp}</text>
+              <text x={tx + 7} y={ty + 26} fontSize="9" fill="#666">{tooltip.date} · WHS {tooltip.hcp}</text>
             </g>
           );
         })()}
@@ -457,12 +457,12 @@ function RosterChart({ students, coachId }) {
       {/* Legend */}
       <div style={{display:"flex",flexWrap:"wrap",gap:"6px 14px",marginTop:8}}>
         {chartData.map(({ student, color, points }) => {
-          const currentHcp = points[points.length - 1]?.hcp;
+          const currentWhs = points[points.length - 1]?.hcp;
           return (
             <div key={student.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#555"}}>
               <div style={{width:9,height:9,borderRadius:"50%",background:color,flexShrink:0}} />
               <span>{student.first_name} {student.last_name}</span>
-              {currentHcp != null && <span style={{color:"#999"}}>({currentHcp})</span>}
+              {currentWhs != null && <span style={{color:"#999"}}>({currentWhs})</span>}
             </div>
           );
         })}
