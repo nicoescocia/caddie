@@ -142,9 +142,12 @@ export default async function handler(req, res) {
           const wellByCourse = bestByCourse[r.course_id] != null && v <= bestByCourse[r.course_id];
           if (wellByAvg || wellByCourse) hasPlayedWell = true;
           if (recentAvg != null && v > recentAvg + 0.2) hasStruggled = true;
-          const netScore   = r.total_score - (r.handicap ?? 0);
-          const courseName = r.courses?.name || "Golf Course";
-          roundLines.push(`${name} - Net ${netScore} (${courseName}, ${r.holes_played} holes)`);
+          const netScore    = r.total_score - (r.handicap ?? 0);
+          const coursePar   = r.total_par ?? (r.holes_played === 9 ? 32 : 68);
+          const netVsPar    = netScore - coursePar;
+          const netVsParStr = (netVsPar >= 0 ? "+" : "") + netVsPar;
+          const courseName  = r.courses?.name || "Golf Course";
+          roundLines.push(`${name} - Net ${netScore} (${netVsParStr}) (${courseName}, ${r.holes_played} holes)`);
         }
 
         // Priority: played_well > struggled (gone_quiet already handled above)
@@ -214,7 +217,8 @@ export default async function handler(req, res) {
         <tr><td style="background:white;border-radius:12px;padding:32px;">
           <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:#0F3D2E;margin-bottom:6px;">Caddie</div>
           <div style="font-size:13px;color:#999;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #F0EDE6;">Weekly student update</div>
-          <div style="font-size:15px;color:#1C1C1C;margin-bottom:24px;">Hi ${coach.first_name},</div>
+          <div style="font-size:15px;color:#1C1C1C;margin-bottom:12px;">Hi ${coach.first_name},</div>
+          <div style="font-size:14px;color:#555;margin-bottom:20px;">Here's a weekly roundup of how your students are performing.</div>
           ${sectionsHtml}
           <div style="text-align:center;margin-top:28px;padding-top:20px;border-top:1px solid #F0EDE6;">
             <span style="font-size:12px;color:#1A6B4A;font-family:Georgia,serif;font-weight:700;">Caddie</span>
