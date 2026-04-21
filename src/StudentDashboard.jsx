@@ -1083,7 +1083,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         {(rounds.length > 0 || lessons.length > 0) && (
           <>
             <div className="section-title">Past rounds & lessons</div>
-            {[
+            {console.log("MERGED TIMELINE", "rounds:", rounds.length, "lessons:", lessons.length) || [
               ...rounds.map(r => ({ type:"round", date:r.created_at, data:r })),
               ...lessons.map(l => ({ type:"lesson", date:l.lesson_date+"T23:59:59", data:l })),
             ].sort((a,b) => new Date(b.date)-new Date(a.date)).map(item => {
