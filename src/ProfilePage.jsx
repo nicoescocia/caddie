@@ -57,6 +57,17 @@ const css = `
   .prof-save-btn:disabled { opacity:.6; cursor:not-allowed; }
   .prof-save-btn.saved { background:var(--green-mid); }
 
+  .prof-toggle-row { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 0; border-top:1px solid var(--border); margin-top:4px; }
+  .prof-toggle-info { flex:1; }
+  .prof-toggle-title { font-size:14px; font-weight:600; color:var(--text); margin-bottom:3px; }
+  .prof-toggle-desc { font-size:12px; color:var(--text-dim); line-height:1.5; }
+  .prof-switch { position:relative; width:44px; height:24px; flex-shrink:0; }
+  .prof-switch input { opacity:0; width:0; height:0; }
+  .prof-slider { position:absolute; inset:0; background:var(--border); border-radius:12px; cursor:pointer; transition:background .2s; }
+  .prof-slider::before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:white; border-radius:50%; transition:transform .2s; }
+  .prof-switch input:checked + .prof-slider { background:var(--green); }
+  .prof-switch input:checked + .prof-slider::before { transform:translateX(20px); }
+
   .loading-wrap { display:flex; align-items:center; justify-content:center; padding:60px; }
   .big-spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to{transform:rotate(360deg)} }
@@ -71,6 +82,7 @@ export default function ProfilePage({ user, onBack, onSignOut, onAddCourse }) {
   const [visibleCourses, setVisibleCourses] = useState(1);
   const [availableCourses, setAvailableCourses] = useState([]);
   const [courseMode, setCourseMode] = useState(["select", "select", "select"]); // 'select' | 'text'
+  const [aiBriefEnabled, setAiBriefEnabled] = useState(true);
   const [form, setForm] = useState({
     first_name: "", last_name: "", phone: "", bio: "",
     home_courses: ["", "", ""],
@@ -79,12 +91,13 @@ export default function ProfilePage({ user, onBack, onSignOut, onAddCourse }) {
   useEffect(() => {
     async function load() {
       const [profRes, authRes, coursesRes] = await Promise.all([
-        supabase.from("profiles").select("first_name, last_name, phone, home_courses, bio, is_premium, role").eq("id", user.id).single(),
+        supabase.from("profiles").select("first_name, last_name, phone, home_courses, bio, is_premium, ai_brief_enabled, role").eq("id", user.id).single(),
         supabase.auth.getUser(),
         supabase.from("courses").select("id, name").order("name", { ascending: true }),
       ]);
       const prof = profRes.data;
       setProfile(prof);
+      setAiBriefEnabled(prof?.ai_brief_enabled !== false);
       setEmail(authRes.data?.user?.email || user.email || "");
       const avail = coursesRes.data || [];
       setAvailableCourses(avail);
@@ -146,6 +159,7 @@ export default function ProfilePage({ user, onBack, onSignOut, onAddCourse }) {
     };
     if (profile?.role !== "student") {
       updatePayload.bio = form.bio.trim() || null;
+      updatePayload.ai_brief_enabled = aiBriefEnabled;
     }
     const { error } = await supabase.from("profiles").update(updatePayload).eq("id", user.id);
     if (!error) setSaved(true);
@@ -269,6 +283,16 @@ export default function ProfilePage({ user, onBack, onSignOut, onAddCourse }) {
                 onChange={e => set("bio", e.target.value)}
                 placeholder="Tell students about your coaching background, specialisms, and approach..."
               />
+            </div>
+            <div className="prof-toggle-row">
+              <div className="prof-toggle-info">
+                <div className="prof-toggle-title">Pre-lesson AI analysis</div>
+                <div className="prof-toggle-desc">Generate AI analysis when scheduling lessons. Automatically generates a pre-lesson brief from recent round data when you schedule a lesson.</div>
+              </div>
+              <label className="prof-switch">
+                <input type="checkbox" checked={aiBriefEnabled} onChange={e => { setAiBriefEnabled(e.target.checked); setSaved(false); }} />
+                <span className="prof-slider" />
+              </label>
             </div>
           </div>
         )}

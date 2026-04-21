@@ -297,10 +297,17 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
     setBriefLoading(false);
   }
 
+  const aiBriefActive = coachProfile?.is_premium && coachProfile?.ai_brief_enabled !== false;
+
   useEffect(() => {
     if (!scheduleForm.studentId || !scheduleForm.date) {
       setBriefPreview(null);
       setScheduleContext(null);
+      return;
+    }
+    if (!aiBriefActive) {
+      setBriefLoading(false);
+      setBriefPreview(null);
       return;
     }
     let cancelled = false;
@@ -508,7 +515,14 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                     <input type="time" className="lesson-form-input" value={scheduleForm.time} onChange={e => updateSchedule("time", e.target.value)} />
                   </div>
                 </div>
-                {scheduleForm.studentId && scheduleForm.date && (
+                {scheduleForm.studentId && scheduleForm.date && !coachProfile?.is_premium && (
+                  <div className="lesson-form-field">
+                    <div className="lesson-ai-box" style={{background:"#FEFBF3"}}>
+                      <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis is a premium feature</div>
+                    </div>
+                  </div>
+                )}
+                {scheduleForm.studentId && scheduleForm.date && aiBriefActive && (
                   <div className="lesson-form-field">
                     <div className="lesson-ai-box">
                       <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
@@ -526,7 +540,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                   <textarea className="lesson-form-textarea" placeholder="What to focus on in this lesson..." value={scheduleForm.prepNotes} onChange={e => updateSchedule("prepNotes", e.target.value)} />
                 </div>
                 <div className="lesson-form-actions">
-                  <button className="lesson-save-btn" onClick={saveScheduledLesson} disabled={scheduleSaving || briefLoading || !scheduleForm.studentId || !scheduleForm.date}>
+                  <button className="lesson-save-btn" onClick={saveScheduledLesson} disabled={scheduleSaving || (aiBriefActive && briefLoading) || !scheduleForm.studentId || !scheduleForm.date}>
                     {scheduleSaving ? "Saving…" : "Save lesson"}
                   </button>
                   <button className="lesson-cancel-btn" onClick={closeSchedule}>Cancel</button>
@@ -1107,7 +1121,7 @@ function AnalyticsTab({ sentRounds }) {
   );
 }
 
-function RoundHistory({ student, rounds, lessons, setLessons, coachId, onSelectRound, onBack, onSignOut, onHome }) {
+function RoundHistory({ student, rounds, lessons, setLessons, coachId, coachProfile, onSelectRound, onBack, onSignOut, onHome }) {
   const sentRounds = rounds.filter(r => r.sent_to_coach);
   const scored     = sentRounds.filter(r => r.total_score);
   const rounds9Count  = scored.filter(r => r.holes_played === 9).length;
@@ -1500,12 +1514,23 @@ OUTPUT FORMAT
                             <div className="lesson-section-text">{l.prep_notes}</div>
                           </div>
                         )}
-                        {l.ai_brief && (
-                          <div className="lesson-ai-box">
-                            <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
-                            <div className="lesson-ai-text">{l.ai_brief}</div>
-                          </div>
-                        )}
+                        {(() => {
+                          const isPremium = coachProfile?.is_premium;
+                          const briefEnabled = coachProfile?.ai_brief_enabled !== false;
+                          if (!isPremium) return (
+                            <div className="lesson-ai-box" style={{background:"#FEFBF3"}}>
+                              <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis is a premium feature</div>
+                            </div>
+                          );
+                          if (!briefEnabled) return null;
+                          if (!l.ai_brief) return null;
+                          return (
+                            <div className="lesson-ai-box">
+                              <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
+                              <div className="lesson-ai-text">{l.ai_brief}</div>
+                            </div>
+                          );
+                        })()}
                         {!isCompleting && (
                           <div className="lesson-action-row">
                             <button className="lesson-complete-btn" onClick={e => { e.stopPropagation(); setCompletingLesson(l.id); setCompleteForm({ session_notes: "", drills: "" }); }}>
@@ -1653,7 +1678,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
     async function load() {
       // Load coach profile
       const { data: profile } = await supabase
-        .from("profiles").select("first_name, last_name").eq("id", user.id).single();
+        .from("profiles").select("first_name, last_name, is_premium, ai_brief_enabled").eq("id", user.id).single();
       setCoachProfile(profile);
 
       // Load linked students
@@ -1796,6 +1821,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       <RoundHistory
         student={selectedStudent}
         coachId={user.id}
+        coachProfile={coachProfile}
         onHome={() => setScreen("students")}
         rounds={studentRounds}
         lessons={studentLessons}
