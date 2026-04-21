@@ -261,6 +261,216 @@ function parDiff(score, round) {
   return { text: "+" + d, cls: "over" };
 }
 
+// ── ROSTER CHART ──
+const ROSTER_COLORS = ["#1A6B4A","#4A90D9","#C9A84C","#C94040","#7B5EA7","#D4763A","#52C97A","#888"];
+
+function RosterChart({ students, coachId }) {
+  const [loading,   setLoading]   = useState(true);
+  const [chartData, setChartData] = useState([]);
+  const [lessons,   setLessons]   = useState([]);
+  const [tooltip,   setTooltip]   = useState(null); // {cx, cy, name, date, hcp, flip}
+
+  useEffect(() => {
+    if (!students || students.length === 0) { setLoading(false); return; }
+    const studentIds = students.map(s => s.id);
+    (async () => {
+      const [roundsRes, lessonsRes] = await Promise.all([
+        supabase
+          .from("rounds")
+          .select("student_id,handicap,created_at")
+          .in("student_id", studentIds)
+          .not("handicap", "is", null)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("lessons")
+          .select("student_id,lesson_date")
+          .eq("coach_id", coachId)
+          .not("lesson_date", "is", null)
+          .order("lesson_date", { ascending: true }),
+      ]);
+
+      const rounds    = roundsRes.data  || [];
+      const lessonRows = lessonsRes.data || [];
+
+      const byStudent = {};
+      for (const r of rounds) {
+        if (!byStudent[r.student_id]) byStudent[r.student_id] = [];
+        byStudent[r.student_id].push({ date: r.created_at.slice(0, 10), hcp: r.handicap });
+      }
+
+      const qualified = students.filter(s => (byStudent[s.id] || []).length >= 3);
+      const data = qualified.map((s, i) => ({
+        student: s,
+        color:  ROSTER_COLORS[i % ROSTER_COLORS.length],
+        points: byStudent[s.id],
+      }));
+
+      setChartData(data);
+      setLessons(lessonRows);
+      setLoading(false);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading || chartData.length < 1) return null;
+
+  // ── layout constants ──
+  const SVG_W = 320, SVG_H = 280;
+  const PAD_T = 40, PAD_B = 48, PAD_L = 48, PAD_R = 16;
+  const chartW = SVG_W - PAD_L - PAD_R;
+  const chartH = SVG_H - PAD_T - PAD_B;
+
+  // ── date range ──
+  const today  = new Date().toISOString().slice(0, 10);
+  const allDates = chartData.flatMap(d => d.points.map(p => p.date));
+  allDates.push(today);
+  const minDate = allDates.reduce((a, b) => a < b ? a : b);
+  const minTs   = new Date(minDate + "T00:00:00").getTime();
+  const maxTs   = new Date(today   + "T00:00:00").getTime();
+  const tsRange = maxTs - minTs || 1;
+
+  function toX(dateStr) {
+    const ts = new Date(dateStr + "T00:00:00").getTime();
+    return PAD_L + ((ts - minTs) / tsRange) * chartW;
+  }
+
+  // ── hcp range, 0.5-step grid ──
+  const allHcps = chartData.flatMap(d => d.points.map(p => p.hcp));
+  const hcpMin  = Math.min(...allHcps);
+  const hcpMax  = Math.max(...allHcps);
+  const domMin  = Math.floor((hcpMin - 0.5) * 2) / 2;
+  const domMax  = Math.ceil((hcpMax  + 0.5) * 2) / 2;
+  const domRange = domMax - domMin || 1;
+
+  function toY(hcp) {
+    return PAD_T + chartH - ((hcp - domMin) / domRange) * chartH;
+  }
+
+  const yTicks = [];
+  for (let v = domMin; v <= domMax + 0.001; v = Math.round((v + 0.5) * 10) / 10) yTicks.push(v);
+
+  // ── X axis month labels ──
+  const totalMonths = (new Date(today).getFullYear() - new Date(minDate).getFullYear()) * 12
+    + new Date(today).getMonth() - new Date(minDate).getMonth();
+  const monthStep = totalMonths > 12 ? 2 : 1;
+  const xLabels = [];
+  let cur = new Date(new Date(minDate + "T00:00:00").getFullYear(), new Date(minDate + "T00:00:00").getMonth(), 1);
+  const endDate = new Date(today + "T00:00:00");
+  let mCount = 0;
+  while (cur <= endDate) {
+    if (mCount % monthStep === 0) {
+      const x = toX(cur.toISOString().slice(0, 10));
+      if (x >= PAD_L - 1 && x <= PAD_L + chartW + 1) {
+        xLabels.push({ x, label: cur.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) });
+      }
+    }
+    mCount++;
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+
+  // ── lesson lines (unique dates) ──
+  const lessonLines = [];
+  const seenDates = new Set();
+  for (const l of lessons) {
+    if (!l.lesson_date || seenDates.has(l.lesson_date)) continue;
+    seenDates.add(l.lesson_date);
+    const x = toX(l.lesson_date);
+    if (x < PAD_L || x > PAD_L + chartW) continue;
+    const s = students.find(st => st.id === l.student_id);
+    lessonLines.push({ x, label: s?.first_name || "" });
+  }
+
+  return (
+    <div style={{background:"white",border:"1.5px solid var(--border)",borderRadius:16,padding:"18px 20px",marginBottom:16}}>
+      <div style={{fontSize:11,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#999",marginBottom:12}}>
+        Handicap trajectories
+      </div>
+      <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{overflow:"visible",display:"block"}}>
+        {/* Y gridlines + labels */}
+        {yTicks.map(t => {
+          const y = toY(t);
+          return (
+            <g key={t}>
+              <line x1={PAD_L} y1={y} x2={PAD_L + chartW} y2={y} stroke="#E2DDD4" strokeWidth={0.8} />
+              <text x={PAD_L - 5} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" fill="#999">
+                {t % 1 === 0 ? String(t) : t.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* X axis labels */}
+        {xLabels.map((lbl, i) => (
+          <text key={i} x={lbl.x} y={PAD_T + chartH + 14} textAnchor="middle" fontSize="9" fill="#999">
+            {lbl.label}
+          </text>
+        ))}
+
+        {/* Lesson vertical lines */}
+        {lessonLines.map((ll, i) => (
+          <g key={i}>
+            <line x1={ll.x} y1={PAD_T} x2={ll.x} y2={PAD_T + chartH}
+              stroke="#C9A84C" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
+            <text x={ll.x + 3} y={PAD_T + 4} fontSize="8" fill="#C9A84C" opacity={0.9}>{ll.label}</text>
+          </g>
+        ))}
+
+        {/* Student polylines + circles */}
+        {chartData.map(({ student, color, points }) => {
+          const d = points.map((p, i) =>
+            `${i === 0 ? "M" : "L"} ${toX(p.date).toFixed(1)} ${toY(p.hcp).toFixed(1)}`
+          ).join(" ");
+          return (
+            <g key={student.id}>
+              <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              {points.map((p, i) => {
+                const cx = toX(p.date);
+                const cy = toY(p.hcp);
+                const flip = cx > PAD_L + chartW * 0.65;
+                return (
+                  <circle
+                    key={i} cx={cx} cy={cy} r={3} fill={color}
+                    style={{cursor:"pointer"}}
+                    onMouseEnter={() => setTooltip({ cx, cy, name: `${student.first_name} ${student.last_name}`, date: p.date, hcp: p.hcp, flip })}
+                    onMouseLeave={() => setTooltip(null)}
+                  />
+                );
+              })}
+            </g>
+          );
+        })}
+
+        {/* Tooltip */}
+        {tooltip && (() => {
+          const TW = 108, TH = 36, TR = 6;
+          const tx = tooltip.flip ? tooltip.cx - TW - 8 : tooltip.cx + 8;
+          const ty = tooltip.cy - TH / 2;
+          return (
+            <g style={{pointerEvents:"none"}}>
+              <rect x={tx} y={ty} width={TW} height={TH} rx={TR} fill="white" stroke="#E2DDD4" strokeWidth={1} />
+              <text x={tx + 7} y={ty + 13} fontSize="10" fill="#1C1C1C" fontWeight="600">{tooltip.name}</text>
+              <text x={tx + 7} y={ty + 26} fontSize="9" fill="#666">{tooltip.date} · Hcp {tooltip.hcp}</text>
+            </g>
+          );
+        })()}
+      </svg>
+
+      {/* Legend */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:"6px 14px",marginTop:8}}>
+        {chartData.map(({ student, color, points }) => {
+          const currentHcp = points[points.length - 1]?.hcp;
+          return (
+            <div key={student.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#555"}}>
+              <div style={{width:9,height:9,borderRadius:"50%",background:color,flexShrink:0}} />
+              <span>{student.first_name} {student.last_name}</span>
+              {currentHcp != null && <span style={{color:"#999"}}>({currentHcp})</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── STUDENT LIST (coach home) ──
 function StudentList({ coachProfile, user, students, studentStats, selectedStudent, setStudentLessons, onSelectStudent, onSignOut, onProfile }) {
   const [inviteLink, setInviteLink] = useState(null);
@@ -569,6 +779,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                 })}
               </>
             )}
+            <RosterChart students={students} coachId={user?.id} />
             <div className="section-label">Your students</div>
             {students.map(s => {
               const stats = studentStats[s.id] || {};
