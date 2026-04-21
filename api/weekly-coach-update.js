@@ -158,34 +158,73 @@ export default async function handler(req, res) {
       // Skip coach if all lists are empty
       if (playedWell.length === 0 && struggled.length === 0 && goneQuiet.length === 0) continue;
 
-      // Build plain-text email body
-      let body = `Hi ${coach.first_name},\n\nHere is your weekly student update from Caddie.\n`;
-
+      // Build plain-text fallback
+      let text = `Hi ${coach.first_name},\n\nHere is your weekly student update from Caddie.\n`;
       if (playedWell.length > 0) {
-        body += `\nPlayed well this week\n`;
-        for (const s of playedWell) {
-          for (const line of s.roundLines) body += `${line}\n`;
-        }
-        body += `Worth sending a message of encouragement!\n`;
+        text += `\nPlayed well this week\n`;
+        for (const s of playedWell) for (const line of s.roundLines) text += `${line}\n`;
+        text += `Worth sending a message of encouragement!\n`;
       }
-
       if (struggled.length > 0) {
-        body += `\nStruggled this week\n`;
-        for (const s of struggled) {
-          for (const line of s.roundLines) body += `${line}\n`;
-        }
-        body += `A lesson might help these students get back on track.\n`;
+        text += `\nStruggled this week\n`;
+        for (const s of struggled) for (const line of s.roundLines) text += `${line}\n`;
+        text += `A lesson might help these students get back on track.\n`;
       }
-
       if (goneQuiet.length > 0) {
-        body += `\nNo rounds in 3 weeks\n`;
-        for (const s of goneQuiet) {
-          body += `${s.name}${s.daysSince != null ? ` - ${s.daysSince} days since last round` : ""}\n`;
-        }
-        body += `Time to check in.\n`;
+        text += `\nNo rounds in 3 weeks\n`;
+        for (const s of goneQuiet) text += `${s.name}${s.daysSince != null ? ` - ${s.daysSince} days since last round` : ""}\n`;
+        text += `Time to check in.\n`;
+      }
+      text += `\nCaddie`;
+
+      // Build HTML email
+      function htmlSection(emoji, label, borderColor, lines, note) {
+        const rowsHtml = lines.map(line =>
+          `<div style="font-size:13px;color:#333;padding:7px 0;border-bottom:1px solid #F0EDE6;">${line}</div>`
+        ).join("");
+        return `
+          <div style="margin-bottom:24px;">
+            <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1C1C1C;padding-left:10px;border-left:3px solid ${borderColor};margin-bottom:10px;">${emoji} ${label}</div>
+            ${rowsHtml}
+            <div style="font-size:13px;color:#666;font-style:italic;margin-top:8px;">${note}</div>
+          </div>`;
       }
 
-      body += `\nCaddie`;
+      let sectionsHtml = "";
+      if (playedWell.length > 0) {
+        const lines = playedWell.flatMap(s => s.roundLines);
+        sectionsHtml += htmlSection("🟢", "Played well this week", "#1A6B4A", lines, "Worth sending a message of encouragement!");
+      }
+      if (struggled.length > 0) {
+        const lines = struggled.flatMap(s => s.roundLines);
+        sectionsHtml += htmlSection("🔴", "Struggled this week", "#C94040", lines, "A lesson might help these students get back on track.");
+      }
+      if (goneQuiet.length > 0) {
+        const lines = goneQuiet.map(s => `${s.name}${s.daysSince != null ? ` - ${s.daysSince} days since last round` : ""}`);
+        sectionsHtml += htmlSection("💤", "No rounds in 3 weeks", "#999999", lines, "Time to check in.");
+      }
+
+      const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<body style="margin:0;padding:0;background:#F4F1EB;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F4F1EB;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr><td style="background:white;border-radius:12px;padding:32px;">
+          <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:#0F3D2E;margin-bottom:6px;">Caddie</div>
+          <div style="font-size:13px;color:#999;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #F0EDE6;">Weekly student update</div>
+          <div style="font-size:15px;color:#1C1C1C;margin-bottom:24px;">Hi ${coach.first_name},</div>
+          ${sectionsHtml}
+          <div style="text-align:center;margin-top:28px;padding-top:20px;border-top:1px solid #F0EDE6;">
+            <span style="font-size:12px;color:#1A6B4A;font-family:Georgia,serif;font-weight:700;">Caddie</span>
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
       // Send via Resend
       const emailRes = await fetch("https://api.resend.com/emails", {
@@ -198,7 +237,8 @@ export default async function handler(req, res) {
           from: "Caddie <onboarding@resend.dev>",
           to: [coachEmail],
           subject: "Your weekly Caddie update",
-          text: body,
+          html,
+          text,
         }),
       });
 
