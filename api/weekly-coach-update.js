@@ -85,7 +85,7 @@ export default async function handler(req, res) {
       // Fetch all sent rounds for these students, newest first
       const rounds = await sbFetch(
         `/rounds?student_id=in.(${studentIds.join(",")})&sent_to_coach=eq.true` +
-        `&select=id,student_id,course_id,total_score,total_par,holes_played,created_at` +
+        `&select=id,student_id,course_id,total_score,total_par,holes_played,handicap,created_at,courses(name)` +
         `&order=created_at.desc`
       );
       if (!rounds) continue;
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
         // Evaluate each round this week
         let hasPlayedWell = false;
         let hasStruggled  = false;
-        const weekDetails = [];
+        const roundLines  = [];
 
         for (const r of thisWeek) {
           const v = vsParPerHole(r);
@@ -142,20 +142,16 @@ export default async function handler(req, res) {
           const wellByCourse = bestByCourse[r.course_id] != null && v <= bestByCourse[r.course_id];
           if (wellByAvg || wellByCourse) hasPlayedWell = true;
           if (recentAvg != null && v > recentAvg + 0.2) hasStruggled = true;
-          weekDetails.push({ v, holes_played: r.holes_played });
+          const netScore   = r.total_score - (r.handicap ?? 0);
+          const courseName = r.courses?.name || "Golf Course";
+          roundLines.push(`${name} - Net ${netScore} (${courseName}, ${r.holes_played} holes)`);
         }
-
-        // Use best round this week for the display label
-        const best = weekDetails.sort((a, b) => a.v - b.v)[0];
-        const roundLabel = best
-          ? `${best.v >= 0 ? "+" : ""}${best.v.toFixed(1)} vs par (${best.holes_played} holes)`
-          : "";
 
         // Priority: played_well > struggled (gone_quiet already handled above)
         if (hasPlayedWell) {
-          playedWell.push({ name, roundLabel });
+          playedWell.push({ roundLines });
         } else if (hasStruggled) {
-          struggled.push({ name, roundLabel });
+          struggled.push({ roundLines });
         }
       }
 
@@ -163,26 +159,30 @@ export default async function handler(req, res) {
       if (playedWell.length === 0 && struggled.length === 0 && goneQuiet.length === 0) continue;
 
       // Build plain-text email body
-      let body = `Hi ${coach.first_name},\n\nHere's your weekly student update from Caddie.\n`;
+      let body = `Hi ${coach.first_name},\n\nHere is your weekly student update from Caddie.\n`;
 
       if (playedWell.length > 0) {
-        body += `\n🟢 Played well this week\n`;
-        for (const s of playedWell) body += `${s.name} — ${s.roundLabel}\n`;
-        body += `These students had a good week — worth sending a message of encouragement!\n`;
+        body += `\nPlayed well this week\n`;
+        for (const s of playedWell) {
+          for (const line of s.roundLines) body += `${line}\n`;
+        }
+        body += `Worth sending a message of encouragement!\n`;
       }
 
       if (struggled.length > 0) {
-        body += `\n🔴 Struggled this week\n`;
-        for (const s of struggled) body += `${s.name} — ${s.roundLabel}\n`;
-        body += `These students had a tough week — maybe a lesson is in order?\n`;
+        body += `\nStruggled this week\n`;
+        for (const s of struggled) {
+          for (const line of s.roundLines) body += `${line}\n`;
+        }
+        body += `A lesson might help these students get back on track.\n`;
       }
 
       if (goneQuiet.length > 0) {
-        body += `\n💤 Haven't logged a round in 3+ weeks\n`;
+        body += `\nNo rounds in 3 weeks\n`;
         for (const s of goneQuiet) {
-          body += `${s.name}${s.daysSince != null ? ` — ${s.daysSince} days since last round` : ""}\n`;
+          body += `${s.name}${s.daysSince != null ? ` - ${s.daysSince} days since last round` : ""}\n`;
         }
-        body += `Time to check in with these students.\n`;
+        body += `Time to check in.\n`;
       }
 
       body += `\nCaddie`;
