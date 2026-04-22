@@ -105,9 +105,7 @@ function generateHoleDetails(holePar, score, abilityLevel) {
   // --- Penalty ---
   // Occasional OB/hazard on bad holes; more likely for worse players
   const penaltyChance = overPar >= 2 ? 0.04 + abilityLevel * 0.05 : 0;
-  const penalty = Math.random() < penaltyChance
-    ? (Math.random() < 0.55 ? "OB" : "Hazard")
-    : "None";
+  const penalty = null; // penalty column is text[] in DB; seed omits it
 
   // --- Putts ---
   let putts;
@@ -200,6 +198,7 @@ async function insertRoundsForStudent(studentId, vsParValues, schedule, startHan
     const vsPar     = vsParValues[i];
     const totalScore = par + vsPar;
     const handicap  = Math.round(startHandicap + ((endHandicap - startHandicap) * i) / Math.max(schedule.length - 1, 1));
+    const whs_index = Math.round((startHandicap + ((endHandicap - startHandicap) * i) / Math.max(schedule.length - 1, 1)) * 10) / 10;
 
     // abilityLevel: 0.0 = best (hcp 8), 1.0 = worst (hcp 14)
     const abilityLevel = isImproving
@@ -239,6 +238,7 @@ async function insertRoundsForStudent(studentId, vsParValues, schedule, startHan
         total_score:   totalScore,
         total_putts:   totalPutts,
         handicap,
+        whs_index,
         sent_to_coach: true,
         created_at:    date,
       })
