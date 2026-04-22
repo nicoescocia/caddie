@@ -1,6 +1,6 @@
 # Caddie — Handover Document
 
-**Last updated:** 2026-04-21
+**Last updated:** 2026-04-22
 
 ---
 
@@ -224,9 +224,9 @@ The `COURSE_PAR` lookup object appears in both `StudentDashboard.jsx` and `Coach
 | Jamie Stewart | `jamie@caddie-test.com` | `CaddieTest123!` | student | *(recreated on each seed run)* |
 | Craig Burns | `craig@caddie-test.com` | `CaddieTest123!` | student | *(recreated on each seed run)* |
 
-Jamie has 12 rounds trending **improving** (+14 → +8 vs par, course handicap 14 → 8, official WHS index seeded at 4.0).
-Craig has 12 rounds trending **worsening** (+8 → +14 vs par, course handicap 8 → 14, official WHS index seeded at 10.0).
-Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed is 18-hole; the rest are 9-hole.
+Jamie has 12 rounds trending **improving** (+14 → +8 vs par, course handicap 14 → 8, WHS index 14.0 → 8.0, official WHS index 4.0).
+Craig has 12 rounds trending **worsening** (+8 → +14 vs par, course handicap 8 → 14, WHS index 8.0 → 14.0, official WHS index 10.0).
+Both are linked to Coach Demo via `coach_students`. Every 3rd round in the seed is 18-hole; the rest are 9-hole. `rounds.whs_index` is now seeded per round — the RosterChart will display both students' trajectories after a fresh seed.
 
 ---
 
@@ -411,6 +411,10 @@ Requires `CRON_SECRET` and `RESEND_API_KEY` in Vercel env vars. Sends from `onbo
 
 **Weekly email requires `CRON_SECRET` and `RESEND_API_KEY` in Vercel env vars**: Without `CRON_SECRET` the endpoint returns 401 for all requests including the Vercel cron trigger. Without `RESEND_API_KEY` no emails are sent (silent skip per coach). Both must be set in the Vercel dashboard under Environment Variables.
 
+**RosterChart only renders students with `whs_index` on rounds**: The chart queries `rounds.whs_index IS NOT NULL` and requires ≥ 3 qualifying rounds per student. Production students who logged rounds before `whs_index` was added to the logging flow will not appear. The seed now writes `whs_index` per round; live student data depends on the column being populated at log time in `StudentLogging`.
+
+**`saveComplete` / `session_notes` field in RoundHistory — verify**: `StudentDashboard.jsx` was updated to fetch and render `session_notes` (was previously `notes`). Verify that the "Log session notes" save path in `RoundHistory` (CoachHome) is also writing to `session_notes` and not the old `notes` field, to avoid silent data loss.
+
 **Student AI analysis regenerates on every view**: `StudentLogging`'s per-round AI summary is called fresh each time the overview screen is shown. There is no caching on the student side (unlike CoachDashboard which caches to `rounds.ai_analysis`). Repeated views of the same completed round each consume API tokens.
 
 ---
@@ -460,9 +464,10 @@ Caddie is in private beta at Greenock Golf Club. There is no public signup. Stud
 - [ ] **Resend custom domain** — currently sends from `onboarding@resend.dev` (sandbox); blocks production email delivery; configure real domain in Resend dashboard before broader rollout
 - [ ] **Stripe integration** — premium is currently granted manually by admin; build a payment flow so students and coaches can self-serve upgrade
 - [ ] **Student-facing AI analysis caching** — StudentLogging's AI round summary regenerates on every view; add caching (e.g. a `student_ai_analysis` column on `rounds`) so it is computed once and read on repeat views
-- [ ] **Handicap trajectory chart with lesson markers** — overlay scheduled/completed lessons on the WHS index trend chart so coaches can see impact of lessons on handicap progression
+- [x] **Roster-wide handicap trajectory chart** — `RosterChart` SVG component in CoachHome; shows WHS index over time per student (date-based X axis, 0.5-step Y gridlines, one polyline per student); lesson markers rendered as hollow circles on the nearest student data point within 30 days; legend with current WHS index and hollow-circle key; only renders for students with ≥ 3 rounds with `whs_index` data
+- [x] **Reseed Jamie/Craig with `whs_index` data** — `scripts/seed-test-data.js` now writes `whs_index` (interpolated float, 1 decimal) per round; penalty field set to null (column is `text[]`, plain strings fail); both students have full trajectory data for the RosterChart
+- [ ] **Per-lesson markers refinement** — current hollow-circle markers snap to the nearest round within 30 days; consider showing lesson date in tooltip, handling multiple lessons near the same data point, and making markers interactive
 - [ ] **Pre-lesson brief UI refinement** — brief currently shown in a plain text box in the schedule panel; consider richer formatting, ability to edit before saving, and display in student timeline
-- [ ] **Roster-wide insights** (month 6+) — coach home screen summary of patterns across all students (e.g. most common miss, average scoring trend)
 - [ ] **Monthly progress report** — automated monthly email to each student summarising their improvement vs the previous month
 - [ ] **Pre-lesson questions** — students answer 2–3 coach-defined questions before each lesson; answers stored and surfaced in the pre-lesson brief
 - [ ] **Par 3 performance section in StudentDashboard** — CoachDashboard has par 3 stats; StudentDashboard analytics does not yet show par 3 GIR rate or miss direction breakdown
