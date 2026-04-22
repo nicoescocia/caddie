@@ -367,16 +367,23 @@ function RosterChart({ students, coachId }) {
     cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
   }
 
-  // ── lesson lines (unique dates) ──
-  const lessonLines = [];
-  const seenDates = new Set();
+  // ── per-student lesson markers ──
+  // For each lesson, find that student's closest data point within 30 days.
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const lessonMarkersByStudent = {};
   for (const l of lessons) {
-    if (!l.lesson_date || seenDates.has(l.lesson_date)) continue;
-    seenDates.add(l.lesson_date);
-    const x = toX(l.lesson_date);
-    if (x < PAD_L || x > PAD_L + chartW) continue;
-    const s = students.find(st => st.id === l.student_id);
-    lessonLines.push({ x, label: s?.first_name || "" });
+    if (!l.lesson_date) continue;
+    const studentEntry = chartData.find(d => d.student.id === l.student_id);
+    if (!studentEntry) continue;
+    const lessonTs = new Date(l.lesson_date + "T00:00:00").getTime();
+    let closest = null, closestDiff = Infinity;
+    for (const p of studentEntry.points) {
+      const diff = Math.abs(new Date(p.date + "T00:00:00").getTime() - lessonTs);
+      if (diff < closestDiff) { closestDiff = diff; closest = p; }
+    }
+    if (!closest || closestDiff > THIRTY_DAYS_MS) continue;
+    if (!lessonMarkersByStudent[l.student_id]) lessonMarkersByStudent[l.student_id] = new Set();
+    lessonMarkersByStudent[l.student_id].add(closest.date);
   }
 
   return (
@@ -405,20 +412,12 @@ function RosterChart({ students, coachId }) {
           </text>
         ))}
 
-        {/* Lesson vertical lines */}
-        {lessonLines.map((ll, i) => (
-          <g key={i}>
-            <line x1={ll.x} y1={PAD_T} x2={ll.x} y2={PAD_T + chartH}
-              stroke="#C9A84C" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
-            <text x={ll.x + 3} y={PAD_T + 4} fontSize="8" fill="#C9A84C" opacity={0.9}>{ll.label}</text>
-          </g>
-        ))}
-
         {/* Student polylines + circles */}
         {chartData.map(({ student, color, points }) => {
           const d = points.map((p, i) =>
             `${i === 0 ? "M" : "L"} ${toX(p.date).toFixed(1)} ${toY(p.hcp).toFixed(1)}`
           ).join(" ");
+          const lessonDates = lessonMarkersByStudent[student.id] || new Set();
           return (
             <g key={student.id}>
               <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -426,13 +425,22 @@ function RosterChart({ students, coachId }) {
                 const cx = toX(p.date);
                 const cy = toY(p.hcp);
                 const flip = cx > PAD_L + chartW * 0.65;
+                const isLesson = lessonDates.has(p.date);
                 return (
-                  <circle
-                    key={i} cx={cx} cy={cy} r={3} fill={color}
-                    style={{cursor:"pointer"}}
-                    onMouseEnter={() => setTooltip({ cx, cy, name: `${student.first_name} ${student.last_name}`, date: p.date, hcp: p.hcp, flip })}
-                    onMouseLeave={() => setTooltip(null)}
-                  />
+                  <g key={i}>
+                    <circle
+                      cx={cx} cy={cy} r={3} fill={color}
+                      style={{cursor:"pointer"}}
+                      onMouseEnter={() => setTooltip({ cx, cy, name: `${student.first_name} ${student.last_name}`, date: p.date, hcp: p.hcp, flip })}
+                      onMouseLeave={() => setTooltip(null)}
+                    />
+                    {isLesson && (
+                      <>
+                        <circle cx={cx} cy={cy} r={6} fill="white" stroke={color} strokeWidth={2} style={{pointerEvents:"none"}} />
+                        <text x={cx} y={cy - 10} textAnchor="middle" fontSize="9" fill={color} fontWeight="600" style={{pointerEvents:"none"}}>L</text>
+                      </>
+                    )}
+                  </g>
                 );
               })}
             </g>
@@ -466,6 +474,12 @@ function RosterChart({ students, coachId }) {
             </div>
           );
         })}
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#999",marginTop:2}}>
+          <svg width="11" height="11" style={{flexShrink:0}}>
+            <circle cx="5.5" cy="5.5" r="4.5" fill="white" stroke="#999" strokeWidth="1.5" />
+          </svg>
+          <span>Lesson around this time</span>
+        </div>
       </div>
     </div>
   );
