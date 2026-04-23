@@ -1768,13 +1768,14 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       putt1: hole.dna || hole.pickedUp ? null : hole.putt1,
       putt2: hole.dna || hole.pickedUp ? null : hole.putt2,
       putt3: hole.dna || hole.pickedUp ? null : hole.putt3 || null,
-      penalty: hole.dna || hole.pickedUp ? null : (hole.penalty.length > 0 ? hole.penalty : null),
+      penalty: hole.dna || hole.pickedUp ? null : (() => { const p = hole.penalty; return Array.isArray(p) ? (p.length > 0 ? p : null) : (p && p !== "None" ? [p] : null); })(),
       sg_reason: hole.dna || hole.pickedUp ? null : hole.sgReason || null,
       picked_up: hole.pickedUp || false,
-      pickup_reason: hole.pickedUp && hole.pickupReason.length > 0 ? hole.pickupReason : null,
+      pickup_reason: hole.pickedUp ? (() => { const r = hole.pickupReason; return Array.isArray(r) ? (r.length > 0 ? r : null) : (r && r !== "None" ? [r] : null); })() : null,
       pickup_note: hole.pickedUp && hole.pickupNote ? hole.pickupNote : null,
       dna: hole.dna || false,
     };
+    console.log("upsertHole payload:", JSON.stringify(payload, null, 2));
     if (savedHoles.has(hi.n)) {
       const { error } = await supabase.from("round_holes").update(payload).eq("round_id", rid).eq("hole_number", hi.n);
       if (error) return error;
