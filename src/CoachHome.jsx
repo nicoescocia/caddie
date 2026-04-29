@@ -347,20 +347,18 @@ function RosterChart({ students, coachId }) {
   const yTicks = [];
   for (let v = domMin; v <= domMax + 0.001; v += 2) yTicks.push(v);
 
-  // ── X axis: ~4 evenly spaced labels, deduplicated by label string ──
+  // ── X axis: one tick per calendar month, centred at the 15th ──
   const xLabels = [];
-  const seenXLabels = new Set();
-  const X_TICKS = 4;
-  for (let i = 0; i < X_TICKS; i++) {
-    const ts  = minTs + (tsRange * i) / (X_TICKS - 1);
-    const dt  = new Date(ts);
-    const label = dt.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
-    if (seenXLabels.has(label)) continue;
-    seenXLabels.add(label);
-    // Snap x to the first day of the labelled month so it aligns with plotted data
-    const firstOfMonth = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01`;
-    const x = toX(firstOfMonth);
-    xLabels.push({ x, label });
+  const startDt = new Date(minDate + "T00:00:00");
+  const endDt   = new Date(maxDate + "T00:00:00");
+  let cur = new Date(startDt.getFullYear(), startDt.getMonth(), 1);
+  while (cur.getFullYear() < endDt.getFullYear() || cur.getMonth() <= endDt.getMonth()) {
+    const year  = cur.getFullYear();
+    const month = String(cur.getMonth() + 1).padStart(2, "0");
+    const mid   = `${year}-${month}-15`;
+    const label = cur.toLocaleDateString("en-GB", { month: "short" });
+    xLabels.push({ x: toX(mid), label });
+    cur = new Date(year, cur.getMonth() + 1, 1);
   }
 
   // ── per-student lesson markers ──
