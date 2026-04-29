@@ -570,7 +570,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                         ? <span className={`chip ${parseFt(h.putt2) > 5 ? "bad" : "warn"}`}>{h.putt2}</span>
                         : <span style={{color:"#CCC"}}>—</span>}
                       </td>
-                      <td><span className={`chip ${h.putts >= 3 ? "tp" : h.putts === 2 ? "two" : "ok"}`}>{h.putts >= 3 ? "3-putt" : h.putts === 2 ? "2-putt" : h.putts === 1 ? "1-putt" : "chip-in"}</span></td>
+                      <td><span className={`chip ${h.putts >= 3 ? "tp" : h.putts === 2 ? "two" : "ok"}`}>{h.picked_up ? "picked up" : h.putts >= 3 ? "3-putt" : h.putts === 2 ? "2-putt" : h.putts === 1 ? "1-putt" : "chip-in"}</span></td>
                     </tr>
                   );
                 })}
