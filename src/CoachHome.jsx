@@ -319,13 +319,12 @@ function RosterChart({ students, coachId }) {
   const chartW = SVG_W - PAD_L - PAD_R;
   const chartH = SVG_H - PAD_T - PAD_B;
 
-  // ── date range ──
-  const today  = new Date().toISOString().slice(0, 10);
+  // ── date range — driven entirely by actual data points across all students ──
   const allDates = chartData.flatMap(d => d.points.map(p => p.date));
-  allDates.push(today);
   const minDate = allDates.reduce((a, b) => a < b ? a : b);
+  const maxDate = allDates.reduce((a, b) => a > b ? a : b);
   const minTs   = new Date(minDate + "T00:00:00").getTime();
-  const maxTs   = new Date(today   + "T00:00:00").getTime();
+  const maxTs   = new Date(maxDate + "T00:00:00").getTime();
   const tsRange = maxTs - minTs || 1;
 
   function toX(dateStr) {
