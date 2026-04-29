@@ -348,14 +348,18 @@ function RosterChart({ students, coachId }) {
   const yTicks = [];
   for (let v = domMin; v <= domMax + 0.001; v += 2) yTicks.push(v);
 
-  // ── X axis: 4 evenly spaced labels across the full date range ──
-  const X_TICKS = 4;
+  // ── X axis: ~4 evenly spaced labels, deduplicated by label string ──
   const xLabels = [];
+  const seenXLabels = new Set();
+  const X_TICKS = 4;
   for (let i = 0; i < X_TICKS; i++) {
     const ts  = minTs + (tsRange * i) / (X_TICKS - 1);
     const dt  = new Date(ts);
-    const x   = PAD_L + ((ts - minTs) / tsRange) * chartW;
-    xLabels.push({ x, label: dt.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) });
+    const label = dt.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+    if (seenXLabels.has(label)) continue;
+    seenXLabels.add(label);
+    const x = PAD_L + ((ts - minTs) / tsRange) * chartW;
+    xLabels.push({ x, label });
   }
 
   // ── per-student lesson markers ──
@@ -498,6 +502,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
         .select("*")
         .eq("coach_id", user.id)
         .eq("status", "upcoming")
+        .gte("lesson_date", new Date().toISOString().split("T")[0])
         .order("lesson_date", { ascending: true });
       setUpcomingLessons(data || []);
     })();
@@ -628,6 +633,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
       .select("*")
       .eq("coach_id", user.id)
       .eq("status", "upcoming")
+      .gte("lesson_date", new Date().toISOString().split("T")[0])
       .order("lesson_date", { ascending: true });
     setUpcomingLessons(refreshedUpcoming || []);
 
