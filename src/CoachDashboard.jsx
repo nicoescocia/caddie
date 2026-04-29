@@ -551,7 +551,6 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
               <tbody>
                 {holes.map(h => {
                   const p1 = parseFt(h.putt1);
-                  const is3 = h.putts >= 3;
                   const ap  = approachPct(h.approach);
                   const approachDisplay = h.approach || (h.par === 3 && h.gir ? h.par + " yds ✱" : "—");
                   return (
@@ -567,11 +566,11 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                           ? <span className={`chip ${p1 > 20 ? "bad" : p1 > 12 ? "warn" : "ok"}`}>{h.putt1}</span>
                           : <span style={{color:"#CCC"}}>—</span>}
                       </td>
-                      <td>{is3 && h.putt2
+                      <td>{h.putt2
                         ? <span className={`chip ${parseFt(h.putt2) > 5 ? "bad" : "warn"}`}>{h.putt2}</span>
                         : <span style={{color:"#CCC"}}>—</span>}
                       </td>
-                      <td><span className={`chip ${is3 ? "tp" : "two"}`}>{is3 ? "3-putt" : "2-putt"}</span></td>
+                      <td><span className={`chip ${h.putts >= 3 ? "tp" : h.putts === 2 ? "two" : "ok"}`}>{h.putts >= 3 ? "3-putt" : h.putts === 2 ? "2-putt" : h.putts === 1 ? "1-putt" : "chip-in"}</span></td>
                     </tr>
                   );
                 })}
@@ -706,7 +705,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                   <thead><tr><th>Hole</th><th>Approach</th><th>Shots ≤50 yds</th><th>Reason</th><th>1st putt</th></tr></thead>
                   <tbody>
                     {missedGIR.map(h => {
-                      const si = h.approach === "Under 50" ? (h.shots_inside_50 || 1) : null;
+                      const si = h.shots_inside_50 != null ? h.shots_inside_50 : null;
                       const col = si !== null && si >= 2 ? "var(--red)" : "var(--green-mid)";
                       return (
                         <tr key={h.hole_number}>
