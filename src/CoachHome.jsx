@@ -358,7 +358,7 @@ function RosterChart({ students, coachId }) {
     if (seenXLabels.has(label)) continue;
     seenXLabels.add(label);
     // Snap x to the first day of the labelled month so it aligns with plotted data
-    const firstOfMonth = new Date(dt.getFullYear(), dt.getMonth(), 1).toISOString().slice(0, 10);
+    const firstOfMonth = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01`;
     const x = toX(firstOfMonth);
     xLabels.push({ x, label });
   }
