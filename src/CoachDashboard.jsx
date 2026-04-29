@@ -204,10 +204,15 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       return line;
     }).join("\n");
 
+    const PENALTY_TYPES = new Set(["Lost ball (tee)", "Lost ball (fairway)", "OOB", "Hazard", "Unplayable"]);
     const penTotals = {};
     holeRows.forEach(h => {
       const types = Array.isArray(h.penalty) ? h.penalty : (h.penalty && h.penalty !== "None" ? [h.penalty] : []);
       types.forEach(t => { penTotals[t] = (penTotals[t] || 0) + 1; });
+      if (h.picked_up) {
+        const puReasons = Array.isArray(h.pickup_reason) ? h.pickup_reason : [];
+        puReasons.filter(r => PENALTY_TYPES.has(r)).forEach(t => { penTotals[t] = (penTotals[t] || 0) + 1; });
+      }
     });
     const penEntries = Object.entries(penTotals).filter(([, n]) => n > 0);
     const totalPenStrokes = penEntries.reduce((s, [, n]) => s + n, 0);
