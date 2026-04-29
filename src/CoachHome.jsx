@@ -314,7 +314,7 @@ function RosterChart({ students, coachId }) {
   if (loading || chartData.length < 1) return null;
 
   // ── layout constants ──
-  const SVG_W = 320, SVG_H = 280;
+  const SVG_W = 320, SVG_H = 360;
   const PAD_T = 40, PAD_B = 48, PAD_L = 48, PAD_R = 16;
   const chartW = SVG_W - PAD_L - PAD_R;
   const chartH = SVG_H - PAD_T - PAD_B;
@@ -333,12 +333,12 @@ function RosterChart({ students, coachId }) {
     return PAD_L + ((ts - minTs) / tsRange) * chartW;
   }
 
-  // ── hcp range, 0.5-step grid ──
+  // ── hcp range, 2-step grid ──
   const allHcps = chartData.flatMap(d => d.points.map(p => p.hcp));
   const hcpMin  = Math.min(...allHcps);
   const hcpMax  = Math.max(...allHcps);
-  const domMin  = Math.floor((hcpMin - 0.5) * 2) / 2;
-  const domMax  = Math.ceil((hcpMax  + 0.5) * 2) / 2;
+  const domMin  = Math.max(0, Math.floor((hcpMin - 2) / 2) * 2);
+  const domMax  = Math.ceil((hcpMax + 2) / 2) * 2;
   const domRange = domMax - domMin || 1;
 
   function toY(hcp) {
@@ -346,25 +346,16 @@ function RosterChart({ students, coachId }) {
   }
 
   const yTicks = [];
-  for (let v = domMin; v <= domMax + 0.001; v = Math.round((v + 0.5) * 10) / 10) yTicks.push(v);
+  for (let v = domMin; v <= domMax + 0.001; v += 2) yTicks.push(v);
 
-  // ── X axis month labels ──
-  const totalMonths = (new Date(today).getFullYear() - new Date(minDate).getFullYear()) * 12
-    + new Date(today).getMonth() - new Date(minDate).getMonth();
-  const monthStep = totalMonths > 12 ? 2 : 1;
+  // ── X axis: 4 evenly spaced labels across the full date range ──
+  const X_TICKS = 4;
   const xLabels = [];
-  let cur = new Date(new Date(minDate + "T00:00:00").getFullYear(), new Date(minDate + "T00:00:00").getMonth(), 1);
-  const endDate = new Date(today + "T00:00:00");
-  let mCount = 0;
-  while (cur <= endDate) {
-    if (mCount % monthStep === 0) {
-      const x = toX(cur.toISOString().slice(0, 10));
-      if (x >= PAD_L - 1 && x <= PAD_L + chartW + 1) {
-        xLabels.push({ x, label: cur.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) });
-      }
-    }
-    mCount++;
-    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  for (let i = 0; i < X_TICKS; i++) {
+    const ts  = minTs + (tsRange * i) / (X_TICKS - 1);
+    const dt  = new Date(ts);
+    const x   = PAD_L + ((ts - minTs) / tsRange) * chartW;
+    xLabels.push({ x, label: dt.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) });
   }
 
   // ── per-student lesson markers ──
@@ -436,8 +427,8 @@ function RosterChart({ students, coachId }) {
                     />
                     {isLesson && (
                       <>
-                        <circle cx={cx} cy={cy} r={6} fill="white" stroke={color} strokeWidth={2} style={{pointerEvents:"none"}} />
-                        <text x={cx} y={cy - 10} textAnchor="middle" fontSize="9" fill={color} fontWeight="600" style={{pointerEvents:"none"}}>L</text>
+                        <circle cx={cx} cy={cy} r={3} fill="white" stroke={color} strokeWidth={2} style={{pointerEvents:"none"}} />
+                        <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={color} fontWeight="700" style={{pointerEvents:"none"}}>L</text>
                       </>
                     )}
                   </g>
