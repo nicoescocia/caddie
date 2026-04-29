@@ -354,7 +354,7 @@ function RosterChart({ students, coachId }) {
   for (let i = 0; i < X_TICKS; i++) {
     const ts  = minTs + (tsRange * i) / (X_TICKS - 1);
     const dt  = new Date(ts);
-    const label = dt.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+    const label = dt.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
     if (seenXLabels.has(label)) continue;
     seenXLabels.add(label);
     // Snap x to the first day of the labelled month so it aligns with plotted data
