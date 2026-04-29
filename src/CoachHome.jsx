@@ -358,7 +358,9 @@ function RosterChart({ students, coachId }) {
     const label = dt.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
     if (seenXLabels.has(label)) continue;
     seenXLabels.add(label);
-    const x = PAD_L + ((ts - minTs) / tsRange) * chartW;
+    // Snap x to the first day of the labelled month so it aligns with plotted data
+    const firstOfMonth = new Date(dt.getFullYear(), dt.getMonth(), 1).toISOString().slice(0, 10);
+    const x = toX(firstOfMonth);
     xLabels.push({ x, label });
   }
 
