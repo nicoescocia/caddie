@@ -110,7 +110,7 @@ function buildProgressReportPrompt({ modeLabel, periodALabel, periodBLabel, stud
   function fmtPeriod(label, d) {
     let s = `${label} (${d.roundCount} round${d.roundCount !== 1 ? "s" : ""}):\n`;
     if (d.avgVsPar != null) s += `  Score avg vs par: ${d.avgVsPar >= 0 ? "+" : ""}${d.avgVsPar}/hole\n`;
-    if (d.avgPutts != null) s += `  Putts/round: ${d.avgPutts}\n`;
+    if (d.puttsPerHole != null) s += `  Putts/hole: ${d.puttsPerHole}\n`;
     if (d.girPct != null)   s += `  GIR: ${d.girPct}%\n`;
     if (d.fwPct != null)    s += `  Fairways: ${d.fwPct}%\n`;
     if (d.whsIndex != null) s += `  WHS index: ${d.whsIndex}\n`;

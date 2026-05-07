@@ -25,9 +25,9 @@ function calcStats(rounds, enrichedMap) {
   const avgVsPar = scored.length
     ? scored.reduce((s, r) => s + (r.total_score - getCoursePar(r)) / (r.holes_played || 9), 0) / scored.length
     : null;
-  const putted = rounds.filter(r => r.total_putts != null && r.total_putts > 0);
+  const putted = rounds.filter(r => r.total_putts != null && r.total_putts > 0 && r.holes_played != null);
   const avgPutts = putted.length
-    ? putted.reduce((s, r) => s + r.total_putts, 0) / putted.length
+    ? putted.reduce((s, r) => s + r.total_putts / r.holes_played, 0) / putted.length
     : null;
   const totalAttempted = rounds.reduce((s, r) => s + (enrichedMap[r.id]?.attempted_holes || 0), 0);
   const totalGIR       = rounds.reduce((s, r) => s + (enrichedMap[r.id]?.gir_count || 0), 0);
@@ -264,20 +264,20 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
           periodBLabel: sPeriodBLabel,
           studentFirstName: displayProfile?.first_name || "Student",
           periodA: {
-            roundCount: sA.n,
-            avgVsPar:   sA.avgVsPar  != null ? +sA.avgVsPar.toFixed(2)  : null,
-            avgPutts:   sA.avgPutts  != null ? +sA.avgPutts.toFixed(1)  : null,
-            girPct:     sA.girPct    != null ? +sA.girPct.toFixed(0)    : null,
-            fwPct:      sA.fwPct     != null ? +sA.fwPct.toFixed(0)     : null,
-            whsIndex:   sWhsThen,
+            roundCount:   sA.n,
+            avgVsPar:     sA.avgVsPar  != null ? +sA.avgVsPar.toFixed(2)  : null,
+            puttsPerHole: sA.avgPutts  != null ? +sA.avgPutts.toFixed(2)  : null,
+            girPct:       sA.girPct    != null ? +sA.girPct.toFixed(0)    : null,
+            fwPct:        sA.fwPct     != null ? +sA.fwPct.toFixed(0)     : null,
+            whsIndex:     sWhsThen,
           },
           periodB: {
-            roundCount: sB.n,
-            avgVsPar:   sB.avgVsPar  != null ? +sB.avgVsPar.toFixed(2)  : null,
-            avgPutts:   sB.avgPutts  != null ? +sB.avgPutts.toFixed(1)  : null,
-            girPct:     sB.girPct    != null ? +sB.girPct.toFixed(0)    : null,
-            fwPct:      sB.fwPct     != null ? +sB.fwPct.toFixed(0)     : null,
-            whsIndex:   sWhsNow,
+            roundCount:   sB.n,
+            avgVsPar:     sB.avgVsPar  != null ? +sB.avgVsPar.toFixed(2)  : null,
+            puttsPerHole: sB.avgPutts  != null ? +sB.avgPutts.toFixed(2)  : null,
+            girPct:       sB.girPct    != null ? +sB.girPct.toFixed(0)    : null,
+            fwPct:        sB.fwPct     != null ? +sB.fwPct.toFixed(0)     : null,
+            whsIndex:     sWhsNow,
           },
         }),
       });
@@ -320,7 +320,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
       modeLabel,
       whsThen != null && whsNow != null ? `Handicap: ${whsThen} → ${whsNow}` : "",
       statsA.avgVsPar != null && statsB.avgVsPar != null ? `Score avg/hole: ${fmtVsPar(statsA.avgVsPar)} → ${fmtVsPar(statsB.avgVsPar)}` : "",
-      statsA.avgPutts != null && statsB.avgPutts != null ? `Putts/round: ${fmtN(statsA.avgPutts)} → ${fmtN(statsB.avgPutts)}` : "",
+      statsA.avgPutts != null && statsB.avgPutts != null ? `Putts/hole: ${fmtN(statsA.avgPutts, 2)} → ${fmtN(statsB.avgPutts, 2)}` : "",
       statsA.girPct != null && statsB.girPct != null ? `GIR: ${fmtN(statsA.girPct, 0)}% → ${fmtN(statsB.girPct, 0)}%` : "",
       statsA.fwPct != null && statsB.fwPct != null ? `Fairways: ${fmtN(statsA.fwPct, 0)}% → ${fmtN(statsB.fwPct, 0)}%` : "",
       "",
@@ -520,7 +520,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
                   format={fmtVsPar}
                 />
                 <StatCard
-                  label="Putts / round"
+                  label="Putts / hole"
                   beforeVal={statsA?.avgPutts}
                   afterVal={statsB?.avgPutts}
                   beforeLabel={periodALabel}
@@ -608,7 +608,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
                       { label: "Score avg/hole", a: fmtVsPar(statsA?.avgVsPar), b: fmtVsPar(statsB?.avgVsPar), imp: statsA?.avgVsPar != null && statsB?.avgVsPar != null && statsB.avgVsPar < statsA.avgVsPar },
-                      { label: "Putts/round",    a: fmtN(statsA?.avgPutts),     b: fmtN(statsB?.avgPutts),     imp: statsA?.avgPutts != null && statsB?.avgPutts != null && statsB.avgPutts < statsA.avgPutts },
+                      { label: "Putts/hole",     a: fmtN(statsA?.avgPutts, 2),  b: fmtN(statsB?.avgPutts, 2),  imp: statsA?.avgPutts != null && statsB?.avgPutts != null && statsB.avgPutts < statsA.avgPutts },
                       { label: "GIR %",          a: fmtN(statsA?.girPct, 0)+"%",b: fmtN(statsB?.girPct, 0)+"%",imp: statsA?.girPct != null && statsB?.girPct != null && statsB.girPct > statsA.girPct },
                       { label: "Fairways %",     a: fmtN(statsA?.fwPct, 0)+"%", b: fmtN(statsB?.fwPct, 0)+"%", imp: statsA?.fwPct != null && statsB?.fwPct != null && statsB.fwPct > statsA.fwPct },
                     ].map(item => (
