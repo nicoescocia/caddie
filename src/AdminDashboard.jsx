@@ -171,6 +171,14 @@ function initials(first, last) {
   return ((first || "?")[0] + (last || "")[0]).toUpperCase();
 }
 
+const COACH_TIERS = {
+  free:     { label: "Free",     price: "£0",       studentLimit: 10,       aiFeatures: false },
+  starter:  { label: "Starter",  price: "£29/mo",   studentLimit: 25,       aiFeatures: true  },
+  pro:      { label: "Pro",      price: "£49/mo",   studentLimit: 50,       aiFeatures: true  },
+  club:     { label: "Club",     price: "£99/mo",   studentLimit: 100,      aiFeatures: true  },
+  academy:  { label: "Academy",  price: "£199/mo",  studentLimit: Infinity, aiFeatures: true  },
+};
+
 function fmtDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -206,7 +214,7 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
 
   async function load() {
     const [profilesRes, roundsRes, csRes, flagsRes, feedbackRes, allRoundsRes, usersRes] = await Promise.all([
-      adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, phone, home_courses, bio, created_at"),
+      adminClient.from("profiles").select("id, first_name, last_name, role, official_handicap, is_premium, coach_tier, phone, home_courses, bio, created_at"),
       adminClient.from("rounds").select("id", { count: "exact", head: true }),
       adminClient.from("coach_students").select("coach_id, student_id"),
       adminClient.from("course_flags").select("id, course_id, note, created_at, courses(id, name), profiles!flagged_by(first_name, last_name)").eq("resolved", false).order("created_at", { ascending: false }),
@@ -377,6 +385,13 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
     setTogglingPremium(null);
   }
 
+  async function handleSetCoachTier(profile, tier) {
+    const { error } = await adminClient.from("profiles").update({ coach_tier: tier }).eq("id", profile.id);
+    if (!error) {
+      setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, coach_tier: tier } : p));
+    }
+  }
+
   async function handleViewProfile(profile) {
     setProfileLoadingId(profile.id);
     let email = "";
@@ -476,6 +491,15 @@ export default function AdminDashboard({ user, onSignOut, onStudentView }) {
                         <td className="adm-hide-sm">{fmtDate(p.created_at)}</td>
                         <td>
                           <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
+                            <select
+                              value={p.coach_tier || "free"}
+                              onChange={e => handleSetCoachTier(p, e.target.value)}
+                              style={{fontSize:12,padding:"3px 6px",borderRadius:4,border:"1px solid var(--border)",background:"var(--card)",color:"var(--text)",cursor:"pointer"}}
+                            >
+                              {Object.entries(COACH_TIERS).map(([key, t]) => (
+                                <option key={key} value={key}>{t.label}</option>
+                              ))}
+                            </select>
                             <button
                               className="adm-btn-view"
                               disabled={profileLoadingId === p.id}

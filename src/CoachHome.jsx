@@ -518,7 +518,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
     setBriefLoading(false);
   }
 
-  const aiBriefActive = coachProfile?.is_premium && coachProfile?.ai_brief_enabled !== false;
+  const aiBriefActive = COACH_TIERS[coachProfile?.coach_tier]?.aiFeatures === true && coachProfile?.ai_brief_enabled !== false;
 
   useEffect(() => {
     if (!scheduleForm.studentId || !scheduleForm.date) {
@@ -650,6 +650,12 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   async function generateInvite() {
     const coachId = user?.id || coachProfile?.id;
     if (!coachId) return;
+    const tier = coachProfile?.coach_tier || "free";
+    const limit = COACH_TIERS[tier]?.studentLimit ?? 10;
+    if (students.length >= limit) {
+      alert(`Your ${COACH_TIERS[tier]?.label ?? tier} plan allows up to ${limit} students. Upgrade to add more.`);
+      return;
+    }
     setInviteLoading(true);
     const code = Math.random().toString(36).substring(2, 10).toUpperCase();
     const { error } = await supabase.from("invites").insert([{ code, coach_id: coachId }]);
@@ -739,10 +745,10 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                     <input type="time" className="lesson-form-input" value={scheduleForm.time} onChange={e => updateSchedule("time", e.target.value)} />
                   </div>
                 </div>
-                {scheduleForm.studentId && scheduleForm.date && !coachProfile?.is_premium && (
+                {scheduleForm.studentId && scheduleForm.date && !aiBriefActive && (
                   <div className="lesson-form-field">
                     <div className="lesson-ai-box" style={{background:"#FEFBF3"}}>
-                      <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis is a premium feature</div>
+                      <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis requires a paid plan</div>
                     </div>
                   </div>
                 )}
@@ -1745,11 +1751,11 @@ OUTPUT FORMAT
                           </div>
                         )}
                         {(() => {
-                          const isPremium = coachProfile?.is_premium;
+                          const hasTierAI = COACH_TIERS[coachProfile?.coach_tier]?.aiFeatures === true;
                           const briefEnabled = coachProfile?.ai_brief_enabled !== false;
-                          if (!isPremium) return (
+                          if (!hasTierAI) return (
                             <div className="lesson-ai-box" style={{background:"#FEFBF3"}}>
-                              <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis is a premium feature</div>
+                              <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis requires a paid plan</div>
                             </div>
                           );
                           if (!briefEnabled) return null;
@@ -1892,6 +1898,14 @@ OUTPUT FORMAT
   );
 }
 
+const COACH_TIERS = {
+  free:     { label: "Free",     price: "£0",       studentLimit: 10,       aiFeatures: false },
+  starter:  { label: "Starter",  price: "£29/mo",   studentLimit: 25,       aiFeatures: true  },
+  pro:      { label: "Pro",      price: "£49/mo",   studentLimit: 50,       aiFeatures: true  },
+  club:     { label: "Club",     price: "£99/mo",   studentLimit: 100,      aiFeatures: true  },
+  academy:  { label: "Academy",  price: "£199/mo",  studentLimit: Infinity, aiFeatures: true  },
+};
+
 // ── ROOT COMPONENT ──
 export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, initialScreen, initialStudent }) {
   const [screen, setScreen]           = useState(initialScreen || "students");
@@ -1908,7 +1922,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
     async function load() {
       // Load coach profile
       const { data: profile } = await supabase
-        .from("profiles").select("first_name, last_name, is_premium, ai_brief_enabled").eq("id", user.id).single();
+        .from("profiles").select("first_name, last_name, is_premium, ai_brief_enabled, coach_tier").eq("id", user.id).single();
       setCoachProfile(profile);
 
       // Load linked students
