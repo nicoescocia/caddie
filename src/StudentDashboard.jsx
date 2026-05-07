@@ -504,6 +504,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
 export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings, onFindCoach }) {
   const [rounds, setRounds]   = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [expandedBriefs, setExpandedBriefs] = useState(new Set());
   const [profile, setProfile] = useState(null);
   const [coaches, setCoaches]             = useState([]);
   const [coachesExpanded, setCoachesExpanded] = useState(false);
@@ -571,7 +572,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
-        supabase.from("lessons").select("id, lesson_date, lesson_time, session_notes, drills, status, coach_id").eq("student_id", user.id).order("lesson_date", { ascending: false }),
+        supabase.from("lessons").select("id, lesson_date, lesson_time, session_notes, drills, status, coach_id, ai_brief").eq("student_id", user.id).order("lesson_date", { ascending: false }),
       ]);
       setProfile(prof);
       setRounds(rds || []);
@@ -1093,13 +1094,46 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                 const coachFirst = coach ? coach.first_name : null;
                 const lessonDate = new Date(l.lesson_date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"});
                 const fmtTime = t => { if (!t) return null; const [h,m] = t.split(":").map(Number); return `${h%12||12}:${String(m).padStart(2,"0")}${h>=12?"pm":"am"}`; };
-                if (l.status === "upcoming") return (
-                  <div key={"l-"+l.id} style={{background:"#FEFBF3",border:"1.5px solid var(--gold)",borderLeft:"4px solid var(--gold)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
-                    <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>📅 Upcoming lesson</div>
-                    {coachFirst && <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:6}}>with {coachFirst}</div>}
-                    <div style={{fontSize:13,color:"var(--text-mid)"}}>{lessonDate}{l.lesson_time ? ` · ${fmtTime(l.lesson_time)}` : ""}</div>
-                  </div>
-                );
+                if (l.status === "upcoming") {
+                  const briefExpanded = expandedBriefs.has(l.id);
+                  return (
+                    <div key={"l-"+l.id} style={{background:"#FEFBF3",border:"1.5px solid var(--gold)",borderLeft:"4px solid var(--gold)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                      <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>📅 Upcoming lesson</div>
+                      {coachFirst && <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:6}}>with {coachFirst}</div>}
+                      <div style={{fontSize:13,color:"var(--text-mid)"}}>{lessonDate}{l.lesson_time ? ` · ${fmtTime(l.lesson_time)}` : ""}</div>
+                      {l.ai_brief && (
+                        <div style={{marginTop:10}}>
+                          <button
+                            onClick={() => setExpandedBriefs(prev => { const s = new Set(prev); s.has(l.id) ? s.delete(l.id) : s.add(l.id); return s; })}
+                            style={{background:"none",border:"none",padding:0,fontSize:12,color:"var(--gold)",fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}
+                          >
+                            {briefExpanded ? "▾ Hide pre-lesson brief" : "▸ Show pre-lesson brief"}
+                          </button>
+                          {briefExpanded && (
+                            <div style={{marginTop:8}}>
+                              {l.ai_brief.split(/\n(?=## )/).map((section, si) => {
+                                const lines = section.split("\n").filter(ln => ln.trim());
+                                if (!lines.length) return null;
+                                const header = lines[0].startsWith("## ") ? lines[0].replace("## ", "") : null;
+                                const bullets = header ? lines.slice(1) : lines;
+                                return (
+                                  <div key={si} style={{marginBottom:10}}>
+                                    {header && <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--gold)",marginBottom:4}}>{header}</div>}
+                                    {bullets.map((b, bi) => (
+                                      <div key={bi} style={{fontSize:12,color:"var(--text-mid)",lineHeight:1.6,paddingLeft:b.startsWith("-") || b.startsWith("•") ? 4 : 0}}>
+                                        {b.replace(/^[-•]\s*/, "· ")}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 return (
                   <div key={"l-"+l.id} style={{background:"#F0F4F0",border:"1.5px solid var(--green-mid)",borderLeft:"4px solid var(--green-mid)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
                     <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>📋 Lesson — {lessonDate}</div>

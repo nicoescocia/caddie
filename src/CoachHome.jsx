@@ -490,6 +490,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
     studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "",
   });
   const [briefPreview, setBriefPreview]   = useState(null);
+  const [briefEdited,  setBriefEdited]    = useState(null);
   const [briefLoading, setBriefLoading]   = useState(false);
   const [scheduleContext, setScheduleContext] = useState(null);
   const [upcomingLessons, setUpcomingLessons] = useState([]);
@@ -512,6 +513,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   function closeSchedule() {
     setShowSchedule(false);
     setBriefPreview(null);
+    setBriefEdited(null);
     setScheduleContext(null);
     setBriefLoading(false);
   }
@@ -584,7 +586,8 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
           }),
         });
         const aiData = await aiRes.json();
-        if (!cancelled) setBriefPreview(aiData.content?.map(c => c.text || "").join("") || null);
+        const generated = aiData.content?.map(c => c.text || "").join("") || null;
+        if (!cancelled) { setBriefPreview(generated); setBriefEdited(generated); }
       } catch {}
       if (!cancelled) setBriefLoading(false);
     })();
@@ -608,8 +611,8 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
     }).select().single();
     if (error || !newLesson) { setScheduleSaving(false); return; }
 
-    // 2. Save ai_brief + round_context (pre-generated before save)
-    await supabase.from("lessons").update({ ai_brief: briefPreview, round_context: scheduleContext }).eq("id", newLesson.id);
+    // 2. Save ai_brief + round_context (pre-generated before save; use edited version if coach changed it)
+    await supabase.from("lessons").update({ ai_brief: briefEdited ?? briefPreview, round_context: scheduleContext }).eq("id", newLesson.id);
 
     // 3. Fire-and-forget notify (student notification — best effort)
     fetch("/api/notify-coach", {
@@ -639,6 +642,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
     setShowSchedule(false);
     setScheduleForm({ studentId: "", date: new Date().toISOString().slice(0, 10), time: "10:00", prepNotes: "" });
     setBriefPreview(null);
+    setBriefEdited(null);
     setScheduleContext(null);
     setScheduleSaving(false);
   }
@@ -748,8 +752,13 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                       <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
                       {briefLoading
                         ? <div className="ai-loading"><div className="ai-spinner" />Generating brief…</div>
-                        : briefPreview
-                          ? <div className="lesson-ai-text">{briefPreview}</div>
+                        : briefEdited != null
+                          ? <textarea
+                              className="lesson-form-textarea"
+                              style={{minHeight:180,fontSize:12,lineHeight:1.6,fontFamily:"'Outfit',sans-serif"}}
+                              value={briefEdited}
+                              onChange={e => setBriefEdited(e.target.value)}
+                            />
                           : <div style={{fontSize:13,color:"var(--text-dim)"}}>No recent rounds available.</div>
                       }
                     </div>

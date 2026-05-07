@@ -91,7 +91,14 @@ TONE ON BAD ROUNDS
 - When a round is significantly worse than the player's recent average (more than 0.5 shots per hole worse), you MUST open with a single short dry humorous sentence before continuing with the analysis. This is not optional. Keep it to one sentence only, then move straight into the analysis. On good rounds or average rounds, keep the tone straightforward and encouraging.
 - The opener must be original, self-deprecating, and specific to something in this round's data — a stat, a pattern, a particular hole count, a penalty. It must never be a generic idiom or stock phrase. Banned phrases (and anything structurally similar): "The course won today", "Golf had other ideas", "Some days the course wins", "Not one for the highlight reel". Instead vary the form: a wry deadpan stat callout ("Eleven putts on the back nine is a bold strategy"), a backhanded compliment to the course ("The rough clearly made a strong case for itself today"), or a self-deprecating observation grounded in the actual numbers. If you cannot make it specific to this round, skip the opener entirely rather than reaching for a cliché.`;
 
-const PRE_LESSON_SYSTEM_PROMPT = `You are an assistant helping a golf coach prepare for a lesson. Write in third person about the student. Be concise, specific, and professional — no preamble. Structure your response as three short sections: 1) Recent form summary (2-3 sentences on scoring trend and key stats), 2) Primary focus areas (2-3 bullet points on the biggest patterns or issues from recent rounds), 3) Suggested lesson structure (1-2 sentences on what to prioritise in the session).`;
+const PRE_LESSON_SYSTEM_PROMPT = `You are an assistant helping a golf coach prepare for a lesson. Write in third person about the student. Be concise, specific, and professional — no preamble, no intro sentence. Return the brief using exactly these markdown section headers (include only sections where there is relevant data to report):
+
+## Recent form
+## Areas to focus on
+## Watch out for
+## Suggested session focus
+
+Under each header, use concise bullet points (one idea per bullet, no prose paragraphs). Do not add any text before the first header.`;
 
 function buildPreLessonPrompt({ studentName, rounds }) {
   let prompt = `Pre-lesson brief for ${studentName}.\n\n`;
