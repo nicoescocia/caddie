@@ -230,10 +230,20 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     const aiUnder50    = aiMissedGIR.filter(h => h.approach === "Under 50");
     const aiScrambMade = aiUnder50.filter(h => h.shots_inside_50 === 1 && h.putts === 1).length;
 
+    // Short game failure analysis
+    const sgFailureHoles = aiUnder50.filter(h => (h.shots_inside_50 || 1) > 1);
+    const sgSingleHoles  = aiUnder50.filter(h => h.shots_inside_50 === 1);
+    const sgFailPct      = aiMissedGIR.length > 0 ? Math.round(sgFailureHoles.length / aiMissedGIR.length * 100) : 0;
+    const sgFailureDetail = sgFailureHoles.length > 0
+      ? sgFailureHoles.map(h => `H${h.hole_number}${h.sg_reason ? ` (${h.sg_reason})` : ""}`).join(", ")
+      : "none";
+    const sgSection = `Short game failures (shots_inside_50 > 1): ${sgFailureHoles.length} holes (${sgFailPct}% of missed-GIR holes) — ${sgFailureDetail}\nSuccessful single chips (shots_inside_50 = 1): ${sgSingleHoles.length} holes\n`;
+    const threePuttNote = tp >= 2 ? `INSTRUCTION: There are ${tp} three-putts this round. Do NOT describe putting as solid, consistent, or excellent. Acknowledge the 3-putts directly.\n` : "";
+
     try {
       const [r1, r2] = await Promise.all([
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\n${penSummaryLine}Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n\nTwo sentences only, no preamble.`),
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted. Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n${penSummaryLine}\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\n${penSummaryLine}Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n${threePuttNote}\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted.\n${sgSection}INSTRUCTION: shots_inside_50 > 1 is a short game failure. ${sgFailPct > 20 ? "More than 20% of missed-GIR holes had shots_inside_50 > 1 — do NOT describe proximity or short game as good or solid. Cite the specific sg_reason values where present." : ""} Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n${penSummaryLine}\nTwo sentences only, no preamble.`),
       ]);
       setAiPutting(r1);
       setAiSg(r2);

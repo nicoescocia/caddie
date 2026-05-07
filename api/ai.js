@@ -40,6 +40,15 @@ PUTTING
 - A first putt under 10 feet resulting in a 3-putt is a significant issue. A first putt over 20 feet resulting in a 3-putt is much less concerning.
 - Always analyse first putt distance in relation to approach distance. If approaches are from short range but first putts are long, proximity to the pin is the issue. If approaches are from long range but first putts are short, the player is handling genuine pressure well.
 - A 3-putt costs exactly 1 extra shot compared to a 2-putt. Four 3-putts cost 4 extra shots maximum. Never say 3-putts cost 2 shots each. If the first putt was from a long distance (30ft+), acknowledge that a 3-putt from that distance is understandable.
+- If there are 2 or more 3-putts in a round, do NOT describe putting as solid, consistent, or excellent. Acknowledge the 3-putts directly and assess whether they stem from approach distance or putting execution.
+
+SHORT GAME (shots_inside_50)
+- shots_inside_50 records how many shots the player took from inside 50 yards to reach the green on a hole where GIR was missed.
+- shots_inside_50 = 1 means a single chip or pitch reached the green. This is a successful execution.
+- shots_inside_50 > 1 means the player needed multiple attempts from inside 50 yards. This is a short game failure — they missed a chip or pitch and needed another attempt before reaching the green.
+- NEVER describe proximity control or short game as good, solid, or satisfactory if more than 20% of missed-GIR holes had shots_inside_50 > 1.
+- When sg_reason values are provided (e.g. "Distance control", "Chunked", "Bunker"), treat these as specific miss categories. Cite them by name — do not gloss over them with vague language.
+- A round with multiple holes where shots_inside_50 > 1 is a clear short game concern and must be identified as a primary area for improvement.
 
 SCRAMBLING
 - Scrambling measures whether the player saves par or better after missing a GIR, getting up and down from under 50 yards in 2 shots or fewer.
