@@ -521,7 +521,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   const aiBriefActive = COACH_TIERS[coachProfile?.coach_tier]?.aiFeatures === true && coachProfile?.ai_brief_enabled !== false;
 
   useEffect(() => {
-    if (!scheduleForm.studentId || !scheduleForm.date) {
+    if (!scheduleForm.studentId) {
       setBriefPreview(null);
       setScheduleContext(null);
       return;
@@ -592,7 +592,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
       if (!cancelled) setBriefLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [scheduleForm.studentId, scheduleForm.date]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scheduleForm.studentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveScheduledLesson() {
     if (!scheduleForm.studentId || !scheduleForm.date) return;
@@ -745,14 +745,14 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                     <input type="time" className="lesson-form-input" value={scheduleForm.time} onChange={e => updateSchedule("time", e.target.value)} />
                   </div>
                 </div>
-                {scheduleForm.studentId && scheduleForm.date && !aiBriefActive && (
+                {scheduleForm.studentId && !aiBriefActive && (
                   <div className="lesson-form-field">
                     <div className="lesson-ai-box" style={{background:"#FEFBF3"}}>
                       <div className="lesson-ai-label" style={{color:"var(--gold)"}}>✦ Pre-lesson AI analysis requires a paid plan</div>
                     </div>
                   </div>
                 )}
-                {scheduleForm.studentId && scheduleForm.date && aiBriefActive && (
+                {scheduleForm.studentId && aiBriefActive && (
                   <div className="lesson-form-field">
                     <div className="lesson-ai-box">
                       <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
