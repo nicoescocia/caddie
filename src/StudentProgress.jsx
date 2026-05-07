@@ -132,7 +132,7 @@ function StatCard({ label, beforeVal, afterVal, beforeLabel, afterLabel, lowerBe
 export default function StudentProgress({ user, profile, studentProfile, onBack, isCoachView }) {
   const displayProfile = studentProfile || profile;
   const studentId      = displayProfile?.id || user?.id;
-  const isPremium      = !isCoachView && !!profile?.is_premium;
+  const canSeePremium  = !isCoachView && !!(profile?.is_premium || profile?.role === 'admin');
 
   const [loading, setLoading]         = useState(true);
   const [rounds, setRounds]           = useState([]);
@@ -307,7 +307,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
 
   // Trigger AI once enrichment is done
   useEffect(() => {
-    if (!isPremium || isCoachView || !periodFullyEnriched || !statsA || !statsB || aiResult !== null || aiLoading) return;
+    if (!canSeePremium || isCoachView || !periodFullyEnriched || !statsA || !statsB || aiResult !== null || aiLoading) return;
     const periodIds = [...periodA, ...periodB].map(r => r.id).sort();
     generateAI(statsA, statsB, studentId, modeLabel, periodALabel, periodBLabel, whsThen, whsNow, periodIds, CACHE_TYPES[mode]);
   }, [periodFullyEnriched, !!statsA, !!statsB, mode, aiResult, aiLoading]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -440,7 +440,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
             </div>
           )}
           {/* AI headline */}
-          {isPremium && !isCoachView && (
+          {canSeePremium && !isCoachView && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
               {aiLoading ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
@@ -550,7 +550,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
             )}
 
             {/* AI narrative */}
-            {isPremium && !isCoachView && (
+            {canSeePremium && !isCoachView && (
               <div style={{ background: "white", border: "1.5px solid #E2DDD4", borderRadius: 16, padding: "16px 18px", marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#C9A84C", marginBottom: 10 }}>
                   ✦ AI Analysis
@@ -568,7 +568,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
               </div>
             )}
 
-            {!isPremium && !isCoachView && (
+            {!canSeePremium && !isCoachView && (
               <div style={{ position: "relative", marginBottom: 20 }}>
                 <div style={{ filter: "blur(4px)", pointerEvents: "none", background: "white", border: "1.5px solid #E2DDD4", borderRadius: 16, padding: "16px 18px" }}>
                   <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#C9A84C", marginBottom: 10 }}>✦ AI Analysis</div>
@@ -583,7 +583,7 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
             )}
 
             {/* Shareable card — premium students only */}
-            {isPremium && !isCoachView && (
+            {canSeePremium && !isCoachView && (
               <>
                 <div ref={shareCardRef} style={{
                   background: "white",

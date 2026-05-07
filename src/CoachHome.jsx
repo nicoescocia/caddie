@@ -837,6 +837,14 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                     <div className="student-meta">
                       {last ? `Last round: ${fmtDateShort(last)}` : "No rounds yet"}
                     </div>
+                    {onShowProgress && (
+                      <button
+                        onClick={e => { e.stopPropagation(); onShowProgress(s); }}
+                        style={{marginTop:4,background:"none",border:"none",padding:0,fontFamily:"'Outfit',sans-serif",fontSize:11,fontWeight:600,color:"var(--green)",cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:2}}
+                      >
+                        Progress report
+                      </button>
+                    )}
                   </div>
                   <div className="student-stats">
                     <div className="s-stat">
@@ -866,14 +874,6 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                       <div className="s-stat-lbl">This month</div>
                     </div>
                   </div>
-                  {onShowProgress && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onShowProgress(s); }}
-                      style={{flexShrink:0,background:"none",border:"1px solid var(--border)",borderRadius:8,padding:"5px 10px",fontFamily:"'Outfit',sans-serif",fontSize:11,fontWeight:600,color:"var(--text-dim)",cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}
-                    >
-                      Progress
-                    </button>
-                  )}
                 </div>
               );
             })}

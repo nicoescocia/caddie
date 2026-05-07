@@ -22,6 +22,8 @@ function App() {
   const [onboardingComplete, setOnboardingComplete] = useState(null)
   const [onboardingCompleteCoach, setOnboardingCompleteCoach] = useState(null)
 
+  const [userProfile, setUserProfile]     = useState(null)
+
   const [adminView, setAdminView]         = useState('admin')
   const [studentScreen, setStudentScreen] = useState('dashboard')
   const [editRound, setEditRound]         = useState(null)
@@ -45,8 +47,9 @@ function App() {
 
   async function fetchAndSetRole(userId) {
     const { data } = await supabase
-      .from('profiles').select('role, first_name, last_name, official_handicap, onboarding_complete, onboarding_complete_coach').eq('id', userId).single()
+      .from('profiles').select('role, first_name, last_name, official_handicap, is_premium, onboarding_complete, onboarding_complete_coach').eq('id', userId).single()
     setRole(data?.role ?? null)
+    setUserProfile(data || null)
     setOnboardingComplete(data?.onboarding_complete ?? false)
     setOnboardingCompleteCoach(data?.onboarding_complete_coach ?? false)
     return data?.role ?? null
@@ -176,6 +179,7 @@ function App() {
         return (
           <StudentProgress
             user={user}
+            profile={userProfile}
             onBack={() => setStudentScreen('dashboard')}
           />
         )
@@ -339,6 +343,7 @@ function App() {
     return (
       <StudentProgress
         user={user}
+        profile={userProfile}
         onBack={() => setStudentScreen('dashboard')}
       />
     )
