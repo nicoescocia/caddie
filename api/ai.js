@@ -100,6 +100,28 @@ TONE ON BAD ROUNDS
 - When a round is significantly worse than the player's recent average (more than 0.5 shots per hole worse), you MUST open with a single short dry humorous sentence before continuing with the analysis. This is not optional. Keep it to one sentence only, then move straight into the analysis. On good rounds or average rounds, keep the tone straightforward and encouraging.
 - The opener must be original, self-deprecating, and specific to something in this round's data — a stat, a pattern, a particular hole count, a penalty. It must never be a generic idiom or stock phrase. Banned phrases (and anything structurally similar): "The course won today", "Golf had other ideas", "Some days the course wins", "Not one for the highlight reel". Instead vary the form: a wry deadpan stat callout ("Eleven putts on the back nine is a bold strategy"), a backhanded compliment to the course ("The rough clearly made a strong case for itself today"), or a self-deprecating observation grounded in the actual numbers. If you cannot make it specific to this round, skip the opener entirely rather than reaching for a cliché.`;
 
+const PROGRESS_REPORT_SYSTEM_PROMPT = `You are an expert golf coach writing a progress report for a student comparing two periods of play. Be encouraging and specific. Write in second person ("you have improved", "your scoring"). Keep language plain and jargon-free. Return valid JSON only — no other text before or after the object. Use exactly these two keys:
+- "headline": one encouraging sentence (max 20 words) summarising the overall trajectory
+- "narrative": 2–3 sentences covering (1) the biggest area of improvement with the specific stat, (2) the biggest remaining opportunity, and (3) a forward-looking observation about what continued work could achieve`;
+
+function buildProgressReportPrompt({ modeLabel, periodALabel, periodBLabel, studentFirstName, periodA, periodB }) {
+  const name = studentFirstName || "The student";
+  let p = `Progress report for ${name} — ${modeLabel}.\n\n`;
+  function fmtPeriod(label, d) {
+    let s = `${label} (${d.roundCount} round${d.roundCount !== 1 ? "s" : ""}):\n`;
+    if (d.avgVsPar != null) s += `  Score avg vs par: ${d.avgVsPar >= 0 ? "+" : ""}${d.avgVsPar}/hole\n`;
+    if (d.avgPutts != null) s += `  Putts/round: ${d.avgPutts}\n`;
+    if (d.girPct != null)   s += `  GIR: ${d.girPct}%\n`;
+    if (d.fwPct != null)    s += `  Fairways: ${d.fwPct}%\n`;
+    if (d.whsIndex != null) s += `  WHS index: ${d.whsIndex}\n`;
+    return s;
+  }
+  p += fmtPeriod(periodALabel, periodA);
+  p += "\n";
+  p += fmtPeriod(periodBLabel, periodB);
+  return p;
+}
+
 const PRE_LESSON_SYSTEM_PROMPT = `You are an assistant helping a golf coach prepare for a lesson. Write in third person about the student. Be concise, specific, and professional — no preamble, no intro sentence. Return the brief using exactly these markdown section headers (include only sections where there is relevant data to report):
 
 ## Recent form
@@ -139,13 +161,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const isPreLesson = req.body.type === "pre_lesson_brief";
-    const systemPrompt = isPreLesson ? PRE_LESSON_SYSTEM_PROMPT : SYSTEM_PROMPT;
+    const isPreLesson     = req.body.type === "pre_lesson_brief";
+    const isProgressReport = req.body.type === "progress_report";
+    const systemPrompt = isPreLesson ? PRE_LESSON_SYSTEM_PROMPT
+      : isProgressReport ? PROGRESS_REPORT_SYSTEM_PROMPT
+      : SYSTEM_PROMPT;
     const requestBody = isPreLesson
       ? {
           model: "claude-sonnet-4-20250514",
           max_tokens: 600,
           messages: [{ role: "user", content: buildPreLessonPrompt(req.body) }],
+        }
+      : isProgressReport
+      ? {
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 400,
+          messages: [{ role: "user", content: buildProgressReportPrompt(req.body) }],
         }
       : { ...req.body };
 

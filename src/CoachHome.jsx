@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import StudentProgress from "./StudentProgress";
 
 const HANDICAP_BENCHMARKS = {
   0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
@@ -480,7 +481,7 @@ function RosterChart({ students, coachId }) {
 }
 
 // ── STUDENT LIST (coach home) ──
-function StudentList({ coachProfile, user, students, studentStats, selectedStudent, setStudentLessons, onSelectStudent, onSignOut, onProfile }) {
+function StudentList({ coachProfile, user, students, studentStats, selectedStudent, setStudentLessons, onSelectStudent, onShowProgress, onSignOut, onProfile }) {
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -865,6 +866,14 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                       <div className="s-stat-lbl">This month</div>
                     </div>
                   </div>
+                  {onShowProgress && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onShowProgress(s); }}
+                      style={{flexShrink:0,background:"none",border:"1px solid var(--border)",borderRadius:8,padding:"5px 10px",fontFamily:"'Outfit',sans-serif",fontSize:11,fontWeight:600,color:"var(--text-dim)",cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}
+                    >
+                      Progress
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -1925,6 +1934,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
   const [studentLessons, setStudentLessons] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [loadingRounds, setLoadingRounds] = useState(initialScreen === "history");
+  const [progressStudent, setProgressStudent] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -2053,6 +2063,17 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
     );
   }
 
+  if (progressStudent) {
+    return (
+      <StudentProgress
+        user={user}
+        studentProfile={progressStudent}
+        onBack={() => setProgressStudent(null)}
+        isCoachView={true}
+      />
+    );
+  }
+
   if (screen === "history" && selectedStudent) {
     if (loadingRounds) {
       return (
@@ -2094,6 +2115,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       selectedStudent={selectedStudent}
       setStudentLessons={setStudentLessons}
       onSelectStudent={handleSelectStudent}
+      onShowProgress={setProgressStudent}
       onSignOut={onSignOut}
       onProfile={onProfile}
     />

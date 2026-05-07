@@ -13,6 +13,7 @@ import FeedbackButton from './FeedbackButton'
 import StudentOnboarding from './StudentOnboarding'
 import CoachOnboarding from './CoachOnboarding'
 import CoachDirectory from './CoachDirectory'
+import StudentProgress from './StudentProgress'
 
 function App() {
   const [user, setUser]     = useState(null)
@@ -171,6 +172,14 @@ function App() {
       if (studentScreen === 'coachDirectory') {
         return <CoachDirectory onBack={() => setStudentScreen('dashboard')} user={user} onCoachLinked={() => setStudentScreen('dashboard')} />
       }
+      if (studentScreen === 'progress') {
+        return (
+          <StudentProgress
+            user={user}
+            onBack={() => setStudentScreen('dashboard')}
+          />
+        )
+      }
       return (
         <>
           <StudentDashboard
@@ -182,6 +191,7 @@ function App() {
             onProfile={() => setStudentScreen('profile')}
             onSettings={() => setStudentScreen('settings')}
             onFindCoach={() => setStudentScreen('coachDirectory')}
+            onProgress={() => setStudentScreen('progress')}
           />
           <FeedbackButton userId={user.id} page="dashboard" />
         </>
@@ -325,6 +335,14 @@ function App() {
   if (studentScreen === 'coachDirectory') {
     return <CoachDirectory onBack={() => setStudentScreen('dashboard')} user={user} onCoachLinked={() => setStudentScreen('dashboard')} />
   }
+  if (studentScreen === 'progress') {
+    return (
+      <StudentProgress
+        user={user}
+        onBack={() => setStudentScreen('dashboard')}
+      />
+    )
+  }
   return (
     <>
       <StudentDashboard
@@ -335,6 +353,7 @@ function App() {
         onProfile={() => setStudentScreen('profile')}
         onSettings={() => setStudentScreen('settings')}
         onFindCoach={() => setStudentScreen('coachDirectory')}
+        onProgress={() => setStudentScreen('progress')}
       />
       <FeedbackButton userId={user.id} page="dashboard" />
     </>

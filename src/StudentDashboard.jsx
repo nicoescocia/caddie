@@ -501,7 +501,7 @@ function StudentAnalytics({ rounds, analyticsHolesMap, isPremium }) {
   );
 }
 
-export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings, onFindCoach }) {
+export default function StudentDashboard({ user, onNewRound, onEditRound, onBackToAdmin, onProfile, onSettings, onFindCoach, onProgress }) {
   const [rounds, setRounds]   = useState([]);
   const [lessons, setLessons] = useState([]);
   const [expandedBriefs, setExpandedBriefs] = useState(new Set());
@@ -1080,6 +1080,15 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
         <button className="new-round-btn" onClick={onNewRound}>
           ⛳ Start new round
         </button>
+
+        {onProgress && (
+          <button
+            onClick={onProgress}
+            style={{ width: "100%", background: "none", border: "1.5px solid var(--border)", borderRadius: 14, padding: "13px", fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-mid)", cursor: "pointer", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20 }}
+          >
+            📊 My Progress
+          </button>
+        )}
 
         {(rounds.length > 0 || lessons.length > 0) && (
           <>
