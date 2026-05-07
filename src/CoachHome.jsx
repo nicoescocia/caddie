@@ -497,12 +497,20 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
 
   useEffect(() => {
     (async () => {
+      const today = new Date().toISOString().split("T")[0];
+      // Mark any past upcoming lessons as completed (fire-and-forget)
+      supabase.from("lessons")
+        .update({ status: "completed" })
+        .eq("coach_id", user.id)
+        .eq("status", "upcoming")
+        .lt("lesson_date", today)
+        .then(() => {});
       const { data } = await supabase
         .from("lessons")
         .select("*")
         .eq("coach_id", user.id)
         .eq("status", "upcoming")
-        .gte("lesson_date", new Date().toISOString().split("T")[0])
+        .gte("lesson_date", today)
         .order("lesson_date", { ascending: true });
       setUpcomingLessons(data || []);
     })();

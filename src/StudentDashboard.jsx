@@ -1094,7 +1094,8 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                 const coachFirst = coach ? coach.first_name : null;
                 const lessonDate = new Date(l.lesson_date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"});
                 const fmtTime = t => { if (!t) return null; const [h,m] = t.split(":").map(Number); return `${h%12||12}:${String(m).padStart(2,"0")}${h>=12?"pm":"am"}`; };
-                if (l.status === "upcoming") {
+                const today = new Date().toISOString().split("T")[0];
+                if (l.status === "upcoming" && l.lesson_date >= today) {
                   const briefExpanded = expandedBriefs.has(l.id);
                   return (
                     <div key={"l-"+l.id} style={{background:"#FEFBF3",border:"1.5px solid var(--gold)",borderLeft:"4px solid var(--gold)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
