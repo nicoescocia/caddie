@@ -665,7 +665,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
 
       const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
       const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
-      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be honest and constructive — do not lead with positives if the overall round was poor. 4–5 sentences, no preamble. You must follow these rules:\n1. Always start by contextualising the overall score against the student's recent form. If today was significantly worse than their average, say so directly.\n2. Call out any hole standouts by hole number and score — both struggles and highlights. Only reference holes that appear explicitly in the hole standouts data below. Do not reference or assign scores to any hole not listed there.\n3. Identify the single biggest factor that most impacted today's score — use the data to determine this, do not default to fairways or GIR.\n4. End with one specific, actionable focus area.\n5. Never describe a stat as good or solid without first checking it against the benchmark and recent form data provided.\n6. You have been given the exact score for every hole listed. Do not infer, estimate, or describe any hole score that differs from the data provided. If you reference a specific hole, the score you state must exactly match the score in the data. Do not describe a hole as a bogey if the data shows a par, and vice versa.\n\n`;
+      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be honest and constructive — do not lead with positives if the overall round was poor. 4–5 sentences, no preamble. You must follow these rules:\n1. Always start by contextualising the overall score against the student's recent form. If today was significantly worse than their average, say so directly.\n2. Call out any hole standouts by hole number and score — both struggles and highlights. Only reference holes that appear explicitly in the hole standouts data below. Do not reference or assign scores to any hole not listed there.\n3. Identify the single biggest factor that most impacted today's score — use the data to determine this, do not default to fairways or GIR.\n4. End with one specific, actionable focus area.\n5. Never describe a stat as good or solid without first checking it against the benchmark and recent form data provided.\n6. You have been given the exact score for every hole listed. Do not infer, estimate, or describe any hole score that differs from the data provided. If you reference a specific hole, the score you state must exactly match the score in the data. Do not describe a hole as a bogey if the data shows a par, and vice versa.\n7. Each hole standout line includes a pre-calculated score label in brackets (par, bogey, birdie, etc.). Use only that label. Do not recalculate or infer the label from the raw numbers.\n\n`;
       prompt += `Course: ${courseName}\nScore: ${totalScore} (${diff >= 0 ? "+" : ""}${diff} vs par)\n`;
       prompt += `GIR: ${girCount}/${attempted.length} (${girPct}%)\n`;
       if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
@@ -754,22 +754,32 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
           }
         }
 
+        const scoreLabel = (score, par) => {
+          const d = score - par;
+          if (d <= -2) return "eagle";
+          if (d === -1) return "birdie";
+          if (d === 0) return "par";
+          if (d === 1) return "bogey";
+          if (d === 2) return "double bogey";
+          return "triple bogey or worse";
+        };
         const hasStandouts = ctx.struggles.length > 0 || ctx.strengths.length > 0 || ctx.recurringPickups.length > 0;
         if (hasStandouts) {
           prompt += `\nHole standouts today (this course):\n`;
+          prompt += `(The score label in brackets has been calculated from the data. Use only these labels when describing hole results. Do not recalculate or infer.)\n`;
           const listedHoles = new Set();
           for (const s of ctx.struggles) {
             listedHoles.add(s.hole);
             const pickupNote = s.pickups > 0 ? `, picked up ${s.pickups} of ${s.total} rounds` : "";
-            prompt += `Hole ${s.hole} (par ${s.par}): scored ${s.todayScore} today, personal avg ${s.avgScore} over ${s.count} rounds here${pickupNote}\n`;
+            prompt += `Hole ${s.hole}: Par ${s.par}, Score ${s.todayScore} (${scoreLabel(s.todayScore, s.par)}), personal avg ${s.avgScore} over ${s.count} rounds here${pickupNote}\n`;
           }
           for (const s of ctx.strengths) {
             listedHoles.add(s.hole);
-            prompt += `Hole ${s.hole} (par ${s.par}): scored ${s.todayScore} today, personal avg ${s.avgScore} over ${s.count} rounds here\n`;
+            prompt += `Hole ${s.hole}: Par ${s.par}, Score ${s.todayScore} (${scoreLabel(s.todayScore, s.par)}), personal avg ${s.avgScore} over ${s.count} rounds here\n`;
           }
           for (const p of ctx.recurringPickups) {
             if (!listedHoles.has(p.hole)) {
-              prompt += `Hole ${p.hole} (par ${p.par}): recurring pick-up hole (${p.pickups} of last ${p.total} rounds)\n`;
+              prompt += `Hole ${p.hole}: Par ${p.par}, recurring pick-up hole (${p.pickups} of last ${p.total} rounds)\n`;
             }
           }
         }
