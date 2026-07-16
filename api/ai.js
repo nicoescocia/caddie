@@ -168,13 +168,13 @@ export default async function handler(req, res) {
       : SYSTEM_PROMPT;
     const requestBody = isPreLesson
       ? {
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 600,
           messages: [{ role: "user", content: buildPreLessonPrompt(req.body) }],
         }
       : isProgressReport
       ? {
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 400,
           messages: [{ role: "user", content: buildProgressReportPrompt(req.body) }],
         }
@@ -203,6 +203,7 @@ export default async function handler(req, res) {
       }
 
       if (response.status !== 529) {
+        console.error("Anthropic API error:", response.status, JSON.stringify(data));
         return res.status(response.status).json(data);
       }
 
