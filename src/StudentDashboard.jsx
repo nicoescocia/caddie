@@ -137,6 +137,11 @@ function getCoursePar(round) {
 
 function prorateHandicap(round, holeStatsMap) {
   if (!round.handicap) return round.handicap;
+  // Partial rounds (holes played not a standard 9 or 18): prorate the full
+  // course handicap across the holes actually played.
+  if (round.holes_played && round.holes_played !== 9 && round.holes_played !== 18) {
+    return Math.round(round.handicap * round.holes_played / 18);
+  }
   const holes = holeStatsMap[round.id];
   if (!holes || !holes.length) return round.handicap;
   let shots = 0;

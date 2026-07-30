@@ -612,8 +612,13 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
           holeMap[h.hole_number].push(h);
         }
 
+        // Only surface standouts for holes actually played in the current round.
+        // Partial rounds must never reference holes not on today's card.
+        const playedHoleNums = new Set(loggedHoles.map(h => h.n));
+
         for (const [holeNumStr, history] of Object.entries(holeMap)) {
           const holeNum = parseInt(holeNumStr);
+          if (!playedHoleNums.has(holeNum)) continue;
           const total = history.length;
           if (total < 3) continue;
 
@@ -665,7 +670,7 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
 
       const girPct = attempted.length ? Math.round(girCount / attempted.length * 100) : 0;
       const fwPct  = fwHoles.length ? Math.round(fwHit / fwHoles.length * 100) : null;
-      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be honest and constructive — do not lead with positives if the overall round was poor. 4–5 sentences, no preamble. You must follow these rules:\n1. Always start by contextualising the overall score against the student's recent form. If today was significantly worse than their average, say so directly.\n2. Call out any hole standouts by hole number and score — both struggles and highlights. Only reference holes that appear explicitly in the hole standouts data below. Do not reference or assign scores to any hole not listed there.\n3. Identify the single biggest factor that most impacted today's score — use the data to determine this, do not default to fairways or GIR.\n4. End with one specific, actionable focus area.\n5. Never describe a stat as good or solid without first checking it against the benchmark and recent form data provided.\n6. You have been given the exact score for every hole listed. Do not infer, estimate, or describe any hole score that differs from the data provided. If you reference a specific hole, the score you state must exactly match the score in the data. Do not describe a hole as a bogey if the data shows a par, and vice versa.\n7. Each hole standout line includes a pre-calculated score label in brackets (par, bogey, birdie, etc.). Use only that label. Do not recalculate or infer the label from the raw numbers.\n\n`;
+      let prompt = `You are a golf coach reviewing a student's round. Write directly to the student in second person ("you", "your"). Be honest and constructive — do not lead with positives if the overall round was poor. 4–5 sentences, no preamble. You must follow these rules:\n1. Always start by contextualising the overall score against the student's recent form. If today was significantly worse than their average, say so directly.\n2. Call out any hole standouts by hole number and score — both struggles and highlights. Only reference holes that appear explicitly in the hole standouts data below. Do not reference or assign scores to any hole not listed there.\n3. Identify the single biggest factor that most impacted today's score — use the data to determine this, do not default to fairways or GIR.\n4. End with one specific, actionable focus area.\n5. Never describe a stat as good or solid without first checking it against the benchmark and recent form data provided.\n6. You have been given the exact score for every hole listed. Do not infer, estimate, or describe any hole score that differs from the data provided. If you reference a specific hole, the score you state must exactly match the score in the data. Do not describe a hole as a bogey if the data shows a par, and vice versa.\n7. Each hole standout line includes a pre-calculated score label in brackets (par, bogey, birdie, etc.). Use only that label. Do not recalculate or infer the label from the raw numbers.\n8. Only reference holes that appear in the current round data. Do not mention or reference any hole not listed in this round's hole-by-hole data.\n\n`;
       prompt += `Course: ${courseName}\nScore: ${totalScore} (${diff >= 0 ? "+" : ""}${diff} vs par)\n`;
       prompt += `GIR: ${girCount}/${attempted.length} (${girPct}%)\n`;
       if (fwHoles.length) prompt += `Fairways: ${fwHit}/${fwHoles.length}${fwPct !== null ? ` (${fwPct}%)` : ""}\n`;
