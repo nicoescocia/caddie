@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabaseClient";
+import renderMarkdown from "./renderMarkdown";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -321,6 +322,14 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const totalPar   = holes.reduce((s, h) => s + (h.par || 0), 0);
   const diff       = totalScore - totalPar;
 
+  // Net uses a prorated course handicap for partial rounds (holes played not a
+  // standard 9 or 18): prorated = round(course_handicap * holes_played / 18).
+  const proratedHandicap = round.handicap == null
+    ? null
+    : (round.holes_played && round.holes_played !== 9 && round.holes_played !== 18)
+      ? Math.round(round.handicap * round.holes_played / 18)
+      : round.handicap;
+
   // DNA holes excluded from all stats; picked_up holes count for GIR (started but abandoned)
   const attempted  = holes.filter(h => !h.dna);
   const p1s    = holes.filter(h => h.putt1).map(h => parseFt(h.putt1));
@@ -418,7 +427,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             <div className="ab-par">{diff >= 0 ? "+" : ""}{diff} vs par</div>
             {round.handicap != null && (
               <div style={{fontSize:12,color:"rgba(255,255,255,0.45)",marginTop:2}}>
-                Net {totalScore - round.handicap} · Course Hcp {Number(round.handicap).toFixed(1)}
+                Net {totalScore - proratedHandicap} · Course Hcp {Number(round.handicap).toFixed(1)}
               </div>
             )}
           </div>
@@ -667,7 +676,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             <div className="ai-box">
               <div className="ai-label">✦ AI Coach Analysis</div>
               {aiPutting
-                ? <div className="ai-text">{aiPutting}</div>
+                ? <div className="ai-text">{renderMarkdown(aiPutting)}</div>
                 : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns…</div>}
             </div>
           </div>
@@ -760,7 +769,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
             <div className="ai-box">
               <div className="ai-label">✦ AI Coach Analysis</div>
               {aiSg
-                ? <div className="ai-text">{aiSg}</div>
+                ? <div className="ai-text">{renderMarkdown(aiSg)}</div>
                 : <div className="ai-loading"><div className="ai-spinner" />Analysing short game…</div>}
             </div>
           </div>

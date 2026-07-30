@@ -442,14 +442,14 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
           {/* AI headline */}
           {canSeePremium && !isCoachView && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-              {aiLoading ? (
+              {aiResult?.headline ? (
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.55, fontStyle: "italic" }}>
+                  "{aiResult.headline}"
+                </div>
+              ) : (aiLoading || !aiResult) ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
                   <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "#C9A84C", borderRadius: "50%", animation: "spin .7s linear infinite", flexShrink: 0 }} />
                   Generating insight…
-                </div>
-              ) : aiResult?.headline ? (
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.55, fontStyle: "italic" }}>
-                  "{aiResult.headline}"
                 </div>
               ) : null}
             </div>
@@ -555,16 +555,16 @@ export default function StudentProgress({ user, profile, studentProfile, onBack,
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#C9A84C", marginBottom: 10 }}>
                   ✦ AI Analysis
                 </div>
-                {aiLoading ? (
+                {aiResult?.narrative ? (
+                  <div style={{ fontSize: 14, color: "#333", lineHeight: 1.65 }}>{aiResult.narrative}</div>
+                ) : (aiLoading || !aiResult) ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#999", fontSize: 13 }}>
                     <div style={{ width: 16, height: 16, border: "2px solid #E2DDD4", borderTopColor: "#1A6B4A", borderRadius: "50%", animation: "spin .7s linear infinite", flexShrink: 0 }} />
                     Generating analysis…
                   </div>
-                ) : aiResult?.narrative ? (
-                  <div style={{ fontSize: 14, color: "#333", lineHeight: 1.65 }}>{aiResult.narrative}</div>
-                ) : aiResult ? (
-                  <div style={{ fontSize: 14, color: "#999" }}>Analysis unavailable.</div>
-                ) : null}
+                ) : (
+                  <div style={{ fontSize: 14, color: "#666", lineHeight: 1.6 }}>We couldn't generate a written analysis this time — your stats above tell the story.</div>
+                )}
               </div>
             )}
 

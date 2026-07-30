@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import StudentProgress from "./StudentProgress";
+import renderMarkdown from "./renderMarkdown";
 
 const HANDICAP_BENCHMARKS = {
   0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
@@ -468,31 +469,46 @@ function RosterChart({ students, coachId }) {
           </text>
         ))}
 
-        {/* Student polylines + circles */}
+        {/* Student segments + circles */}
         {chartData.map(({ student, color, points }) => {
-          const d = points.map((p, i) =>
-            `${i === 0 ? "M" : "L"} ${toX(p.date).toFixed(1)} ${toY(p.hcp).toFixed(1)}`
-          ).join(" ");
           const lessonDates = lessonMarkersByStudent[student.id] || new Set();
+          const showTip = (p, cx, cy, flip) =>
+            setTooltip({ cx, cy, name: `${student.first_name} ${student.last_name}`, date: p.date, hcp: p.hcp, flip });
           return (
             <g key={student.id}>
-              <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              {/* Line segments — dashed where >30 days elapsed between points (inactivity) */}
+              {points.slice(1).map((p, i) => {
+                const prev = points[i];
+                const gap = new Date(p.date + "T00:00:00").getTime() - new Date(prev.date + "T00:00:00").getTime();
+                return (
+                  <line
+                    key={"seg-" + i}
+                    x1={toX(prev.date)} y1={toY(prev.hcp)}
+                    x2={toX(p.date)}    y2={toY(p.hcp)}
+                    stroke={color} strokeWidth={2} strokeLinecap="round"
+                    strokeDasharray={gap > THIRTY_DAYS_MS ? "3 4" : undefined}
+                  />
+                );
+              })}
               {points.map((p, i) => {
                 const cx = toX(p.date);
                 const cy = toY(p.hcp);
                 const flip = cx > PAD_L + chartW * 0.65;
                 const isLesson = lessonDates.has(p.date);
+                const isLast = i === points.length - 1;
+                const r = isLast ? 5 : 3; // emphasise current status
                 return (
                   <g key={i}>
                     <circle
-                      cx={cx} cy={cy} r={3} fill={color}
+                      cx={cx} cy={cy} r={r} fill={color}
                       style={{cursor:"pointer"}}
-                      onMouseEnter={() => setTooltip({ cx, cy, name: `${student.first_name} ${student.last_name}`, date: p.date, hcp: p.hcp, flip })}
+                      onMouseEnter={() => showTip(p, cx, cy, flip)}
                       onMouseLeave={() => setTooltip(null)}
+                      onClick={() => showTip(p, cx, cy, flip)}
                     />
                     {isLesson && (
                       <>
-                        <circle cx={cx} cy={cy} r={3} fill="white" stroke={color} strokeWidth={2} style={{pointerEvents:"none"}} />
+                        <circle cx={cx} cy={cy} r={r} fill="white" stroke={color} strokeWidth={2} style={{pointerEvents:"none"}} />
                         <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={color} fontWeight="700" style={{pointerEvents:"none"}}>L</text>
                       </>
                     )}
@@ -939,7 +955,7 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                     <button className="next-btn" onClick={() => onSelectStudent(nlStudent)}>Open student →</button>
                   </div>
                   {nextView === "full" && nextLesson.ai_brief && (
-                    <div className="next-expand">{nextLesson.ai_brief}</div>
+                    <div className="next-expand">{renderMarkdown(nextLesson.ai_brief)}</div>
                   )}
                   {nextView === "notes" && (
                     <div className="next-expand">{nlPrev?.notes ? nlPrev.notes : "No notes recorded from a previous session yet."}</div>
@@ -1892,7 +1908,7 @@ OUTPUT FORMAT
               <div className="ai-box">
                 <div className="ai-label">✦ Multi-round pattern analysis — last {aiRoundsCount} rounds</div>
                 {aiPatterns
-                  ? <div className="ai-text">{aiPatterns}</div>
+                  ? <div className="ai-text">{renderMarkdown(aiPatterns)}</div>
                   : <div className="ai-loading"><div className="ai-spinner" />Analysing patterns across rounds…</div>}
               </div>
             )}
@@ -1992,7 +2008,7 @@ OUTPUT FORMAT
                           return (
                             <div className="lesson-ai-box">
                               <div className="lesson-ai-label">✦ Pre-lesson analysis</div>
-                              <div className="lesson-ai-text">{l.ai_brief}</div>
+                              <div className="lesson-ai-text">{renderMarkdown(l.ai_brief)}</div>
                             </div>
                           );
                         })()}
