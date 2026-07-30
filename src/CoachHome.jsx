@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import StudentProgress from "./StudentProgress";
 
@@ -200,8 +200,68 @@ const css = `
   .ai-loading { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-dim); }
   .ai-spinner { width:14px; height:14px; border:2px solid #DDD; border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
 
+  /* ── COACH HOME (reordered) ── */
+  .header-icon-btn { background:none; border:1px solid rgba(255,255,255,0.2); color:rgba(255,255,255,0.85); border-radius:8px; padding:5px 12px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:all .2s; }
+  .header-icon-btn:hover { border-color:rgba(255,255,255,0.5); color:white; }
+
+  /* Next lesson anchor card */
+  .next-card { background:white; border:2px solid var(--green); border-radius:18px; padding:18px 20px; margin-bottom:20px; box-shadow:var(--shadow); }
+  .next-card-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--green); margin-bottom:12px; }
+  .next-card-top { display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+  .next-avatar { width:46px; height:46px; border-radius:50%; background:var(--green-dark); display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:17px; color:var(--gold); flex-shrink:0; }
+  .next-info { flex:1; min-width:0; }
+  .next-name { font-size:17px; font-weight:700; color:var(--text); }
+  .next-sub { font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .next-whs { text-align:right; flex-shrink:0; }
+  .next-whs-val { font-family:'Playfair Display',serif; font-size:22px; color:var(--text); line-height:1; }
+  .next-whs-lbl { font-size:10px; color:var(--text-dim); margin-top:2px; text-transform:uppercase; letter-spacing:.06em; }
+  .next-rounds-since { display:inline-block; background:var(--bg); border-radius:8px; padding:4px 10px; font-size:12px; font-weight:600; color:var(--text-mid); margin-bottom:12px; }
+  .brief-lines { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .brief-line { display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--text-mid); line-height:1.4; }
+  .brief-dir { flex-shrink:0; font-size:13px; font-weight:800; width:14px; text-align:center; }
+  .brief-dir.improving { color:var(--green-mid); }
+  .brief-dir.watch { color:var(--gold); }
+  .brief-dir.declining { color:var(--red); }
+  .next-btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .next-btn { background:none; border:1.5px solid var(--border); border-radius:9px; padding:7px 14px; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:var(--text-mid); cursor:pointer; transition:all .15s; }
+  .next-btn:hover, .next-btn.active { border-color:var(--green); color:var(--green); }
+  .next-expand { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:13px; color:var(--text-mid); line-height:1.7; white-space:pre-line; }
+  .next-empty { text-align:center; padding:4px 0; }
+  .next-empty-text { font-size:13px; color:var(--text-mid); margin-bottom:14px; line-height:1.6; }
+
+  /* Needs attention */
+  .na-card { border-radius:14px; padding:13px 16px; margin-bottom:10px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .na-card.warning { background:#FCF3F0; border:1.5px solid rgba(201,64,64,0.35); }
+  .na-card.accent { background:linear-gradient(135deg,#FEFBF3,#FFF8E8); border:1.5px solid rgba(201,168,76,0.45); }
+  .na-body { flex:1; min-width:0; }
+  .na-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:3px; }
+  .na-sub { font-size:12px; color:var(--text-mid); line-height:1.5; }
+  .na-dismiss { background:none; border:none; color:var(--text-dim); font-size:18px; line-height:1; cursor:pointer; padding:0 2px; flex-shrink:0; }
+  .na-dismiss:hover { color:var(--text); }
+
+  /* Compact student rows */
+  .roster-search { width:100%; border:1.5px solid var(--border); border-radius:10px; padding:9px 12px; font-family:'Outfit',sans-serif; font-size:13px; color:var(--text); background:white; margin-bottom:10px; }
+  .roster-search:focus { outline:none; border-color:var(--green-light); }
+  .compact-row { background:white; border:1.5px solid var(--border); border-radius:12px; padding:11px 14px; margin-bottom:8px; cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:12px; }
+  .compact-row:hover { border-color:var(--green-light); box-shadow:var(--shadow); }
+  .compact-avatar { width:38px; height:38px; border-radius:50%; background:var(--green-dark); display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:14px; color:var(--gold); flex-shrink:0; }
+  .compact-info { flex:1; min-width:0; }
+  .compact-name { font-size:14px; font-weight:600; color:var(--text); }
+  .compact-meta { font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .compact-meta .progress-link { color:var(--green); cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+  .compact-whs { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .compact-whs-val { font-family:'Playfair Display',serif; font-size:18px; color:var(--text); line-height:1; text-align:right; }
+  .compact-whs-lbl { font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; text-align:right; margin-top:1px; }
+  .compact-trend { font-size:11px; font-weight:700; }
+
+  /* Expandable trajectories */
+  .expand-row { display:flex; align-items:center; justify-content:space-between; background:white; border:1.5px solid var(--border); border-radius:12px; padding:13px 16px; cursor:pointer; margin-bottom:16px; transition:all .15s; }
+  .expand-row:hover { border-color:var(--green-light); }
+  .expand-row-title { font-size:13px; font-weight:600; color:var(--text); }
+  .expand-row-chevron { font-size:13px; color:var(--text-dim); transition:transform .2s; }
+  .expand-row-chevron.open { transform:rotate(180deg); }
+
   @media(max-width:520px) {
-    .student-stats { display:none; }
     .sh-stats { display:none; }
     .round-stats-row { grid-template-columns:repeat(3,1fr); }
   }
@@ -241,10 +301,6 @@ function initials(first, last) {
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-}
-
-function fmtDateShort(iso) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function fmtDateWeekday(iso) {
@@ -486,6 +542,38 @@ function RosterChart({ students, coachId }) {
 }
 
 // ── STUDENT LIST (coach home) ──
+// Turn a markdown pre-lesson brief (## sections + bullets) into up to 3 scannable
+// headline lines, each tagged with a direction indicator. The "Recent form" line
+// takes its direction from the student's actual WHS trend when known.
+function briefHeadlines(brief, recentDir) {
+  if (!brief) return [];
+  const sections = {};
+  let cur = null;
+  brief.split("\n").forEach(raw => {
+    const h = raw.match(/^#{1,6}\s+(.*)/);
+    if (h) { cur = h[1].trim().toLowerCase(); sections[cur] = sections[cur] || []; return; }
+    const b = raw.replace(/^[-*•]\s+/, "").trim();
+    if (cur && b) sections[cur].push(b);
+  });
+  const first = name => (sections[name] && sections[name][0]) || null;
+  const out = [];
+  const rf = first("recent form");
+  if (rf) out.push({ text: rf, dir: recentDir || "watch" });
+  const af = first("areas to focus on");
+  if (af) out.push({ text: af, dir: "watch" });
+  const wo = first("watch out for");
+  if (wo) out.push({ text: wo, dir: "declining" });
+  if (out.length < 3) {
+    const sf = first("suggested session focus");
+    if (sf) out.push({ text: sf, dir: "watch" });
+  }
+  if (out.length === 0) {
+    brief.split("\n").map(l => l.replace(/^[-*•#]+\s*/, "").trim()).filter(Boolean)
+      .slice(0, 3).forEach(t => out.push({ text: t, dir: "watch" }));
+  }
+  return out.slice(0, 3);
+}
+
 function StudentList({ coachProfile, user, students, studentStats, selectedStudent, setStudentLessons, onSelectStudent, onShowProgress, onSignOut, onProfile }) {
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -500,25 +588,33 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   const [briefLoading, setBriefLoading]   = useState(false);
   const [scheduleContext, setScheduleContext] = useState(null);
   const [upcomingLessons, setUpcomingLessons] = useState([]);
+  const [completedLessons, setCompletedLessons] = useState([]);
+  const [showInvite, setShowInvite] = useState(false);
+  const [showChart, setShowChart]   = useState(false);
+  const [dismissed, setDismissed]   = useState(new Set());
+  const [search, setSearch]         = useState("");
+  const [nextView, setNextView]     = useState(null); // null | "full" | "notes"
+  const scheduleRef = useRef(null);
 
   useEffect(() => {
     (async () => {
       const today = new Date().toISOString().split("T")[0];
-      // Mark any past upcoming lessons as completed (fire-and-forget)
-      supabase.from("lessons")
+      // Mark any past upcoming lessons as completed before reading them back.
+      await supabase.from("lessons")
         .update({ status: "completed" })
         .eq("coach_id", user.id)
         .eq("status", "upcoming")
-        .lt("lesson_date", today)
-        .then(() => {});
+        .lt("lesson_date", today);
       const { data } = await supabase
         .from("lessons")
         .select("*")
         .eq("coach_id", user.id)
-        .eq("status", "upcoming")
-        .gte("lesson_date", today)
         .order("lesson_date", { ascending: true });
-      setUpcomingLessons(data || []);
+      const all = data || [];
+      setUpcomingLessons(all.filter(l => l.status === "upcoming" && l.lesson_date >= today));
+      setCompletedLessons(
+        all.filter(l => l.status === "completed").sort((a, b) => (a.lesson_date < b.lesson_date ? 1 : -1))
+      );
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -690,12 +786,77 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
   const totalStudents = students.length;
   const totalRounds   = Object.values(studentStats).reduce((s, st) => s + (st.totalRounds || 0), 0);
 
+  const nowMs    = Date.now();
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Every handicap figure on this screen is the student's WHS index (fall back to
+  // their profile official handicap only when no round carries a WHS index).
+  function studentWhs(s) {
+    const st = studentStats[s.id] || {};
+    if (st.currentWhs != null) return st.currentWhs;
+    return s.official_handicap != null ? s.official_handicap : null;
+  }
+  const fmtWhs = v => (v == null ? "—" : Number(v).toFixed(1));
+
+  function prevCompletedLesson(studentId) {
+    return completedLessons
+      .filter(l => l.student_id === studentId && l.lesson_date < todayStr)
+      .sort((a, b) => (a.lesson_date < b.lesson_date ? 1 : -1))[0] || null;
+  }
+
+  // 1 — Next upcoming lesson (nearest future date), the visual anchor.
+  const nextLesson  = upcomingLessons[0] || null;
+  const nlStudent   = nextLesson ? students.find(s => s.id === nextLesson.student_id) : null;
+  const nlPrev      = nextLesson ? prevCompletedLesson(nextLesson.student_id) : null;
+  const nlSince     = nextLesson
+    ? (studentStats[nextLesson.student_id]?.sentDates || [])
+        .filter(d => !nlPrev || d.slice(0, 10) > nlPrev.lesson_date).length
+    : 0;
+  const nlTrend     = nextLesson ? studentStats[nextLesson.student_id]?.hcpTrend : null;
+  const nlRecentDir = nlTrend == null ? "watch" : nlTrend < 0 ? "improving" : nlTrend > 0 ? "declining" : "watch";
+  const nlHeadlines = nextLesson ? briefHeadlines(nextLesson.ai_brief, nlRecentDir) : [];
+
+  // Rounds sent but not yet opened by the coach, across the whole roster.
+  const totalUnreviewed = Object.values(studentStats).reduce((s, st) => s + (st.unopenedCount || 0), 0);
+
+  // 2 — Needs attention (dismissible, capped at 3).
+  const quietStudents = students.filter(s => {
+    const last = studentStats[s.id]?.lastRoundDate;
+    if (!last) return false;
+    return (nowMs - new Date(last).getTime()) / 86400000 >= 21;
+  });
+  const attentionItems = [];
+  if (quietStudents.length > 0) {
+    const names = quietStudents.map(s => s.first_name);
+    const extra = names.length - 2;
+    const label = names.length === 1
+      ? `${names[0]} has gone quiet`
+      : names.length === 2
+        ? `${names[0]} and ${names[1]} have gone quiet`
+        : `${names[0]}, ${names[1]} and ${extra} other${extra !== 1 ? "s" : ""} have gone quiet`;
+    attentionItems.push({ key: "quiet", tone: "warning", title: label, sub: "No rounds sent in the last 21+ days." });
+  }
+  if (totalUnreviewed > 0) {
+    attentionItems.push({
+      key: "unreviewed", tone: "accent",
+      title: `${totalUnreviewed} round${totalUnreviewed !== 1 ? "s" : ""} to review`,
+      sub: "Sent by students but not yet opened.",
+    });
+  }
+  const visibleAttention = attentionItems.filter(a => !dismissed.has(a.key)).slice(0, 3);
+
+  // 3 — Roster, searchable once large.
+  const rosterFiltered = search.trim()
+    ? students.filter(s => `${s.first_name} ${s.last_name}`.toLowerCase().includes(search.trim().toLowerCase()))
+    : students;
+
   return (
     <>
       <style>{css}</style>
       <div className="mode-bar">
         <div className="mode-logo">⛳ Caddie</div>
         <div className="mode-bar-right">
+          <button className="header-icon-btn" onClick={() => setShowInvite(v => !v)}>🔗 Invite</button>
           {onProfile && (
             <button className="signout-btn" onClick={onProfile} style={{color:"rgba(255,255,255,0.8)"}}>
               My Profile
@@ -711,32 +872,162 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
           <div className="home-hero-sub">{totalStudents} student{totalStudents !== 1 ? "s" : ""} · {totalRounds} round{totalRounds !== 1 ? "s" : ""} logged</div>
         </div>
 
-        {/* Invite section */}
-        <div className="invite-section">
-          <div className="invite-title">🔗 Invite a student</div>
-          <div className="invite-sub">Generate a unique link to share with your student. When they sign up using your link, they'll be automatically connected to your account.</div>
-          {inviteLink ? (
-            <div className="invite-link-row">
-              <div className="invite-link-box">{inviteLink}</div>
-              <button className={"invite-copy-btn" + (copied ? " copied" : "")} onClick={copyLink}>
-                {copied ? "✓ Copied!" : "Copy"}
+        {/* Invite panel — toggled from the header button */}
+        {showInvite && (
+          <div className="invite-section">
+            <div className="invite-title">🔗 Invite a student</div>
+            <div className="invite-sub">Generate a unique link to share. When a student signs up using it, they're automatically connected to your account.</div>
+            {inviteLink ? (
+              <div className="invite-link-row">
+                <div className="invite-link-box">{inviteLink}</div>
+                <button className={"invite-copy-btn" + (copied ? " copied" : "")} onClick={copyLink}>
+                  {copied ? "✓ Copied!" : "Copy"}
+                </button>
+              </div>
+            ) : (
+              <button className="invite-gen-btn" onClick={generateInvite} disabled={inviteLoading}>
+                {inviteLoading ? "Generating…" : "+ Generate invite link"}
               </button>
-            </div>
-          ) : (
-            <button className="invite-gen-btn" onClick={generateInvite} disabled={inviteLoading}>
-              {inviteLoading ? "Generating…" : "+ Generate invite link"}
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {students.length === 0 ? (
           <div className="empty-state">
             <div className="es-icon">📭</div>
             <div className="es-title">No students linked yet</div>
-            <div className="es-sub">Generate an invite link above and share it with your students.</div>
+            <div className="es-sub">Tap “🔗 Invite” in the header to generate a link and share it with your students.</div>
           </div>
         ) : (
           <>
+            {/* 1 — NEXT LESSON (visual anchor) */}
+            <div className="next-card">
+              <div className="next-card-label">Next lesson</div>
+              {nextLesson && nlStudent ? (
+                <>
+                  <div className="next-card-top">
+                    <div className="next-avatar">{initials(nlStudent.first_name, nlStudent.last_name)}</div>
+                    <div className="next-info">
+                      <div className="next-name">{nlStudent.first_name} {nlStudent.last_name}</div>
+                      <div className="next-sub">{fmtDateWeekday(nextLesson.lesson_date)}{fmtTime(nextLesson.lesson_time) ? ` · ${fmtTime(nextLesson.lesson_time)}` : ""}</div>
+                    </div>
+                    <div className="next-whs">
+                      <div className="next-whs-val">{fmtWhs(studentWhs(nlStudent))}</div>
+                      <div className="next-whs-lbl">WHS</div>
+                    </div>
+                  </div>
+                  <div className="next-rounds-since">
+                    {nlSince} round{nlSince !== 1 ? "s" : ""} sent {nlPrev ? "since last lesson" : "so far"}
+                  </div>
+                  {nlHeadlines.length > 0 ? (
+                    <div className="brief-lines">
+                      {nlHeadlines.map((h, i) => (
+                        <div className="brief-line" key={i}>
+                          <span className={"brief-dir " + h.dir}>{h.dir === "improving" ? "↗" : h.dir === "declining" ? "↘" : "→"}</span>
+                          <span>{h.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="next-sub" style={{marginBottom:14}}>No pre-lesson brief for this lesson yet.</div>
+                  )}
+                  <div className="next-btns">
+                    {nextLesson.ai_brief && (
+                      <button className={"next-btn" + (nextView === "full" ? " active" : "")} onClick={() => setNextView(nextView === "full" ? null : "full")}>Full brief</button>
+                    )}
+                    <button className={"next-btn" + (nextView === "notes" ? " active" : "")} onClick={() => setNextView(nextView === "notes" ? null : "notes")}>Last session notes</button>
+                    <button className="next-btn" onClick={() => onSelectStudent(nlStudent)}>Open student →</button>
+                  </div>
+                  {nextView === "full" && nextLesson.ai_brief && (
+                    <div className="next-expand">{nextLesson.ai_brief}</div>
+                  )}
+                  {nextView === "notes" && (
+                    <div className="next-expand">{nlPrev?.notes ? nlPrev.notes : "No notes recorded from a previous session yet."}</div>
+                  )}
+                </>
+              ) : (
+                <div className="next-empty">
+                  <div className="next-empty-text">
+                    No upcoming lesson scheduled.
+                    {totalUnreviewed > 0 ? ` You have ${totalUnreviewed} round${totalUnreviewed !== 1 ? "s" : ""} waiting to be reviewed.` : ""}
+                  </div>
+                  <button className="lesson-save-btn" onClick={() => { setShowSchedule(true); setTimeout(() => scheduleRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>📅 Schedule a lesson</button>
+                </div>
+              )}
+            </div>
+
+            {/* 2 — NEEDS ATTENTION */}
+            {visibleAttention.length > 0 && (
+              <>
+                <div className="section-label">Needs attention</div>
+                {visibleAttention.map(a => (
+                  <div className={"na-card " + a.tone} key={a.key}>
+                    <div className="na-body">
+                      <div className="na-title">{a.title}</div>
+                      <div className="na-sub">{a.sub}</div>
+                    </div>
+                    <button className="na-dismiss" aria-label="Dismiss" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(a.key); return n; })}>×</button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* 3 — YOUR STUDENTS (compact rows) */}
+            <div className="section-label">Your students</div>
+            {students.length > 15 && (
+              <input className="roster-search" placeholder="Search students…" value={search} onChange={e => setSearch(e.target.value)} />
+            )}
+            {rosterFiltered.map(s => {
+              const st = studentStats[s.id] || {};
+              const thisMonth = st.thisMonth || 0;
+              const last = st.lastRoundDate;
+              const recency = thisMonth > 0
+                ? `${thisMonth} round${thisMonth !== 1 ? "s" : ""} this month`
+                : last
+                  ? `Quiet ${Math.floor((nowMs - new Date(last).getTime()) / 86400000)} days`
+                  : "No rounds yet";
+              const whs = studentWhs(s);
+              const hcpTrend = st.hcpTrend;
+              return (
+                <div className="compact-row" key={s.id} onClick={() => onSelectStudent(s)}>
+                  <div className="compact-avatar">{initials(s.first_name, s.last_name)}</div>
+                  <div className="compact-info">
+                    <div className="compact-name">
+                      {s.first_name} {s.last_name}
+                      {st.newRounds > 0 && <span className="new-badge">{st.newRounds} new</span>}
+                    </div>
+                    <div className="compact-meta">
+                      {recency}
+                      {onShowProgress && <> · <span className="progress-link" onClick={e => { e.stopPropagation(); onShowProgress(s); }}>Progress</span></>}
+                    </div>
+                  </div>
+                  <div className="compact-whs">
+                    <div>
+                      <div className="compact-whs-val">{fmtWhs(whs)}</div>
+                      <div className="compact-whs-lbl">WHS</div>
+                    </div>
+                    {hcpTrend != null && (
+                      <span className="compact-trend" style={{color: hcpTrend < 0 ? "#2e7d32" : "#c62828"}}>
+                        {hcpTrend < 0 ? "▼" : "▲"} {Math.abs(hcpTrend).toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {rosterFiltered.length === 0 && (
+              <div className="compact-meta" style={{padding:"6px 2px 12px"}}>No students match “{search}”.</div>
+            )}
+
+            {/* 4 — HANDICAP TRAJECTORIES (collapsed by default) */}
+            <div className="expand-row" style={{marginTop:16}} onClick={() => setShowChart(v => !v)}>
+              <div className="expand-row-title">📈 Handicap trajectories</div>
+              <div className={"expand-row-chevron" + (showChart ? " open" : "")}>▾</div>
+            </div>
+            {showChart && <RosterChart students={students} coachId={user?.id} />}
+
+            {/* 5 — SCHEDULE A LESSON */}
+            <div ref={scheduleRef} />
             {showSchedule ? (
               <div className="schedule-panel">
                 <div className="schedule-panel-title">📅 Schedule lesson</div>
@@ -796,92 +1087,8 @@ function StudentList({ coachProfile, user, students, studentStats, selectedStude
                 </div>
               </div>
             ) : (
-              <button className="schedule-panel-btn" onClick={() => setShowSchedule(true)}>📅 Schedule lesson</button>
+              <button className="schedule-panel-btn" onClick={() => setShowSchedule(true)}>📅 Schedule a lesson</button>
             )}
-            {upcomingLessons.length > 0 && (
-              <>
-                <div className="section-label">Upcoming lessons</div>
-                {upcomingLessons.map(l => {
-                  const s = students.find(st => st.id === l.student_id);
-                  const studentName = s ? `${s.first_name} ${s.last_name}` : "Student";
-                  const dateStr = fmtDateWeekday(l.lesson_date);
-                  const timeStr = fmtTime(l.lesson_time);
-                  return (
-                    <div className="upcoming-lesson-mini" key={l.id}>
-                      <div className="upcoming-mini-left">
-                        <div className="upcoming-mini-name">{studentName}</div>
-                        <div className="upcoming-mini-date">{dateStr}{timeStr ? ` · ${timeStr}` : ""}</div>
-                      </div>
-                      <button className="upcoming-mini-view" onClick={() => s && onSelectStudent(s)}>View →</button>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-            <RosterChart students={students} coachId={user?.id} />
-            <div className="section-label">Your students</div>
-            {students.map(s => {
-              const stats = studentStats[s.id] || {};
-              const hasNew = stats.newRounds > 0;
-              const thisMonth = stats.thisMonth || 0;
-              const last = stats.lastRoundDate;
-              const { avgVsParPerHole, trendDiff, hcpTrend } = stats;
-              const currentHcp = stats.currentHcp;
-              function fmtAvgPerHole(v) {
-                if (v == null) return "—";
-                return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
-              }
-              return (
-                <div className="student-card" key={s.id} onClick={() => onSelectStudent(s)}>
-                  <div className="student-avatar">{initials(s.first_name, s.last_name)}</div>
-                  <div className="student-info">
-                    <div className="student-name">
-                      {s.first_name} {s.last_name}
-                      {hasNew && <span className="new-badge">{stats.newRounds} new</span>}
-                    </div>
-                    <div className="student-meta">
-                      {last ? `Last round: ${fmtDateShort(last)}` : "No rounds yet"}
-                    </div>
-                    {onShowProgress && (
-                      <button
-                        onClick={e => { e.stopPropagation(); onShowProgress(s); }}
-                        style={{marginTop:4,background:"none",border:"none",padding:0,fontFamily:"'Outfit',sans-serif",fontSize:11,fontWeight:600,color:"var(--green)",cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:2}}
-                      >
-                        Progress report
-                      </button>
-                    )}
-                  </div>
-                  <div className="student-stats">
-                    <div className="s-stat">
-                      <div className="s-stat-val" style={{display:"flex", alignItems:"center", gap:4}}>
-                        <span>{currentHcp != null ? Number(currentHcp).toFixed(1) : (s.official_handicap != null ? Number(s.official_handicap).toFixed(1) : "—")}</span>
-                        {hcpTrend != null && (
-                          <span style={{fontSize:12, fontWeight:600, color: hcpTrend < 0 ? "#2e7d32" : "#c62828"}}>
-                            {hcpTrend < 0 ? "▼" : "▲"} {Math.abs(hcpTrend).toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="s-stat-lbl">Hcp</div>
-                    </div>
-                    <div className="s-stat">
-                      <div className="s-stat-val" style={{display:"flex", alignItems:"center", gap:4}}>
-                        <span>{fmtAvgPerHole(avgVsParPerHole)}</span>
-                        {trendDiff != null && (
-                          <span style={{fontSize:12, fontWeight:600, color: trendDiff < 0 ? "#2e7d32" : "#c62828"}}>
-                            {trendDiff < 0 ? "▼" : "▲"} {Math.abs(trendDiff).toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="s-stat-lbl">Avg/hole</div>
-                    </div>
-                    <div className="s-stat">
-                      <div className="s-stat-val">{thisMonth}</div>
-                      <div className="s-stat-lbl">This month</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
           </>
         )}
       </div>
@@ -1961,7 +2168,7 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
       // Load rounds for all students to compute stats
       const { data: allRounds } = await supabase
         .from("rounds")
-        .select("id, student_id, total_score, handicap, whs_index, holes_played, total_par, course_id, sent_to_coach, created_at")
+        .select("id, student_id, total_score, handicap, whs_index, holes_played, total_par, course_id, sent_to_coach, ai_analysis, created_at")
         .in("student_id", ids)
         .eq("sent_to_coach", true)
         .order("created_at", { ascending: false });
@@ -2002,11 +2209,17 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
         stats[p.id] = {
           totalRounds:    pRounds.length,
           currentHcp,
+          // Current WHS index = most recent round with a WHS index (matches chart legend/tooltip).
+          currentWhs:     pRounds.find(r => r.whs_index != null)?.whs_index ?? null,
           avgVsParPerHole,
           trendDiff,
           hcpTrend,
           lastRoundDate:  pRounds[0]?.created_at || null,
           thisMonth:      pRounds.filter(r => r.created_at >= monthStart).length,
+          // Sent rounds not yet opened by the coach (ai_analysis is populated on first open).
+          unopenedCount:  pRounds.filter(r => !r.ai_analysis).length,
+          // created_at of every sent round (newest first) — used for "rounds since last lesson".
+          sentDates:      pRounds.map(r => r.created_at),
           newRounds:      pRounds.filter(r => {
             const d = new Date(r.created_at);
             const daysSince = (now - d) / (1000 * 60 * 60 * 24);
