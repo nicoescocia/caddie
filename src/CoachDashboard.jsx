@@ -204,6 +204,18 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       return line;
     }).join("\n");
 
+    // Explicit per-hole putt counts for the putting analysis, so the model reads
+    // the actual putts value rather than inferring 3-putts from putt distances.
+    const puttSummary = holeRows
+      .filter(h => !h.picked_up && !h.dna)
+      .map(h => {
+        let l = `H${h.hole_number}: ${h.putts} putts`;
+        if (h.putt1) l += `, first putt ${h.putt1}`;
+        if (h.putt2) l += `, second putt ${h.putt2}`;
+        return l;
+      })
+      .join("\n");
+
     const PENALTY_TYPES = new Set(["Lost ball (tee)", "Lost ball (fairway)", "OOB", "Hazard", "Unplayable"]);
     const penTotals = {};
     holeRows.forEach(h => {
@@ -242,7 +254,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
 
     try {
       const [r1, r2] = await Promise.all([
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers.\n\n${summary}\n${penSummaryLine}Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n${threePuttNote}\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers. 3-putt holes are only those where putts = 3 as stated in the data. Do not infer 3-putts from first putt distance. Do not identify a hole as a 3-putt unless its putt count is explicitly 3.\n\nPutts per hole:\n${puttSummary}\n\n${summary}\n${penSummaryLine}Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n${threePuttNote}\nTwo sentences only, no preamble.`),
         callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted.\n${sgSection}INSTRUCTION: shots_inside_50 > 1 is a short game failure. ${sgFailPct > 20 ? "More than 20% of missed-GIR holes had shots_inside_50 > 1 — do NOT describe proximity or short game as good or solid. Cite the specific sg_reason values where present." : ""} Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n${penSummaryLine}\nTwo sentences only, no preamble.`),
       ]);
       setAiPutting(r1);
