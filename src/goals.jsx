@@ -139,7 +139,9 @@ export function GoalsSection({ coachId, studentId, editable }) {
       .in("status", ["active", "achieved"])
       .order("created_at", { ascending: false });
     if (coachId) q = q.eq("coach_id", coachId);
-    const { data } = await q;
+    const { data, error } = await q;
+    // Surface read failures (missing table / RLS) instead of silently showing nothing.
+    if (error) console.error("[goals] read failed — check the goals table exists and RLS allows this user:", error);
     let list = data || [];
 
     // Only the coach can persist status changes (RLS). Mark any goal whose
@@ -168,7 +170,7 @@ export function GoalsSection({ coachId, studentId, editable }) {
     if (isNaN(target)) return;
     setSaving(true);
     const baseline = stats ? stats[type] : null;
-    await supabase.from("goals").insert({
+    const { error } = await supabase.from("goals").insert({
       coach_id:       coachId,
       student_id:     studentId,
       goal_type:      type,
@@ -177,13 +179,20 @@ export function GoalsSection({ coachId, studentId, editable }) {
       baseline_value: baseline != null ? Math.round(baseline * 100) / 100 : null,
       status:         "active",
     });
-    setForm({ goal_type: "handicap", target_value: "", target_date: "" });
     setSaving(false);
+    if (error) {
+      // Without visible feedback a rejected insert (missing table / RLS) looks like the button does nothing.
+      console.error("[goals] save failed:", error);
+      alert("Could not save the goal: " + error.message);
+      return;
+    }
+    setForm({ goal_type: "handicap", target_value: "", target_date: "" });
     load();
   }
 
   async function remove(id) {
-    await supabase.from("goals").delete().eq("id", id);
+    const { error } = await supabase.from("goals").delete().eq("id", id);
+    if (error) { console.error("[goals] delete failed:", error); alert("Could not delete the goal: " + error.message); return; }
     setGoals(prev => prev.filter(g => g.id !== id));
   }
 
