@@ -1660,7 +1660,10 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, coachProf
   const aiRoundsCount = Math.min(scored.length, 5);
 
   useEffect(() => {
-    if (scored.length < 3) return;
+    // Wait for coachId — if the effect runs before it's available the cache
+    // read/write key nothing and every visit misses. coachId is in the deps so
+    // the effect re-runs once it resolves.
+    if (scored.length < 3 || !coachId) return;
     const last5 = scored.slice(0, 5).reverse(); // last 5 regardless of length, oldest → newest
     setAiPatterns(null);
     const roundSummaries = last5.map((r, i) => {
@@ -1731,6 +1734,7 @@ OUTPUT FORMAT
       // Fetch cache rows as a list (not maybeSingle) so a stray duplicate row
       // can never wedge us into a permanent cache-miss. Serve a row whose stored
       // round IDs match the current last-5 exactly.
+      console.log("[patterns] cache read params:", { coachId, studentId: student.id, last5Ids });
       const { data: cacheRows } = await supabase
         .from("ai_cache")
         .select("content, round_ids")
@@ -1828,7 +1832,7 @@ OUTPUT FORMAT
       }
     }
     run();
-  }, [rounds]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rounds, coachId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
