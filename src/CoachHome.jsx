@@ -331,7 +331,6 @@ function RosterChart({ students, coachId }) {
   const [loading,   setLoading]   = useState(true);
   const [chartData, setChartData] = useState([]);
   const [lessons,   setLessons]   = useState([]);
-  const [tooltip,   setTooltip]   = useState(null); // {cx, cy, name, date, hcp, flip}
 
   useEffect(() => {
     if (!students || students.length === 0) { setLoading(false); return; }
@@ -376,13 +375,7 @@ function RosterChart({ students, coachId }) {
 
   if (loading || chartData.length < 1) return null;
 
-  // ── layout constants ──
-  const SVG_W = 320, SVG_H = 360;
-  const PAD_T = 40, PAD_B = 48, PAD_L = 48, PAD_R = 16;
-  const chartW = SVG_W - PAD_L - PAD_R;
-  const chartH = SVG_H - PAD_T - PAD_B;
-
-  // ── date range — driven entirely by actual data points across all students ──
+  // ── shared time domain across all students (keeps sparklines temporally aligned) ──
   const allDates = chartData.flatMap(d => d.points.map(p => p.date));
   const minDate = allDates.reduce((a, b) => a < b ? a : b);
   const maxDate = allDates.reduce((a, b) => a > b ? a : b);
@@ -390,27 +383,19 @@ function RosterChart({ students, coachId }) {
   const maxTs   = new Date(maxDate + "T00:00:00").getTime();
   const tsRange = maxTs - minTs || 1;
 
-  function toX(dateStr) {
+  // ── sparkline geometry (viewBox units; each SVG scales to fill its column) ──
+  const SPARK_W = 220, SPARK_H = 60;
+  const PAD_X = 4, PAD_Y = 9;
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const LABEL_COL = 116;
+  const rowGrid = { display: "grid", gridTemplateColumns: `${LABEL_COL}px 1fr`, alignItems: "center", gap: 12 };
+
+  function toXSpark(dateStr) {
     const ts = new Date(dateStr + "T00:00:00").getTime();
-    return PAD_L + ((ts - minTs) / tsRange) * chartW;
+    return PAD_X + ((ts - minTs) / tsRange) * (SPARK_W - PAD_X * 2);
   }
 
-  // ── hcp range, 2-step grid ──
-  const allHcps = chartData.flatMap(d => d.points.map(p => p.hcp));
-  const hcpMin  = Math.min(...allHcps);
-  const hcpMax  = Math.max(...allHcps);
-  const domMin  = Math.max(0, Math.floor((hcpMin - 2) / 2) * 2);
-  const domMax  = Math.ceil((hcpMax + 2) / 2) * 2;
-  const domRange = domMax - domMin || 1;
-
-  function toY(hcp) {
-    return PAD_T + chartH - ((hcp - domMin) / domRange) * chartH;
-  }
-
-  const yTicks = [];
-  for (let v = domMin; v <= domMax + 0.001; v += 2) yTicks.push(v);
-
-  // ── X axis: one tick per calendar month, centred at the 15th ──
+  // ── shared x-axis: one tick per calendar month, centred on the 15th ──
   const xLabels = [];
   const startDt = new Date(minDate + "T00:00:00");
   const endDt   = new Date(maxDate + "T00:00:00");
@@ -419,14 +404,11 @@ function RosterChart({ students, coachId }) {
     const year  = cur.getFullYear();
     const month = String(cur.getMonth() + 1).padStart(2, "0");
     const mid   = `${year}-${month}-15`;
-    const label = cur.toLocaleDateString("en-GB", { month: "short" });
-    xLabels.push({ x: toX(mid), label });
+    xLabels.push({ x: toXSpark(mid), label: cur.toLocaleDateString("en-GB", { month: "short" }) });
     cur = new Date(year, cur.getMonth() + 1, 1);
   }
 
-  // ── per-student lesson markers ──
-  // For each lesson, find that student's closest data point within 30 days.
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  // ── per-student lesson markers: snap each lesson to the nearest point within 30 days ──
   const lessonMarkersByStudent = {};
   for (const l of lessons) {
     if (!l.lesson_date) continue;
@@ -445,113 +427,80 @@ function RosterChart({ students, coachId }) {
 
   return (
     <div style={{background:"white",border:"1.5px solid var(--border)",borderRadius:16,padding:"18px 20px",marginBottom:16}}>
-      <div style={{fontSize:11,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#999",marginBottom:12}}>
+      <div style={{fontSize:11,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#999",marginBottom:14}}>
         Handicap trajectories
       </div>
-      <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{overflow:"visible",display:"block"}}>
-        {/* Y gridlines + labels */}
-        {yTicks.map(t => {
-          const y = toY(t);
-          return (
-            <g key={t}>
-              <line x1={PAD_L} y1={y} x2={PAD_L + chartW} y2={y} stroke="#E2DDD4" strokeWidth={0.8} />
-              <text x={PAD_L - 5} y={y} textAnchor="end" dominantBaseline="middle" fontSize="9" fill="#999">
-                {t % 1 === 0 ? String(t) : t.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
 
-        {/* X axis labels */}
-        {xLabels.map((lbl, i) => (
-          <text key={i} x={lbl.x} y={PAD_T + chartH + 14} textAnchor="middle" fontSize="9" fill="#999">
-            {lbl.label}
-          </text>
-        ))}
+      {chartData.map(({ student, color, points }) => {
+        const lessonDates = lessonMarkersByStudent[student.id] || new Set();
+        const current  = points[points.length - 1]?.hcp;
+        const earliest = points[0]?.hcp;
+        const change   = (current != null && earliest != null) ? current - earliest : null;
 
-        {/* Student segments + circles */}
-        {chartData.map(({ student, color, points }) => {
-          const lessonDates = lessonMarkersByStudent[student.id] || new Set();
-          const showTip = (p, cx, cy, flip) =>
-            setTooltip({ cx, cy, name: `${student.first_name} ${student.last_name}`, date: p.date, hcp: p.hcp, flip });
-          return (
-            <g key={student.id}>
-              {/* Line segments — dashed where >30 days elapsed between points (inactivity) */}
+        // Personal y-scale fitted to this student's range, with 0.5 padding top & bottom.
+        const hcps   = points.map(p => p.hcp);
+        const yMin   = Math.min(...hcps) - 0.5;
+        const yMax   = Math.max(...hcps) + 0.5;
+        const yRange = (yMax - yMin) || 1;
+        const innerH = SPARK_H - PAD_Y * 2;
+        const toYSpark = h => PAD_Y + ((yMax - h) / yRange) * innerH;
+
+        return (
+          <div key={student.id} style={{ ...rowGrid, marginBottom: 12 }}>
+            {/* Left: name, current WHS, trend since earliest point */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {student.first_name} {student.last_name}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 3 }}>
+                <span style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, color: "var(--text)", lineHeight: 1 }}>
+                  {current != null ? Number(current).toFixed(1) : "—"}
+                </span>
+                {change != null && Math.abs(change) >= 0.05 && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: change < 0 ? "#2e7d32" : "#c62828" }}>
+                    {change < 0 ? "▼" : "▲"} {Math.abs(change).toFixed(1)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Right: sparkline — own y-scale, shared x-domain, no gridlines */}
+            <svg viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
               {points.slice(1).map((p, i) => {
                 const prev = points[i];
                 const gap = new Date(p.date + "T00:00:00").getTime() - new Date(prev.date + "T00:00:00").getTime();
                 return (
-                  <line
-                    key={"seg-" + i}
-                    x1={toX(prev.date)} y1={toY(prev.hcp)}
-                    x2={toX(p.date)}    y2={toY(p.hcp)}
-                    stroke={color} strokeWidth={2} strokeLinecap="round"
-                    strokeDasharray={gap > THIRTY_DAYS_MS ? "3 4" : undefined}
-                  />
+                  <line key={"seg-" + i}
+                    x1={toXSpark(prev.date)} y1={toYSpark(prev.hcp)}
+                    x2={toXSpark(p.date)}    y2={toYSpark(p.hcp)}
+                    stroke={color} strokeWidth={1.6} strokeLinecap="round"
+                    strokeDasharray={gap > THIRTY_DAYS_MS ? "3 3" : undefined} />
                 );
               })}
               {points.map((p, i) => {
-                const cx = toX(p.date);
-                const cy = toY(p.hcp);
-                const flip = cx > PAD_L + chartW * 0.65;
-                const isLesson = lessonDates.has(p.date);
+                const cx = toXSpark(p.date), cy = toYSpark(p.hcp);
                 const isLast = i === points.length - 1;
-                const r = isLast ? 5 : 3; // emphasise current status
-                return (
-                  <g key={i}>
-                    <circle
-                      cx={cx} cy={cy} r={r} fill={color}
-                      style={{cursor:"pointer"}}
-                      onMouseEnter={() => showTip(p, cx, cy, flip)}
-                      onMouseLeave={() => setTooltip(null)}
-                      onClick={() => showTip(p, cx, cy, flip)}
-                    />
-                    {isLesson && (
-                      <>
-                        <circle cx={cx} cy={cy} r={r} fill="white" stroke={color} strokeWidth={2} style={{pointerEvents:"none"}} />
-                        <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={color} fontWeight="700" style={{pointerEvents:"none"}}>L</text>
-                      </>
-                    )}
-                  </g>
-                );
+                if (lessonDates.has(p.date)) {
+                  return <circle key={i} cx={cx} cy={cy} r={isLast ? 3.4 : 2.8} fill="white" stroke={color} strokeWidth={1.4} />;
+                }
+                return <circle key={i} cx={cx} cy={cy} r={isLast ? 3.4 : 2} fill={color} />;
               })}
-            </g>
-          );
-        })}
+            </svg>
+          </div>
+        );
+      })}
 
-        {/* Tooltip */}
-        {tooltip && (() => {
-          const TW = 108, TH = 36, TR = 6;
-          const tx = tooltip.flip ? tooltip.cx - TW - 8 : tooltip.cx + 8;
-          const ty = tooltip.cy - TH / 2;
-          return (
-            <g style={{pointerEvents:"none"}}>
-              <rect x={tx} y={ty} width={TW} height={TH} rx={TR} fill="white" stroke="#E2DDD4" strokeWidth={1} />
-              <text x={tx + 7} y={ty + 13} fontSize="10" fill="#1C1C1C" fontWeight="600">{tooltip.name}</text>
-              <text x={tx + 7} y={ty + 26} fontSize="9" fill="#666">{tooltip.date} · WHS {tooltip.hcp}</text>
-            </g>
-          );
-        })()}
-      </svg>
-
-      {/* Legend */}
-      <div style={{display:"flex",flexWrap:"wrap",gap:"6px 14px",marginTop:8}}>
-        {chartData.map(({ student, color, points }) => {
-          const currentWhs = points[points.length - 1]?.hcp;
-          return (
-            <div key={student.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#555"}}>
-              <div style={{width:9,height:9,borderRadius:"50%",background:color,flexShrink:0}} />
-              <span>{student.first_name} {student.last_name}</span>
-              {currentWhs != null && <span style={{color:"#999"}}>({currentWhs})</span>}
-            </div>
-          );
-        })}
-        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#999",marginTop:2}}>
-          <svg width="11" height="11" style={{flexShrink:0}}>
-            <circle cx="5.5" cy="5.5" r="4.5" fill="white" stroke="#999" strokeWidth="1.5" />
-          </svg>
-          <span>Lesson around this time</span>
-        </div>
+      {/* Shared x-axis — same date domain as every sparkline above */}
+      <div style={{ ...rowGrid, marginTop: 2 }}>
+        <div />
+        <svg viewBox={`0 0 ${SPARK_W} 14`} width="100%" style={{ display: "block", overflow: "visible" }}>
+          {xLabels.map((lbl, i) => (
+            <text key={i} x={lbl.x} y={10} textAnchor="middle" fontSize="9" fill="#999">{lbl.label}</text>
+          ))}
+        </svg>
       </div>
     </div>
   );
