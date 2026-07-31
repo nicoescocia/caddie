@@ -327,6 +327,21 @@ function parDiff(score, round) {
 // ── ROSTER CHART ──
 const ROSTER_COLORS = ["#1A6B4A","#4A90D9","#C9A84C","#C94040","#7B5EA7","#D4763A","#52C97A","#888"];
 
+// ISO-8601 week key (e.g. "2026-W12") for a "YYYY-MM-DD" date. Computed in UTC
+// to avoid timezone drift; the week-year can differ from the calendar year at
+// December/January boundaries.
+function isoWeekKey(dateStr) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  const dayNum = (d.getUTCDay() + 6) % 7;            // Mon=0 … Sun=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);          // move to this week's Thursday
+  const isoYear = d.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const week = 1 + Math.round((d - firstThursday) / (7 * 86400000));
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
+}
+
 function RosterChart({ students, coachId }) {
   const [loading,   setLoading]   = useState(true);
   const [chartData, setChartData] = useState([]);
@@ -354,17 +369,30 @@ function RosterChart({ students, coachId }) {
       const rounds    = roundsRes.data  || [];
       const lessonRows = lessonsRes.data || [];
 
-      const byStudent = {};
+      // Bucket rounds per student (ascending by date), then aggregate to one
+      // point per ISO week — the last (most recent) WHS index in that week,
+      // positioned at that round's date.
+      const roundsByStudent = {};
       for (const r of rounds) {
-        if (!byStudent[r.student_id]) byStudent[r.student_id] = [];
-        byStudent[r.student_id].push({ date: r.created_at.slice(0, 10), hcp: r.whs_index });
+        if (!roundsByStudent[r.student_id]) roundsByStudent[r.student_id] = [];
+        roundsByStudent[r.student_id].push(r);
       }
 
-      const qualified = students.filter(s => (byStudent[s.id] || []).length >= 3);
+      const weeklyByStudent = {};
+      for (const [sid, rs] of Object.entries(roundsByStudent)) {
+        const weeks = {};
+        for (const r of rs) { // rounds are ascending → last write per week wins
+          const date = r.created_at.slice(0, 10);
+          weeks[isoWeekKey(date)] = { date, hcp: r.whs_index };
+        }
+        weeklyByStudent[sid] = Object.values(weeks).sort((a, b) => (a.date < b.date ? -1 : 1));
+      }
+
+      const qualified = students.filter(s => (roundsByStudent[s.id] || []).length >= 3);
       const data = qualified.map((s, i) => ({
         student: s,
         color:  ROSTER_COLORS[i % ROSTER_COLORS.length],
-        points: byStudent[s.id],
+        points: weeklyByStudent[s.id] || [],
       }));
 
       setChartData(data);
@@ -386,7 +414,8 @@ function RosterChart({ students, coachId }) {
   // ── sparkline geometry (viewBox units; each SVG scales to fill its column) ──
   const SPARK_W = 220, SPARK_H = 60;
   const PAD_X = 4, PAD_Y = 9;
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // lesson-marker snap window
+  const TWO_WEEKS_MS   = 14 * 24 * 60 * 60 * 1000; // gap threshold for dashed segments
   const LABEL_COL = 116;
   const rowGrid = { display: "grid", gridTemplateColumns: `${LABEL_COL}px 1fr`, alignItems: "center", gap: 12 };
 
@@ -477,7 +506,7 @@ function RosterChart({ students, coachId }) {
                     x1={toXSpark(prev.date)} y1={toYSpark(prev.hcp)}
                     x2={toXSpark(p.date)}    y2={toYSpark(p.hcp)}
                     stroke={color} strokeWidth={1.6} strokeLinecap="round"
-                    strokeDasharray={gap > THIRTY_DAYS_MS ? "3 3" : undefined} />
+                    strokeDasharray={gap > TWO_WEEKS_MS ? "3 3" : undefined} />
                 );
               })}
               {points.map((p, i) => {
