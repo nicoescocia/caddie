@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import { GoalsSection } from "./goals";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -1026,6 +1027,9 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
             activeStatTab={activeStatTab}
           />
         )}
+
+        {/* Goals set by the coach (read-only) */}
+        <GoalsSection studentId={user.id} editable={false} />
 
         {/* Coach section */}
         <div style={{marginBottom:14}}>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabaseClient";
 import renderMarkdown from "./renderMarkdown";
+import { GoalsSection } from "./goals";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -415,7 +416,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 Round received · {studentName}
                 {student?.official_handicap != null && (
                   <span style={{fontSize:13,fontWeight:400,color:"rgba(255,255,255,0.55)",marginLeft:8}}>
-                    Hcp {Number(student.official_handicap).toFixed(1)}
+                    WHS {Number(student.official_handicap).toFixed(1)}
                   </span>
                 )}
               </div>
@@ -575,6 +576,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 onChange={e => { setCoachNote(e.target.value); setNoteSaved(false); }}
               />
             </div>
+            {student && <GoalsSection coachId={user.id} studentId={student.id} editable={true} />}
           </div>
         </div>
 

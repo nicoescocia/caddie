@@ -1252,7 +1252,7 @@ function RoundTrends({ rounds, activeTab, setActiveTab }) {
       <div className="trend-summary">
         <div className="trend-stat">
           <div className="trend-stat-val">{avgVsPar != null ? fmtPar(avgVsPar) : "—"}</div>
-          <div className="trend-stat-lbl">Avg vs par</div>
+          <div className="trend-stat-lbl">Avg vs par ({activeTab} holes)</div>
         </div>
         <div className="trend-stat">
           <div className="trend-stat-val">{bestVsPar != null ? fmtPar(bestVsPar) : "—"}</div>
@@ -1652,6 +1652,10 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, coachProf
   const bestDiff = diffs.length ? Math.min(...diffs) : null;
   function fmtDiff(d) { return d == null ? "—" : d === 0 ? "E" : d > 0 ? "+" + d : String(d); }
 
+  // Header handicap figure = WHS index from the most recent round (fall back to
+  // the profile's official handicap) — kept consistent with the roster/chart.
+  const headerWhs = sentRounds.find(r => r.whs_index != null)?.whs_index ?? student.official_handicap;
+
   const aiRoundsCount = Math.min(scored.length, 5);
 
   useEffect(() => {
@@ -1833,9 +1837,9 @@ OUTPUT FORMAT
           <div className="sh-info">
             <div className="sh-name">
               {student.first_name} {student.last_name}
-              {student.official_handicap != null && (
+              {headerWhs != null && (
                 <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,0.55)",marginLeft:8}}>
-                  Hcp {Number(student.official_handicap).toFixed(1)}
+                  WHS {Number(headerWhs).toFixed(1)}
                 </span>
               )}
             </div>
@@ -1844,7 +1848,7 @@ OUTPUT FORMAT
           <div className="sh-stats">
             <div className="sh-stat">
               <div className="sh-stat-val">{fmtDiff(avgDiff)}</div>
-              <div className="sh-stat-lbl">Avg</div>
+              <div className="sh-stat-lbl">Avg vs par (all rounds)</div>
             </div>
             <div className="sh-stat">
               <div className="sh-stat-val">{fmtDiff(bestDiff)}</div>
@@ -2176,9 +2180,6 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
         const pRounds = (allRounds || []).filter(r => r.student_id === p.id);
         const scored  = pRounds.filter(r => r.total_score);
 
-        // Current handicap = most recent round that has one
-        const currentHcp = pRounds.find(r => r.handicap != null)?.handicap ?? null;
-
         // Avg gross vs par per hole — last 30 days, or last 5 rounds if none in that window
         const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
         const sixtyDaysAgo  = new Date(now - 60 * 24 * 60 * 60 * 1000).toISOString();
@@ -2202,7 +2203,6 @@ export default function CoachHome({ user, onSelectRound, onSignOut, onProfile, i
 
         stats[p.id] = {
           totalRounds:    pRounds.length,
-          currentHcp,
           // Current WHS index = most recent round with a WHS index (matches chart legend/tooltip).
           currentWhs:     pRounds.find(r => r.whs_index != null)?.whs_index ?? null,
           avgVsParPerHole,
