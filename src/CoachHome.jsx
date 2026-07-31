@@ -1647,10 +1647,11 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, coachProf
     setSavingEdit(false);
   }
 
-  const diffs   = scored.map(r => r.total_score - getCoursePar(r));
-  const avgDiff = diffs.length ? Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length) : null;
-  const bestDiff = diffs.length ? Math.min(...diffs) : null;
-  function fmtDiff(d) { return d == null ? "—" : d === 0 ? "E" : d > 0 ? "+" + d : String(d); }
+  // Normalise vs-par to per hole so 9- and 18-hole rounds are comparable before averaging.
+  const perHoleDiffs = scored.filter(r => r.holes_played).map(r => (r.total_score - getCoursePar(r)) / r.holes_played);
+  const avgDiff  = perHoleDiffs.length ? perHoleDiffs.reduce((a, b) => a + b, 0) / perHoleDiffs.length : null;
+  const bestDiff = perHoleDiffs.length ? Math.min(...perHoleDiffs) : null;
+  function fmtDiff(d) { return d == null ? "—" : (d > 0 ? "+" : "") + d.toFixed(1); }
 
   // Header handicap figure = WHS index from the most recent round (fall back to
   // the profile's official handicap) — kept consistent with the roster/chart.
@@ -1848,11 +1849,11 @@ OUTPUT FORMAT
           <div className="sh-stats">
             <div className="sh-stat">
               <div className="sh-stat-val">{fmtDiff(avgDiff)}</div>
-              <div className="sh-stat-lbl">Avg vs par (all rounds)</div>
+              <div className="sh-stat-lbl">Avg vs par/hole (all rounds)</div>
             </div>
             <div className="sh-stat">
               <div className="sh-stat-val">{fmtDiff(bestDiff)}</div>
-              <div className="sh-stat-lbl">Best</div>
+              <div className="sh-stat-lbl">Best vs par/hole</div>
             </div>
           </div>
         </div>
