@@ -1715,7 +1715,7 @@ OUTPUT FORMAT
 - Be constructive — frame patterns as development opportunities, not criticisms
 - Do not mention round length or the normalisation process in the output`;
 
-    const last5Ids = last5.map(r => r.id).sort();
+    const last5Ids = last5.map(r => String(r.id)).sort(); // string-coerce so the UUID comparison is type-safe
 
     const APPROACH_BANDS = [
       { key: "Under 25", label: "under 25" },
@@ -1728,20 +1728,27 @@ OUTPUT FORMAT
     ];
 
     async function run() {
-      const { data: cached } = await supabase
+      // Fetch cache rows as a list (not maybeSingle) so a stray duplicate row
+      // can never wedge us into a permanent cache-miss. Serve a row whose stored
+      // round IDs match the current last-5 exactly.
+      const { data: cacheRows } = await supabase
         .from("ai_cache")
         .select("content, round_ids")
         .eq("coach_id", coachId)
         .eq("student_id", student.id)
-        .eq("cache_type", "patterns")
-        .maybeSingle();
-      if (cached) {
-        const cachedIds = [...cached.round_ids].sort();
-        if (cachedIds.length === last5Ids.length && cachedIds.every((id, i) => id === last5Ids[i])) {
-          setAiPatterns(cached.content);
-          return;
-        }
+        .eq("cache_type", "patterns");
+
+      const cacheHit = (cacheRows || []).find(row => {
+        if (!Array.isArray(row.round_ids)) return false;
+        const ids = row.round_ids.map(String).sort();
+        return ids.length === last5Ids.length && ids.every((id, i) => id === last5Ids[i]);
+      });
+      if (cacheHit) {
+        console.log("[patterns] serving cached analysis — round IDs unchanged");
+        setAiPatterns(cacheHit.content);
+        return;
       }
+      console.log("[patterns] generating fresh analysis — no cache row or round IDs changed");
 
       // Fetch per-hole data for approach and putt enrichment
       const { data: allHoles } = await supabase
@@ -1813,7 +1820,7 @@ OUTPUT FORMAT
           student_id: student.id,
           cache_type: "patterns",
           content: result,
-          round_ids: last5.map(r => r.id),
+          round_ids: last5Ids, // sorted + string-coerced — matches the cache-check comparison
         }, { onConflict: "coach_id,student_id,cache_type" });
       } catch {
         setAiPatterns("Pattern analysis unavailable.");
