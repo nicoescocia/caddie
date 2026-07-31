@@ -1,6 +1,9 @@
 // Lightweight markdown renderer for AI-generated coach text (briefs, pattern
-// analysis). Intentionally minimal — no library. Handles: ## headings, **bold**,
-// "-"/"–"/"•" bullets, and "---" dividers. Returns an array of React elements.
+// analysis). Intentionally minimal — no library. Handles: ## headings, whole-line
+// **bold** headings (incl. numbered "1. ..."), **bold** inline, "-"/"–"/"•"
+// bullets, and "---" dividers. Returns an array of React elements.
+
+const HEADING_STYLE = { fontSize: 13, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: ".04em", margin: "12px 0 6px" };
 
 function parseInline(text, keyPrefix) {
   const parts = [];
@@ -33,11 +36,18 @@ export default function renderMarkdown(text) {
     // Heading (## Heading)
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
-      out.push(
-        <div key={key} style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: ".04em", margin: "12px 0 6px" }}>
-          {parseInline(h[2], key)}
-        </div>
-      );
+      out.push(<div key={key} style={HEADING_STYLE}>{parseInline(h[2], key)}</div>);
+      return;
+    }
+
+    // Bold heading: a whole line that is a single bold span, optionally prefixed
+    // by a number (e.g. "**Title**", "**1. Title**", "1. **Title**"). The model
+    // emits section titles this way instead of ## headings, so treat them as
+    // headings too. The !includes("**") guard rules out body lines that merely
+    // start and end with separate bold spans.
+    const boldHeading = line.match(/^(\d+\.\s+)?\*\*(.+?)\*\*$/);
+    if (boldHeading && !boldHeading[2].includes("**")) {
+      out.push(<div key={key} style={HEADING_STYLE}>{(boldHeading[1] || "") + boldHeading[2]}</div>);
       return;
     }
 
