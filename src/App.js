@@ -24,7 +24,9 @@ function App() {
 
   const [userProfile, setUserProfile]     = useState(null)
 
-  const [adminView, setAdminView]         = useState('admin')
+  // Admins land on the student dashboard ('student'); AdminDashboard stays
+  // reachable via the "Admin" button in the student header (onBackToAdmin).
+  const [adminView, setAdminView]         = useState('student')
   const [studentScreen, setStudentScreen] = useState('dashboard')
   const [editRound, setEditRound]         = useState(null)
   const [coachScreen, setCoachScreen]     = useState('home')
@@ -65,15 +67,46 @@ function App() {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event) => {
         if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setRole(null)
-          resetScreenState()
+          // A SIGNED_OUT event can be a genuine sign-out or a transient token
+          // expiry after the tab was backgrounded. Only drop the user if the
+          // session truly cannot be recovered. Defer the check so we don't
+          // contend with Supabase's internal auth lock inside this callback.
+          setTimeout(async () => {
+            const { data: { session: current } } = await supabase.auth.getSession()
+            if (current?.user) {
+              setUser(current.user) // recovered — stay signed in, no redirect to login
+            } else {
+              setUser(null)
+              setRole(null)
+              resetScreenState()
+            }
+          }, 0)
         }
       }
     )
-    return () => subscription.unsubscribe()
+
+    // When the tab is re-focused after being backgrounded, make sure the
+    // session is still alive; refresh it silently from the stored refresh token
+    // if it has expired, rather than bouncing the user to the login screen.
+    async function handleVisibility() {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) return // still valid — nothing to do
+        const { data } = await supabase.auth.refreshSession()
+        if (data?.session?.user) setUser(data.session.user)
+      } catch {
+        // No recoverable session (e.g. genuinely signed out) — leave state as is.
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [])
 
   async function handleSignOut() {
