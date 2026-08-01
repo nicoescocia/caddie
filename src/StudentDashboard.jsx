@@ -534,6 +534,38 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
   const [analyticsHolesMap, setAnalyticsHolesMap] = useState({});
   const [statTab, setStatTab]                 = useState(null);
   const [mainView, setMainView]               = useState("trends");
+  const [activeRound, setActiveRound]         = useState(null);
+
+  // Restore an in-progress round after an iOS tab-kill. If localStorage holds a
+  // recent, unsent round for this user, offer to resume it via a banner.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let raw;
+      try { raw = localStorage.getItem("caddie_active_round"); } catch { return; }
+      if (!raw) return;
+      let rec;
+      try { rec = JSON.parse(raw); }
+      catch { try { localStorage.removeItem("caddie_active_round"); } catch {} return; }
+      // Must belong to this user and have been saved within the last 24 hours.
+      if (!rec || !rec.roundId || rec.studentId !== user.id) return;
+      const ageMs = Date.now() - new Date(rec.savedAt).getTime();
+      if (!(ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000)) {
+        try { localStorage.removeItem("caddie_active_round"); } catch {}
+        return;
+      }
+      // Verify the round still exists, is this student's, and is not yet sent.
+      const { data, error } = await supabase
+        .from("rounds").select("*").eq("id", rec.roundId).maybeSingle();
+      if (cancelled) return;
+      if (error || !data || data.student_id !== user.id || data.sent_to_coach) {
+        try { localStorage.removeItem("caddie_active_round"); } catch {}
+        return;
+      }
+      setActiveRound({ currentHole: rec.currentHole, round: data });
+    })();
+    return () => { cancelled = true; };
+  }, [user.id]);
 
   function updateHistHole(i, fields) {
     setHistHoles(prev => prev.map((h, idx) => idx === i ? { ...h, ...fields } : h));
@@ -948,6 +980,29 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
             </div>
           </div>
         </div>
+
+        {activeRound && (
+          <div style={{background:"var(--gold)",borderRadius:16,padding:"16px 18px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:"var(--green-dark)",marginBottom:2}}>Round in progress</div>
+              <div style={{fontSize:13,color:"var(--green-dark)",opacity:0.85}}>You have a round in progress on hole {activeRound.currentHole}. Continue?</div>
+            </div>
+            <div style={{display:"flex",gap:8,flexShrink:0}}>
+              <button
+                onClick={() => onEditRound({ ...activeRound.round, _resumeHole: activeRound.currentHole })}
+                style={{background:"var(--green-dark)",border:"none",borderRadius:10,padding:"9px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:700,color:"white",cursor:"pointer",whiteSpace:"nowrap"}}
+              >
+                Continue
+              </button>
+              <button
+                onClick={() => { try { localStorage.removeItem("caddie_active_round"); } catch {} setActiveRound(null); }}
+                style={{background:"transparent",border:"1.5px solid var(--green-dark)",borderRadius:10,padding:"9px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,color:"var(--green-dark)",cursor:"pointer",whiteSpace:"nowrap"}}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {coaches.length === 0 && onFindCoach && (
           <div style={{background:"var(--green-dark)",borderRadius:16,padding:"18px 20px",marginBottom:16}}>

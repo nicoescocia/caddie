@@ -1300,6 +1300,20 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       setConditions(existingRound.conditions || null);
       setTemperature(existingRound.temperature || null);
       setStudentNote(existingRound.student_note || "");
+
+      // Resume from the recovery banner: for an in-progress round, position on
+      // the saved current hole rather than hole 1. Completed/sent rounds and the
+      // normal edit-from-list flow are unaffected (they open on the overview).
+      const inProgress = !(existingRound.round_complete || existingRound.sent_to_coach);
+      if (inProgress && existingRound._resumeHole != null) {
+        let targetIdx = mapped.findIndex(h => h.n === existingRound._resumeHole);
+        if (targetIdx < 0) {
+          const savedNums = new Set((data || []).map(r => r.hole_number));
+          targetIdx = mapped.findIndex(h => !savedNums.has(h.n));
+        }
+        if (targetIdx >= 0) { setCur(targetIdx); setView("logging"); }
+      }
+
       setLoading(false);
     }
     loadExisting();
@@ -1325,6 +1339,23 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }
     fetchSettings();
   }, [user.id]);
+
+  // Persist the active round to localStorage so it survives an iOS Safari
+  // tab-kill (which discards JS state after ~10 min backgrounded). Written on
+  // every hole change; cleared once the round is sent or finished.
+  useEffect(() => {
+    if (!roundId || sent || roundComplete) return;
+    try {
+      localStorage.setItem("caddie_active_round", JSON.stringify({
+        roundId,
+        currentHole: cur + 1,
+        studentId: user.id,
+        courseId,
+        holesPlayed: holes.length,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch {}
+  }, [roundId, cur, sent, roundComplete, courseId, holes.length, user.id]);
 
   // Load course list from DB (only for new rounds)
   useEffect(() => {
@@ -1946,6 +1977,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     setSent(true);
     setRoundComplete(true);
     setView("sent");
+    try { localStorage.removeItem("caddie_active_round"); } catch {}
   }
 
   async function handleFinishRound() {
@@ -1981,6 +2013,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
     }).eq("id", roundId);
     setRoundComplete(true);
     setSaving(false);
+    try { localStorage.removeItem("caddie_active_round"); } catch {}
   }
 
   function scoreClass() {
