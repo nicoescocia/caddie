@@ -1903,13 +1903,17 @@ OUTPUT FORMAT
             </div>
 
             {mainView === "trends" && (
-              <RoundTrends rounds={sentRounds} activeTab={activeStatTab} setActiveTab={setActiveStatTab} />
+              <>
+                <RoundTrends rounds={sentRounds} activeTab={activeStatTab} setActiveTab={setActiveStatTab} />
+                {/* Surfaced on the default view so it's visible without opening Analytics */}
+                <ShotsVsBenchmark rounds={sentRounds} whsIndex={headerWhs} prominent />
+              </>
             )}
 
             {mainView === "analytics" && (
               <>
                 <AnalyticsTab sentRounds={sentRounds} />
-                <ShotsVsBenchmark rounds={sentRounds} whsIndex={headerWhs} />
+                <ShotsVsBenchmark rounds={sentRounds} whsIndex={headerWhs} prominent />
               </>
             )}
 

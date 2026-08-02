@@ -131,11 +131,11 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   // shots added to score).
   const penStrokesAvg = avg(penStrokesPer18);
   if (penStrokesAvg != null) {
-    const lost = Math.max(0, penStrokesAvg - bm.penaltiesPerRound);
+    const delta = penStrokesAvg - bm.penaltiesPerRound;
     areas.push({
       key: "penalties", name: AREA_NAMES.penalties,
       actualLabel: `${penStrokesAvg.toFixed(1)} shots`, benchmarkLabel: `${bm.penaltiesPerRound} shots`,
-      shotsLost: lost,
+      shotsLost: Math.max(0, delta), shotsDelta: delta,
       explanation: `Averaging ${penStrokesAvg.toFixed(1)} penalty strokes per round vs benchmark of ${bm.penaltiesPerRound} for your handicap.`,
     });
   }
@@ -143,11 +143,12 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   // 2. Putting
   const puttAvg = avg(puttsPer18);
   if (puttAvg != null) {
-    const lost = Math.max(0, puttAvg - bm.putts_per_round);
+    const delta = puttAvg - bm.putts_per_round;
+    const lost = Math.max(0, delta);
     areas.push({
       key: "putting", name: AREA_NAMES.putting,
       actualLabel: `${puttAvg.toFixed(0)} putts`, benchmarkLabel: `${bm.putts_per_round}`,
-      shotsLost: lost,
+      shotsLost: lost, shotsDelta: delta,
       explanation: `Averaging ${puttAvg.toFixed(0)} putts per 18 vs benchmark of ${bm.putts_per_round} costs approximately ${lost.toFixed(1)} shots.`,
     });
   }
@@ -156,12 +157,12 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   const proxAvg = avg(u25Dists);
   const u25Per18 = avg(u25HolesPer18) || 0;
   if (proxAvg != null) {
-    const distGap = Math.max(0, proxAvg - bm.proximity_u25);
-    const lost = (distGap / 3) * 0.15 * u25Per18;
+    const delta = ((proxAvg - bm.proximity_u25) / 3) * 0.15 * u25Per18;
+    const lost = Math.max(0, delta);
     areas.push({
       key: "proximity", name: AREA_NAMES.proximity,
       actualLabel: `${proxAvg.toFixed(1)}ft`, benchmarkLabel: `${bm.proximity_u25}ft`,
-      shotsLost: lost,
+      shotsLost: lost, shotsDelta: delta,
       explanation: `Averaging ${proxAvg.toFixed(1)}ft from under 25 yards vs benchmark of ${bm.proximity_u25}ft costs approximately ${lost.toFixed(1)} shots.`,
     });
   }
@@ -169,11 +170,12 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   // 4. GIR
   const girAvg = avg(girPcts);
   if (girAvg != null) {
-    const lost = Math.max(0, bm.gir - girAvg) * 0.18;
+    const delta = (bm.gir - girAvg) * 0.18;
+    const lost = Math.max(0, delta);
     areas.push({
       key: "gir", name: AREA_NAMES.gir,
       actualLabel: `${girAvg.toFixed(0)}%`, benchmarkLabel: `${bm.gir}%`,
-      shotsLost: lost,
+      shotsLost: lost, shotsDelta: delta,
       explanation: `Hitting ${girAvg.toFixed(0)}% greens vs benchmark of ${bm.gir}% costs approximately ${lost.toFixed(1)} shots.`,
     });
   }
@@ -181,11 +183,12 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   // 5. Scrambling
   if (scrOpp > 0) {
     const scrPct = scrSucc / scrOpp * 100;
-    const lost = Math.max(0, bm.scrambling - scrPct) * 0.1;
+    const delta = (bm.scrambling - scrPct) * 0.1;
+    const lost = Math.max(0, delta);
     areas.push({
       key: "scrambling", name: AREA_NAMES.scrambling,
       actualLabel: `${scrPct.toFixed(0)}%`, benchmarkLabel: `${bm.scrambling}%`,
-      shotsLost: lost,
+      shotsLost: lost, shotsDelta: delta,
       explanation: `Scrambling ${scrPct.toFixed(0)}% vs benchmark of ${bm.scrambling}% costs approximately ${lost.toFixed(1)} shots.`,
     });
   }
@@ -193,18 +196,20 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   // 6. Fairways
   if (fwTotal > 0) {
     const fwPct = fwHit / fwTotal * 100;
-    const lost = Math.max(0, bm.fairways - fwPct) * 0.05;
+    const delta = (bm.fairways - fwPct) * 0.05;
+    const lost = Math.max(0, delta);
     areas.push({
       key: "fairways", name: AREA_NAMES.fairways,
       actualLabel: `${fwPct.toFixed(0)}%`, benchmarkLabel: `${bm.fairways}%`,
-      shotsLost: lost,
+      shotsLost: lost, shotsDelta: delta,
       explanation: `Hitting ${fwPct.toFixed(0)}% fairways vs benchmark of ${bm.fairways}% costs approximately ${lost.toFixed(1)} shots.`,
     });
   }
 
   // At/above benchmark (0 shots lost) sink to the bottom, biggest gap on top.
   areas.sort((a, b) => b.shotsLost - a.shotsLost);
-  const top = areas.length && areas[0].shotsLost > 0.05 ? areas[0] : null;
+  // Only flag a biggest priority when an area is genuinely losing shots.
+  const top = areas.length && areas[0].shotsLost > 0.1 ? areas[0] : null;
   return {
     whs: whsIndex,
     areas,
@@ -223,7 +228,7 @@ function computeTrend(area, prevByKey) {
   return { dir: change < 0 ? "improving" : "worse", change: abs };
 }
 
-export function ShotsVsBenchmark({ rounds, whsIndex }) {
+export function ShotsVsBenchmark({ rounds, whsIndex, prominent = false }) {
   const [holesByRound, setHolesByRound] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -282,13 +287,13 @@ export function ShotsVsBenchmark({ rounds, whsIndex }) {
         vs benchmark for {whsLabel} WHS · last {result ? Math.min(rounds.length, 5) : 0} rounds
       </div>
 
-      {/* Top priority card */}
+      {/* Top priority card — full width, emphasised when prominent (coach detail) */}
       {result.top ? (
-        <div style={{ background: "linear-gradient(135deg,#0F3D2E,#1A6B4A)", borderRadius: 12, padding: "14px 16px", color: "white" }}>
+        <div style={{ background: "linear-gradient(135deg,#0F3D2E,#1A6B4A)", borderRadius: 12, padding: prominent ? "18px 20px" : "14px 16px", color: "white", width: "100%" }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gold)", marginBottom: 4 }}>
             Biggest priority: {result.top.name}
           </div>
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 6 }}>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: prominent ? 27 : 22, marginBottom: 6 }}>
             ~{result.top.shotsLost.toFixed(1)} shots per round vs benchmark
           </div>
           {result.top.trend && (
@@ -299,13 +304,13 @@ export function ShotsVsBenchmark({ rounds, whsIndex }) {
                 : "— stable vs previous 5"}
             </div>
           )}
-          <div style={{ fontSize: 13, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
+          <div style={{ fontSize: prominent ? 14 : 13, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
             {result.top.explanation}
           </div>
         </div>
       ) : (
-        <div style={{ background: "var(--bg)", borderRadius: 12, padding: "14px 16px", fontSize: 13, color: "var(--text-mid)" }}>
-          You're at or above benchmark across all measured areas. Keep it up.
+        <div style={{ background: "var(--bg)", borderRadius: 12, padding: prominent ? "18px 20px" : "14px 16px", fontSize: 13, color: "var(--text-mid)", width: "100%" }}>
+          All areas at or above benchmark for your handicap.
         </div>
       )}
 
@@ -324,9 +329,12 @@ export function ShotsVsBenchmark({ rounds, whsIndex }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{a.name}</span>
                 <span style={{ display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: a.shotsLost > 0.05 ? "var(--red)" : "var(--green-mid)" }}>
-                    {a.shotsLost > 0.05 ? `~${a.shotsLost.toFixed(1)} shots` : "At benchmark"}
-                  </span>
+                  {(() => {
+                    const d = a.shotsDelta ?? 0;
+                    if (d > 0.1) return <span style={{ fontSize: 12, fontWeight: 700, color: "var(--red)" }}>~{d.toFixed(1)} shots</span>;
+                    if (d < -0.1) return <span style={{ fontSize: 12, fontWeight: 700, color: "var(--green-mid)" }}>+{Math.abs(d).toFixed(1)} shots above benchmark</span>;
+                    return <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)" }}>At benchmark</span>;
+                  })()}
                   {a.trend && (
                     <span style={{ fontSize: 11, fontWeight: 700,
                       color: a.trend.dir === "improving" ? "var(--green-mid)" : a.trend.dir === "worse" ? "var(--red)" : "var(--text-dim)" }}>
