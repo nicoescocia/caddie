@@ -31,15 +31,41 @@ function parseFt(v) {
   return isNaN(n) ? null : n;
 }
 
-const PENALTY_TYPES = new Set(["Lost ball (tee)", "Lost ball (fairway)", "OOB", "Hazard", "Unplayable"]);
+// Shot cost per penalty type. Lost ball / OOB are stroke-and-distance (2);
+// hazard and unplayable are a single stroke (1).
+const PENALTY_COSTS = {
+  "Lost ball (tee)":     2,
+  "Lost ball (fairway)": 2,
+  "OOB":                 2,
+  "Hazard":              1,
+  "Unplayable":          1,
+};
+const PENALTY_TYPES = new Set(Object.keys(PENALTY_COSTS));
 
-// How many penalty strokes a hole's penalty field represents.
-function penaltyCount(penalty) {
-  if (Array.isArray(penalty)) return penalty.length;
-  if (penalty == null || penalty === "None" || penalty === "") return 0;
+// Best-effort list of penalty type entries from a hole's penalty field. Legacy
+// numeric storage carries no type, so it yields untyped placeholders.
+function penaltyEntries(penalty) {
+  if (Array.isArray(penalty)) return penalty;
+  if (penalty == null || penalty === "None" || penalty === "") return [];
   const n = parseInt(penalty, 10);
-  if (!isNaN(n)) return n;         // legacy numeric-string storage
-  return 1;                        // single named penalty
+  if (!isNaN(n)) return Array(n).fill(null); // legacy numeric — count only, no type
+  return [penalty];                          // single named penalty
+}
+
+// Shot cost of one penalty entry; unknown/legacy defaults to 1.
+function penaltyShots(entry) {
+  return PENALTY_COSTS[entry] ?? 1;
+}
+
+// Describe the dominant penalty category for the explanation sentence.
+function penaltyDescriptor(tally) {
+  const total = Object.values(tally).reduce((s, n) => s + n, 0);
+  if (!total) return "";
+  const lostLike = (tally["Lost ball (tee)"] || 0) + (tally["Lost ball (fairway)"] || 0) + (tally["OOB"] || 0);
+  const other = total - lostLike;
+  if (lostLike > other) return "mostly lost balls";
+  if (other > lostLike) return "mostly hazards";
+  return "mixed penalties";
 }
 
 const AREA_NAMES = {
@@ -59,8 +85,10 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   if (!rounds || rounds.length === 0 || whsIndex == null) return null;
   const bm = getBenchmark(whsIndex);
 
-  // Per-round penalty + putting averages, prorated to 18 holes.
-  const penPer18 = [], puttsPer18 = [];
+  // Per-round penalty (shot cost + event count) + putting averages, prorated to
+  // 18 holes. penTypeTally is pooled across rounds for the descriptor.
+  const penShotsPer18 = [], penEventsPer18 = [], puttsPer18 = [];
+  const penTypeTally = {};
   // Pooled tallies for rate/distance metrics.
   let u25Dists = [], u25HolesPer18 = [];
   let girPcts = [];
@@ -72,19 +100,23 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
     const hp = r.holes_played || 18;
     const mult = 18 / hp;
 
-    // 1. Tee penalties
-    let pen = 0, u25Count = 0;
+    // 1. Tee penalties — weighted by type
+    let penShots = 0, penEvents = 0, u25Count = 0;
     for (const h of holes) {
-      pen += penaltyCount(h.penalty);
-      const pr = Array.isArray(h.pickup_reason) ? h.pickup_reason : [];
-      pen += pr.filter(x => PENALTY_TYPES.has(x)).length;
+      const pr = Array.isArray(h.pickup_reason) ? h.pickup_reason.filter(x => PENALTY_TYPES.has(x)) : [];
+      for (const e of [...penaltyEntries(h.penalty), ...pr]) {
+        penEvents++;
+        penShots += penaltyShots(e);
+        if (e && PENALTY_COSTS[e] != null) penTypeTally[e] = (penTypeTally[e] || 0) + 1;
+      }
       if (h.approach === "Under 25") {
         u25Count++;
         const ft = parseFt(h.putt1);
         if (ft != null) u25Dists.push(ft);
       }
     }
-    penPer18.push(pen * mult);
+    penShotsPer18.push(penShots * mult);
+    penEventsPer18.push(penEvents * mult);
     u25HolesPer18.push(u25Count * mult);
 
     // 2. Putting
@@ -117,15 +149,18 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
 
   const areas = [];
 
-  // 1. Tee penalties — benchmark 0, gap is the average directly.
-  const penAvg = avg(penPer18);
-  if (penAvg != null) {
-    const lost = Math.max(0, penAvg);
+  // 1. Tee penalties — benchmark 0. Shots lost are weighted by penalty type;
+  // the event count drives the explanation sentence.
+  const penShotsAvg = avg(penShotsPer18);
+  const penEventsAvg = avg(penEventsPer18);
+  if (penShotsAvg != null) {
+    const lost = Math.max(0, penShotsAvg);
+    const descriptor = penaltyDescriptor(penTypeTally);
     areas.push({
       key: "penalties", name: AREA_NAMES.penalties,
-      actualLabel: `${penAvg.toFixed(1)} strokes`, benchmarkLabel: "0",
+      actualLabel: `${penEventsAvg.toFixed(1)} events`, benchmarkLabel: "0",
       shotsLost: lost,
-      explanation: `Averaging ${penAvg.toFixed(1)} penalty strokes per round vs benchmark of 0 costs approximately ${lost.toFixed(1)} shots.`,
+      explanation: `Averaging ${penEventsAvg.toFixed(1)} penalty events per round${descriptor ? ` (${descriptor})` : ""} costs approximately ${lost.toFixed(1)} shots.`,
     });
   }
 
