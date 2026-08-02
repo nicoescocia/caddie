@@ -237,25 +237,39 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   };
 }
 
+// Trend of an area's shots lost vs the previous window. Improving = fewer shots
+// lost now. Returns null when there is no previous-window value for the area.
+function computeTrend(area, prevByKey) {
+  if (!prevByKey || !(area.key in prevByKey)) return null;
+  const change = area.shotsLost - prevByKey[area.key];
+  const abs = Math.abs(change);
+  if (abs < 0.3) return { dir: "stable", change: abs };
+  return { dir: change < 0 ? "improving" : "worse", change: abs };
+}
+
 export function ShotsVsBenchmark({ rounds, whsIndex }) {
   const [holesByRound, setHolesByRound] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
-  // Last 5 rounds newest-first (defensive sort in case caller order varies).
-  const last5 = (rounds || [])
+  // Current window = last 5 rounds; previous window = rounds 6–10. Fetch holes
+  // for up to 10 rounds in one query, then split client-side. Newest-first
+  // (defensive sort in case caller order varies).
+  const sorted = (rounds || [])
     .slice()
-    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-    .slice(0, 5);
-  const idKey = last5.map(r => r.id).join(",");
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  const last10   = sorted.slice(0, 10);
+  const current5 = sorted.slice(0, 5);
+  const prev5    = sorted.slice(5, 10);
+  const idKey = last10.map(r => r.id).join(",");
 
   useEffect(() => {
     let cancelled = false;
-    if (!last5.length || whsIndex == null) { setHolesByRound({}); return; }
+    if (!last10.length || whsIndex == null) { setHolesByRound({}); return; }
     (async () => {
       const { data } = await supabase
         .from("round_holes")
         .select("round_id, approach, putt1, penalty, pickup_reason, gir, fairway, par, score, putts, dna, picked_up")
-        .in("round_id", last5.map(r => r.id));
+        .in("round_id", last10.map(r => r.id));
       if (cancelled) return;
       const map = {};
       for (const h of (data || [])) {
@@ -268,9 +282,16 @@ export function ShotsVsBenchmark({ rounds, whsIndex }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idKey, whsIndex]);
 
-  if (whsIndex == null || last5.length === 0 || holesByRound == null) return null;
-  const result = computeShotsVsBenchmark({ rounds: last5, holesByRound, whsIndex });
+  if (whsIndex == null || current5.length === 0 || holesByRound == null) return null;
+  const result = computeShotsVsBenchmark({ rounds: current5, holesByRound, whsIndex });
   if (!result) return null;
+
+  // Previous-window values drive the per-area trend indicators (omitted when
+  // fewer than 6 rounds exist, i.e. no previous window).
+  const prevResult = prev5.length ? computeShotsVsBenchmark({ rounds: prev5, holesByRound, whsIndex }) : null;
+  const prevByKey = {};
+  if (prevResult) prevResult.areas.forEach(a => { prevByKey[a.key] = a.shotsLost; });
+  result.areas.forEach(a => { a.trend = computeTrend(a, prevResult ? prevByKey : null); });
 
   const maxLost = Math.max(...result.areas.map(a => a.shotsLost), 0.0001);
   const whsLabel = Number(whsIndex).toFixed(1);
@@ -294,6 +315,14 @@ export function ShotsVsBenchmark({ rounds, whsIndex }) {
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 6 }}>
             ~{result.top.shotsLost.toFixed(1)} shots per round vs benchmark
           </div>
+          {result.top.trend && (
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6,
+              color: result.top.trend.dir === "improving" ? "#7EE0A6" : result.top.trend.dir === "worse" ? "#FF9B9B" : "rgba(255,255,255,0.6)" }}>
+              {result.top.trend.dir === "improving" ? `↑ ${result.top.trend.change.toFixed(1)} shots vs previous 5`
+                : result.top.trend.dir === "worse" ? `↓ ${result.top.trend.change.toFixed(1)} shots vs previous 5`
+                : "— stable vs previous 5"}
+            </div>
+          )}
           <div style={{ fontSize: 13, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
             {result.top.explanation}
           </div>
@@ -318,8 +347,18 @@ export function ShotsVsBenchmark({ rounds, whsIndex }) {
             <div key={a.key} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{a.name}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: a.shotsLost > 0.05 ? "var(--red)" : "var(--green-mid)", whiteSpace: "nowrap" }}>
-                  {a.shotsLost > 0.05 ? `~${a.shotsLost.toFixed(1)} shots` : "At benchmark"}
+                <span style={{ display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: a.shotsLost > 0.05 ? "var(--red)" : "var(--green-mid)" }}>
+                    {a.shotsLost > 0.05 ? `~${a.shotsLost.toFixed(1)} shots` : "At benchmark"}
+                  </span>
+                  {a.trend && (
+                    <span style={{ fontSize: 11, fontWeight: 700,
+                      color: a.trend.dir === "improving" ? "var(--green-mid)" : a.trend.dir === "worse" ? "var(--red)" : "var(--text-dim)" }}>
+                      {a.trend.dir === "improving" ? `↑ ${a.trend.change.toFixed(1)} shots`
+                        : a.trend.dir === "worse" ? `↓ ${a.trend.change.toFixed(1)} shots`
+                        : "— stable"}
+                    </span>
+                  )}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 5 }}>
