@@ -4,18 +4,25 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
-// Source: Shot Scope / Arccos aggregate data (hundreds of thousands of amateur rounds)
-// Penalties converted to weighted shots (lost ball/OOB ×2, hazard/unplayable ×1)
-// Proximity figures are internal estimates — no published source
 const HANDICAP_BENCHMARKS = {
-  0:  { proximity_u25: 8,  scrambling: 58, gir: 64, fairways: 64, putts_per_round: 29, penaltiesPerRound: 0.2 },
-  5:  { proximity_u25: 10, scrambling: 45, gir: 52, fairways: 58, putts_per_round: 30, penaltiesPerRound: 0.5 },
-  10: { proximity_u25: 12, scrambling: 32, gir: 38, fairways: 50, putts_per_round: 31, penaltiesPerRound: 1.0 },
-  15: { proximity_u25: 14, scrambling: 22, gir: 25, fairways: 42, putts_per_round: 32, penaltiesPerRound: 1.9 },
-  20: { proximity_u25: 16, scrambling: 15, gir: 15, fairways: 35, putts_per_round: 34, penaltiesPerRound: 3.2 },
-  25: { proximity_u25: 18, scrambling: 10, gir: 8,  fairways: 28, putts_per_round: 35, penaltiesPerRound: 4.5 },
-  30: { proximity_u25: 20, scrambling: 7,  gir: 5,  fairways: 22, putts_per_round: 36, penaltiesPerRound: 5.5 },
+  0:  { proximity_u25: 8,  scrambling: 52, gir: 62, fairways: 58, putts_per_round: 29, penaltiesPerRound: 0.6 },
+  5:  { proximity_u25: 10, scrambling: 43, gir: 48, fairways: 53, putts_per_round: 30, penaltiesPerRound: 0.9 },
+  10: { proximity_u25: 12, scrambling: 32, gir: 37, fairways: 50, putts_per_round: 31, penaltiesPerRound: 1.6 },
+  15: { proximity_u25: 14, scrambling: 22, gir: 25, fairways: 45, putts_per_round: 33, penaltiesPerRound: 2.5 },
+  20: { proximity_u25: 16, scrambling: 18, gir: 16, fairways: 38, putts_per_round: 33, penaltiesPerRound: 3.0 },
+  25: { proximity_u25: 18, scrambling: 14, gir: 9,  fairways: 32, putts_per_round: 34, penaltiesPerRound: 4.7 },
+  30: { proximity_u25: 20, scrambling: 10, gir: 5,  fairways: 26, putts_per_round: 36, penaltiesPerRound: 6.5 },
 };
+
+// Sources: Shot Scope benchmark PDF + Arccos aggregate data (hundreds of thousands of amateur rounds each)
+// GIR: both sources agree closely — averaged
+// Putts: both sources agree closely — averaged
+// Scrambling: Shot Scope and Arccos differ at extremes — blended
+// Fairways: Shot Scope shows ~46-50% flat (likely GPS artefact); Arccos shows clear gradient (28-64%)
+//   — used a moderate gradient as a compromise; neither treated as definitive
+// Penalties: Shot Scope figures used directly as scoring impact (penalty strokes added to score)
+//   — no additional weighting applied; penaltiesPerRound = actual shots lost to penalties per round
+// Proximity figures: internal estimates — no published source
 
 function getBenchmark(handicap) {
   const brackets = [0, 5, 10, 15, 20, 25, 30];
@@ -34,30 +41,16 @@ function parseFt(v) {
   return isNaN(n) ? null : n;
 }
 
-// Shot cost per penalty type. Lost ball / OOB are stroke-and-distance (2);
-// hazard and unplayable are a single stroke (1).
-const PENALTY_COSTS = {
-  "Lost ball (tee)":     2,
-  "Lost ball (fairway)": 2,
-  "OOB":                 2,
-  "Hazard":              1,
-  "Unplayable":          1,
-};
-const PENALTY_TYPES = new Set(Object.keys(PENALTY_COSTS));
+const PENALTY_TYPES = new Set(["Lost ball (tee)", "Lost ball (fairway)", "OOB", "Hazard", "Unplayable"]);
 
-// Best-effort list of penalty type entries from a hole's penalty field. Legacy
-// numeric storage carries no type, so it yields untyped placeholders.
+// Best-effort list of penalty entries from a hole's penalty field. Legacy numeric
+// storage yields that many untyped placeholders. Entry count = raw penalty strokes.
 function penaltyEntries(penalty) {
   if (Array.isArray(penalty)) return penalty;
   if (penalty == null || penalty === "None" || penalty === "") return [];
   const n = parseInt(penalty, 10);
-  if (!isNaN(n)) return Array(n).fill(null); // legacy numeric — count only, no type
+  if (!isNaN(n)) return Array(n).fill(null); // legacy numeric — count only
   return [penalty];                          // single named penalty
-}
-
-// Shot cost of one penalty entry; unknown/legacy defaults to 1.
-function penaltyShots(entry) {
-  return PENALTY_COSTS[entry] ?? 1;
 }
 
 const AREA_NAMES = {
@@ -77,8 +70,8 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   if (!rounds || rounds.length === 0 || whsIndex == null) return null;
   const bm = getBenchmark(whsIndex);
 
-  // Per-round weighted penalty shots + putting averages, prorated to 18 holes.
-  const penShotsPer18 = [], puttsPer18 = [];
+  // Per-round raw penalty strokes + putting averages, prorated to 18 holes.
+  const penStrokesPer18 = [], puttsPer18 = [];
   // Pooled tallies for rate/distance metrics.
   let u25Dists = [], u25HolesPer18 = [];
   let girPcts = [];
@@ -90,20 +83,18 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
     const hp = r.holes_played || 18;
     const mult = 18 / hp;
 
-    // 1. Penalties — weighted by type
-    let penShots = 0, u25Count = 0;
+    // 1. Penalties — raw penalty strokes (one per entry, no type weighting)
+    let penStrokes = 0, u25Count = 0;
     for (const h of holes) {
       const pr = Array.isArray(h.pickup_reason) ? h.pickup_reason.filter(x => PENALTY_TYPES.has(x)) : [];
-      for (const e of [...penaltyEntries(h.penalty), ...pr]) {
-        penShots += penaltyShots(e);
-      }
+      penStrokes += penaltyEntries(h.penalty).length + pr.length;
       if (h.approach === "Under 25") {
         u25Count++;
         const ft = parseFt(h.putt1);
         if (ft != null) u25Dists.push(ft);
       }
     }
-    penShotsPer18.push(penShots * mult);
+    penStrokesPer18.push(penStrokes * mult);
     u25HolesPer18.push(u25Count * mult);
 
     // 2. Putting
@@ -136,15 +127,16 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
 
   const areas = [];
 
-  // 1. Penalties — weighted penalty shots vs the handicap benchmark.
-  const penShotsAvg = avg(penShotsPer18);
-  if (penShotsAvg != null) {
-    const lost = Math.max(0, penShotsAvg - bm.penaltiesPerRound);
+  // 1. Penalties — raw penalty strokes vs the handicap benchmark (same basis:
+  // shots added to score).
+  const penStrokesAvg = avg(penStrokesPer18);
+  if (penStrokesAvg != null) {
+    const lost = Math.max(0, penStrokesAvg - bm.penaltiesPerRound);
     areas.push({
       key: "penalties", name: AREA_NAMES.penalties,
-      actualLabel: `${penShotsAvg.toFixed(1)} shots`, benchmarkLabel: `${bm.penaltiesPerRound} shots`,
+      actualLabel: `${penStrokesAvg.toFixed(1)} shots`, benchmarkLabel: `${bm.penaltiesPerRound} shots`,
       shotsLost: lost,
-      explanation: `Averaging ${penShotsAvg.toFixed(1)} weighted penalty shots per round vs benchmark of ${bm.penaltiesPerRound} for your handicap.`,
+      explanation: `Averaging ${penStrokesAvg.toFixed(1)} penalty strokes per round vs benchmark of ${bm.penaltiesPerRound} for your handicap.`,
     });
   }
 
