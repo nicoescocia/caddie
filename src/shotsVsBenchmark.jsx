@@ -4,14 +4,17 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
+// Source: Shot Scope / Arccos aggregate data (hundreds of thousands of amateur rounds)
+// Penalties converted to weighted shots (lost ball/OOB ×2, hazard/unplayable ×1)
+// Proximity figures are internal estimates — no published source
 const HANDICAP_BENCHMARKS = {
-  0:  { proximity_u25: 8,  scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31, penaltiesPerRound: 0.3 },
-  5:  { proximity_u25: 10, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33, penaltiesPerRound: 0.5 },
-  10: { proximity_u25: 12, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34, penaltiesPerRound: 0.8 },
-  15: { proximity_u25: 14, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35, penaltiesPerRound: 1.2 },
-  20: { proximity_u25: 16, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36, penaltiesPerRound: 1.8 },
-  25: { proximity_u25: 18, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37, penaltiesPerRound: 2.4 },
-  30: { proximity_u25: 20, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38, penaltiesPerRound: 3.0 },
+  0:  { proximity_u25: 8,  scrambling: 58, gir: 64, fairways: 64, putts_per_round: 29, penaltiesPerRound: 0.2 },
+  5:  { proximity_u25: 10, scrambling: 45, gir: 52, fairways: 58, putts_per_round: 30, penaltiesPerRound: 0.5 },
+  10: { proximity_u25: 12, scrambling: 32, gir: 38, fairways: 50, putts_per_round: 31, penaltiesPerRound: 1.0 },
+  15: { proximity_u25: 14, scrambling: 22, gir: 25, fairways: 42, putts_per_round: 32, penaltiesPerRound: 1.9 },
+  20: { proximity_u25: 16, scrambling: 15, gir: 15, fairways: 35, putts_per_round: 34, penaltiesPerRound: 3.2 },
+  25: { proximity_u25: 18, scrambling: 10, gir: 8,  fairways: 28, putts_per_round: 35, penaltiesPerRound: 4.5 },
+  30: { proximity_u25: 20, scrambling: 7,  gir: 5,  fairways: 22, putts_per_round: 36, penaltiesPerRound: 5.5 },
 };
 
 function getBenchmark(handicap) {
