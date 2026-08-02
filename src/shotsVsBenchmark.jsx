@@ -69,7 +69,7 @@ function penaltyDescriptor(tally) {
 }
 
 const AREA_NAMES = {
-  penalties:  "Tee penalties",
+  penalties:  "Penalties",
   putting:    "Putting",
   proximity:  "Proximity (under 25 yds)",
   gir:        "Greens in regulation",
@@ -100,7 +100,7 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
     const hp = r.holes_played || 18;
     const mult = 18 / hp;
 
-    // 1. Tee penalties — weighted by type
+    // 1. Penalties — weighted by type
     let penShots = 0, penEvents = 0, u25Count = 0;
     for (const h of holes) {
       const pr = Array.isArray(h.pickup_reason) ? h.pickup_reason.filter(x => PENALTY_TYPES.has(x)) : [];
@@ -149,7 +149,7 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
 
   const areas = [];
 
-  // 1. Tee penalties — benchmark 0. Shots lost are weighted by penalty type;
+  // 1. Penalties — benchmark 0. Shots lost are weighted by penalty type;
   // the event count drives the explanation sentence.
   const penShotsAvg = avg(penShotsPer18);
   const penEventsAvg = avg(penEventsPer18);
