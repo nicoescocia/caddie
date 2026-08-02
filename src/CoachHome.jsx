@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import StudentProgress from "./StudentProgress";
 import renderMarkdown from "./renderMarkdown";
+import { ShotsVsBenchmark } from "./shotsVsBenchmark";
 
 const HANDICAP_BENCHMARKS = {
   0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
@@ -1896,7 +1897,10 @@ OUTPUT FORMAT
             )}
 
             {mainView === "analytics" && (
-              <AnalyticsTab sentRounds={sentRounds} />
+              <>
+                <AnalyticsTab sentRounds={sentRounds} />
+                <ShotsVsBenchmark rounds={sentRounds} whsIndex={headerWhs} />
+              </>
             )}
 
             {scored.length >= 3 && (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { GoalsSection } from "./goals";
+import { ShotsVsBenchmark } from "./shotsVsBenchmark";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -1075,12 +1076,21 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
           <StudentRoundTrends rounds={enrichedForTrends} activeTab={activeStatTab} />
         )}
         {mainView === "analytics" && (
-          <StudentAnalytics
-            rounds={enrichedForTrends}
-            analyticsHolesMap={analyticsHolesMap}
-            isPremium={!!profile?.is_premium}
-            activeStatTab={activeStatTab}
-          />
+          <>
+            <StudentAnalytics
+              rounds={enrichedForTrends}
+              analyticsHolesMap={analyticsHolesMap}
+              isPremium={!!profile?.is_premium}
+              activeStatTab={activeStatTab}
+            />
+            {/* Premium (or admin, detected via the admin-only onBackToAdmin prop) */}
+            {(!!profile?.is_premium || !!onBackToAdmin) && (
+              <ShotsVsBenchmark
+                rounds={completedRounds}
+                whsIndex={completedRounds.find(r => r.whs_index != null)?.whs_index ?? profile?.official_handicap ?? null}
+              />
+            )}
+          </>
         )}
 
         {/* Goals set by the coach (read-only) */}
