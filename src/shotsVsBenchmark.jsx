@@ -5,13 +5,13 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
 const HANDICAP_BENCHMARKS = {
-  0:  { proximity_u25: 8,  scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
-  5:  { proximity_u25: 10, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33 },
-  10: { proximity_u25: 12, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34 },
-  15: { proximity_u25: 14, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35 },
-  20: { proximity_u25: 16, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36 },
-  25: { proximity_u25: 18, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37 },
-  30: { proximity_u25: 20, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38 },
+  0:  { proximity_u25: 8,  scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31, penaltiesPerRound: 0.3 },
+  5:  { proximity_u25: 10, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33, penaltiesPerRound: 0.5 },
+  10: { proximity_u25: 12, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34, penaltiesPerRound: 0.8 },
+  15: { proximity_u25: 14, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35, penaltiesPerRound: 1.2 },
+  20: { proximity_u25: 16, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36, penaltiesPerRound: 1.8 },
+  25: { proximity_u25: 18, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37, penaltiesPerRound: 2.4 },
+  30: { proximity_u25: 20, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38, penaltiesPerRound: 3.0 },
 };
 
 function getBenchmark(handicap) {
@@ -57,17 +57,6 @@ function penaltyShots(entry) {
   return PENALTY_COSTS[entry] ?? 1;
 }
 
-// Describe the dominant penalty category for the explanation sentence.
-function penaltyDescriptor(tally) {
-  const total = Object.values(tally).reduce((s, n) => s + n, 0);
-  if (!total) return "";
-  const lostLike = (tally["Lost ball (tee)"] || 0) + (tally["Lost ball (fairway)"] || 0) + (tally["OOB"] || 0);
-  const other = total - lostLike;
-  if (lostLike > other) return "mostly lost balls";
-  if (other > lostLike) return "mostly hazards";
-  return "mixed penalties";
-}
-
 const AREA_NAMES = {
   penalties:  "Penalties",
   putting:    "Putting",
@@ -85,10 +74,8 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   if (!rounds || rounds.length === 0 || whsIndex == null) return null;
   const bm = getBenchmark(whsIndex);
 
-  // Per-round penalty (shot cost + event count) + putting averages, prorated to
-  // 18 holes. penTypeTally is pooled across rounds for the descriptor.
-  const penShotsPer18 = [], penEventsPer18 = [], puttsPer18 = [];
-  const penTypeTally = {};
+  // Per-round weighted penalty shots + putting averages, prorated to 18 holes.
+  const penShotsPer18 = [], puttsPer18 = [];
   // Pooled tallies for rate/distance metrics.
   let u25Dists = [], u25HolesPer18 = [];
   let girPcts = [];
@@ -101,13 +88,11 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
     const mult = 18 / hp;
 
     // 1. Penalties — weighted by type
-    let penShots = 0, penEvents = 0, u25Count = 0;
+    let penShots = 0, u25Count = 0;
     for (const h of holes) {
       const pr = Array.isArray(h.pickup_reason) ? h.pickup_reason.filter(x => PENALTY_TYPES.has(x)) : [];
       for (const e of [...penaltyEntries(h.penalty), ...pr]) {
-        penEvents++;
         penShots += penaltyShots(e);
-        if (e && PENALTY_COSTS[e] != null) penTypeTally[e] = (penTypeTally[e] || 0) + 1;
       }
       if (h.approach === "Under 25") {
         u25Count++;
@@ -116,7 +101,6 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
       }
     }
     penShotsPer18.push(penShots * mult);
-    penEventsPer18.push(penEvents * mult);
     u25HolesPer18.push(u25Count * mult);
 
     // 2. Putting
@@ -149,18 +133,15 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
 
   const areas = [];
 
-  // 1. Penalties — benchmark 0. Shots lost are weighted by penalty type;
-  // the event count drives the explanation sentence.
+  // 1. Penalties — weighted penalty shots vs the handicap benchmark.
   const penShotsAvg = avg(penShotsPer18);
-  const penEventsAvg = avg(penEventsPer18);
   if (penShotsAvg != null) {
-    const lost = Math.max(0, penShotsAvg);
-    const descriptor = penaltyDescriptor(penTypeTally);
+    const lost = Math.max(0, penShotsAvg - bm.penaltiesPerRound);
     areas.push({
       key: "penalties", name: AREA_NAMES.penalties,
-      actualLabel: `${penEventsAvg.toFixed(1)} events`, benchmarkLabel: "0",
+      actualLabel: `${penShotsAvg.toFixed(1)} shots`, benchmarkLabel: `${bm.penaltiesPerRound} shots`,
       shotsLost: lost,
-      explanation: `Averaging ${penEventsAvg.toFixed(1)} penalty events per round${descriptor ? ` (${descriptor})` : ""} costs approximately ${lost.toFixed(1)} shots.`,
+      explanation: `Averaging ${penShotsAvg.toFixed(1)} weighted penalty shots per round vs benchmark of ${bm.penaltiesPerRound} for your handicap.`,
     });
   }
 

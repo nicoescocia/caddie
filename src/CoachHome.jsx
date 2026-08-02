@@ -5,13 +5,13 @@ import renderMarkdown from "./renderMarkdown";
 import { ShotsVsBenchmark } from "./shotsVsBenchmark";
 
 const HANDICAP_BENCHMARKS = {
-  0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31 },
-  5:  { proximity_u25: 10, proximity_25_50: 17, proximity_50_75: 21, proximity_75_100: 28, proximity_100_125: 33, proximity_125_150: 40, proximity_150plus: 63, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33 },
-  10: { proximity_u25: 12, proximity_25_50: 20, proximity_50_75: 24, proximity_75_100: 32, proximity_100_125: 40, proximity_125_150: 50, proximity_150plus: 72, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34 },
-  15: { proximity_u25: 14, proximity_25_50: 24, proximity_50_75: 28, proximity_75_100: 38, proximity_100_125: 50, proximity_125_150: 65, proximity_150plus: 92, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35 },
-  20: { proximity_u25: 16, proximity_25_50: 28, proximity_50_75: 32, proximity_75_100: 44, proximity_100_125: 56, proximity_125_150: 75, proximity_150plus: 109, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36 },
-  25: { proximity_u25: 18, proximity_25_50: 32, proximity_50_75: 36, proximity_75_100: 50, proximity_100_125: 62, proximity_125_150: 85, proximity_150plus: 116, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37 },
-  30: { proximity_u25: 20, proximity_25_50: 36, proximity_50_75: 40, proximity_75_100: 56, proximity_100_125: 70, proximity_125_150: 95, proximity_150plus: 125, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38 },
+  0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 54, gir: 57, fairways: 57, putts_per_round: 31, penaltiesPerRound: 0.3 },
+  5:  { proximity_u25: 10, proximity_25_50: 17, proximity_50_75: 21, proximity_75_100: 28, proximity_100_125: 33, proximity_125_150: 40, proximity_150plus: 63, scrambling: 47, gir: 46, fairways: 51, putts_per_round: 33, penaltiesPerRound: 0.5 },
+  10: { proximity_u25: 12, proximity_25_50: 20, proximity_50_75: 24, proximity_75_100: 32, proximity_100_125: 40, proximity_125_150: 50, proximity_150plus: 72, scrambling: 39, gir: 37, fairways: 49, putts_per_round: 34, penaltiesPerRound: 0.8 },
+  15: { proximity_u25: 14, proximity_25_50: 24, proximity_50_75: 28, proximity_75_100: 38, proximity_100_125: 50, proximity_125_150: 65, proximity_150plus: 92, scrambling: 34, gir: 26, fairways: 48, putts_per_round: 35, penaltiesPerRound: 1.2 },
+  20: { proximity_u25: 16, proximity_25_50: 28, proximity_50_75: 32, proximity_75_100: 44, proximity_100_125: 56, proximity_125_150: 75, proximity_150plus: 109, scrambling: 31, gir: 22, fairways: 43, putts_per_round: 36, penaltiesPerRound: 1.8 },
+  25: { proximity_u25: 18, proximity_25_50: 32, proximity_50_75: 36, proximity_75_100: 50, proximity_100_125: 62, proximity_125_150: 85, proximity_150plus: 116, scrambling: 25, gir: 19, fairways: 43, putts_per_round: 37, penaltiesPerRound: 2.4 },
+  30: { proximity_u25: 20, proximity_25_50: 36, proximity_50_75: 40, proximity_75_100: 56, proximity_100_125: 70, proximity_125_150: 95, proximity_150plus: 125, scrambling: 20, gir: 15, fairways: 40, putts_per_round: 38, penaltiesPerRound: 3.0 },
 };
 
 function getBenchmark(handicap) {
