@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabaseClient";
 import renderMarkdown from "./renderMarkdown";
+import { computeFocusComparisons, headlineComparison } from "./focusMetrics";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -159,7 +160,7 @@ function scoreClass(score, par) {
   return "worse";
 }
 
-async function callAI(prompt) {
+async function callAI(prompt, extra = {}) {
   const r = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -167,6 +168,7 @@ async function callAI(prompt) {
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
+      ...extra,
     }),
   });
   const d = await r.json();
@@ -180,8 +182,9 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const [aiSg, setAiSg]           = useState(null);
   const [coachNote, setCoachNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
+  const [focusComparisons, setFocusComparisons] = useState(null);
 
-  const runAI = useCallback(async (holeRows) => {
+  const runAI = useCallback(async (holeRows, comparisons = []) => {
     const summary = holeRows.map(h => {
       const penTypes = Array.isArray(h.penalty) ? h.penalty : (h.penalty && h.penalty !== "None" ? [h.penalty] : []);
       const puTypes  = Array.isArray(h.pickup_reason) ? h.pickup_reason : [];
@@ -253,10 +256,16 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     const sgSection = `Short game failures (shots_inside_50 > 1): ${sgFailureHoles.length} holes (${sgFailPct}% of missed-GIR holes) — ${sgFailureDetail}\nSuccessful single chips (shots_inside_50 = 1): ${sgSingleHoles.length} holes\n`;
     const threePuttNote = tp >= 2 ? `INSTRUCTION: There are ${tp} three-putts this round. Do NOT describe putting as solid, consistent, or excellent. Acknowledge the 3-putts directly.\n` : "";
 
+    // Pass the focus-area comparison (prior vs this round, per metric) to the
+    // short game / overall analysis so it can open on a genuinely improved area.
+    const focusExtra = comparisons && comparisons.length > 0
+      ? { focusComparison: comparisons.map(c => ({ label: c.label, prior: c.priorLabel, current: c.currentLabel, window: c.windowLabel })) }
+      : {};
+
     try {
       const [r1, r2] = await Promise.all([
         callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Give a precise 2-sentence insight on their PUTTING. State whether 3-putts are caused by approach distance or actual putting failure. Use exact numbers. 3-putt holes are only those where putts = 3 as stated in the data. Do not infer 3-putts from first putt distance. Do not identify a hole as a 3-putt unless its putt count is explicitly 3.\n\nPutts per hole:\n${puttSummary}\n\n${summary}\n${penSummaryLine}Avg first putt: ${avgP}ft. 3-putt rate: ${tpPct}%.\n${threePuttNote}\nTwo sentences only, no preamble.`),
-        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted.\n${sgSection}INSTRUCTION: shots_inside_50 > 1 is a short game failure. ${sgFailPct > 20 ? "More than 20% of missed-GIR holes had shots_inside_50 > 1 — do NOT describe proximity or short game as good or solid. Cite the specific sg_reason values where present." : ""} Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n${penSummaryLine}\nTwo sentences only, no preamble.`),
+        callAI(`You are an expert golf coach reviewing a student's round. Write in third person about the student — use 'the student', 'they', 'their'; never 'you' or 'your'. Analyse their short game and fairway miss data. Up-and-down definition: missed GIR + approach under 50 yds + 1 chip (shots_inside_50=1) + 1 putt. Scrambling: ${aiScrambMade}/${aiUnder50.length} converted.\n${sgSection}INSTRUCTION: shots_inside_50 > 1 is a short game failure. ${sgFailPct > 20 ? "More than 20% of missed-GIR holes had shots_inside_50 > 1 — do NOT describe proximity or short game as good or solid. Cite the specific sg_reason values where present." : ""} Fairway miss: ${missL} left, ${missR} right. Give a 2-sentence insight.\n\n${summary}\n${penSummaryLine}\nTwo sentences only, no preamble.`, focusExtra),
       ]);
       setAiPutting(r1);
       setAiSg(r2);
@@ -270,7 +279,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   useEffect(() => {
     if (!round) return;
     async function loadHoles() {
-      setAiPutting(null); setAiSg(null);
+      setAiPutting(null); setAiSg(null); setFocusComparisons(null);
       const { data } = await supabase
         .from("round_holes")
         .select("*")
@@ -280,20 +289,33 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       setCoachNote(round.coach_note || "");
       setNoteSaved(false);
       setLoading(false);
+
+      // Focus-area comparison for this round — snapshots + lessons for the student,
+      // compared against the loaded holes (no second round_holes fetch).
+      let comparisons = [];
+      if (student?.id) {
+        const [{ data: snaps }, { data: lessons }] = await Promise.all([
+          supabase.from("focus_snapshots").select("metric, value, round_id, created_at").eq("student_id", student.id),
+          supabase.from("lessons").select("lesson_date, status").eq("student_id", student.id),
+        ]);
+        comparisons = computeFocusComparisons({ round, currentHoles: data || [], snapshots: snaps || [], lessons: lessons || [] });
+      }
+      setFocusComparisons(comparisons);
+
       if (round.ai_analysis) {
         try {
           const cached = JSON.parse(round.ai_analysis);
           setAiPutting(cached.putting || null);
           setAiSg(cached.sg || null);
         } catch {
-          if (data && data.length > 0) runAI(data);
+          if (data && data.length > 0) runAI(data, comparisons);
         }
       } else if (data && data.length > 0) {
-        runAI(data);
+        runAI(data, comparisons);
       }
     }
     loadHoles();
-  }, [round, runAI]);
+  }, [round, student, runAI]);
 
   async function saveNote() {
     await supabase.from("rounds").update({ coach_note: coachNote }).eq("id", round.id);
@@ -388,6 +410,12 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     s: "Drill: chip to within 3ft from rough/fringe"
   });
   const focusAreasReady = focusAreas.length > 0 || aiPutting !== null;
+
+  // Focus-area follow-up: comparisons drive the panel when any metric has one.
+  const compsReady   = focusComparisons !== null;
+  const comps        = focusComparisons || [];
+  const compsSorted  = [...comps].sort((a, b) => b.change - a.change);
+  const compHeadline = headlineComparison(comps);
 
   const studentName = student ? `${student.first_name} ${student.last_name}` : "Student";
   const roundDate   = new Date(round.created_at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
@@ -532,27 +560,62 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           <div className="ccard">
             <div className="cc-title">Session focus areas</div>
             <div className="focus-list">
-              {!focusAreasReady
+              {!compsReady
                 ? <div style={{fontSize:13,color:"var(--text-dim)",padding:"8px 0"}}>Analysing session…</div>
-                : focusAreas.length > 0
-                  ? focusAreas.slice(0, 3).map((a, i) => (
-                      <div className="focus-item" key={i}>
-                        <div className={`fp ${a.p}`}>{a.p.replace("p", "")}</div>
-                        <div>
-                          <div className="ft">{a.t}</div>
-                          <div className="fd">{a.d}</div>
-                          <div className="fs">{a.s}</div>
+                : comps.length > 0
+                  ? <>
+                      {compHeadline && (
+                        <div style={{
+                          background: compHeadline.improved ? "linear-gradient(135deg,#0F3D2E,#1A6B4A)" : "var(--bg)",
+                          borderRadius: 10, padding: "12px 14px", marginBottom: 2,
+                          color: compHeadline.improved ? "white" : "var(--text)",
+                        }}>
+                          <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",marginBottom:3,
+                            color: compHeadline.improved ? "var(--gold)" : "var(--text-dim)"}}>
+                            {compHeadline.improved ? "Most improved" : "Biggest change"}
+                          </div>
+                          <div style={{fontSize:14,fontWeight:700,lineHeight:1.4}}>
+                            {compHeadline.label}: {compHeadline.movement} {compHeadline.windowLabel}
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  : <div className="focus-item">
-                      <div className="fp p1">1</div>
-                      <div>
-                        <div className="ft">Solid round overall</div>
-                        <div className="fd">No major patterns detected. Continue building consistency.</div>
-                        <div className="fs">Maintain current practice routine</div>
-                      </div>
-                    </div>
+                      )}
+                      {compsSorted.slice(0, 4).map(c => (
+                        <div className="focus-item" key={c.key}>
+                          <div style={{width:9,height:9,borderRadius:"50%",marginTop:6,flexShrink:0,
+                            background: c.improved ? "var(--green-mid)" : "var(--red)"}} />
+                          <div style={{flex:1}}>
+                            <div className="ft">{c.label}</div>
+                            <div className="fd">{c.movement}</div>
+                            <div className="fs">{c.windowLabel}</div>
+                          </div>
+                          <div style={{fontSize:17,fontWeight:700,lineHeight:1,marginTop:4,
+                            color: c.improved ? "var(--green-mid)" : "var(--red)"}}>
+                            {c.rawChange < 0 ? "↓" : "↑"}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  : !focusAreasReady
+                    ? <div style={{fontSize:13,color:"var(--text-dim)",padding:"8px 0"}}>Analysing session…</div>
+                    : focusAreas.length > 0
+                      ? focusAreas.slice(0, 3).map((a, i) => (
+                          <div className="focus-item" key={i}>
+                            <div className={`fp ${a.p}`}>{a.p.replace("p", "")}</div>
+                            <div>
+                              <div className="ft">{a.t}</div>
+                              <div className="fd">{a.d}</div>
+                              <div className="fs">{a.s}</div>
+                            </div>
+                          </div>
+                        ))
+                      : <div className="focus-item">
+                          <div className="fp p1">1</div>
+                          <div>
+                            <div className="ft">Solid round overall</div>
+                            <div className="fd">No major patterns detected. Continue building consistency.</div>
+                            <div className="fs">Maintain current practice routine</div>
+                          </div>
+                        </div>
               }
             </div>
             <div className="note-box">

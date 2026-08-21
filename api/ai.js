@@ -126,6 +126,11 @@ TONE ON BAD ROUNDS
 - When a round is significantly worse than the player's recent average (more than 0.5 shots per hole worse), you MUST open with a single short dry humorous sentence before continuing with the analysis. This is not optional. Keep it to one sentence only, then move straight into the analysis. On good rounds or average rounds, keep the tone straightforward and encouraging.
 - The opener must be original, self-deprecating, and specific to something in this round's data — a stat, a pattern, a particular hole count, a penalty. It must never be a generic idiom or stock phrase. Banned phrases (and anything structurally similar): "The course won today", "Golf had other ideas", "Some days the course wins", "Not one for the highlight reel". Instead vary the form: a wry deadpan stat callout ("Eleven putts on the back nine is a bold strategy"), a backhanded compliment to the course ("The rough clearly made a strong case for itself today"), or a self-deprecating observation grounded in the actual numbers. If you cannot make it specific to this round, skip the opener entirely rather than reaching for a cliché.
 
+FOCUS AREA FOLLOW-UP
+- The round data sometimes includes a "FOCUS AREA COMPARISON" block listing metrics with their prior average, this round's value, and the comparison window (since a lesson, or the last few rounds). Use it to judge whether a previously weak area has moved.
+- When that block is present and a previously weak area has improved, open the analysis by naming that area and citing both numbers — the prior average and this round's value — along with the window.
+- Never fabricate a comparison. If no FOCUS AREA COMPARISON block is provided, do not invent prior numbers, do not reference a baseline, and do not claim improvement over an unstated past.
+
 ${WRITING_STYLE}`;
 
 const PROGRESS_REPORT_SYSTEM_PROMPT = `You are an expert golf coach writing a progress report for a student comparing two periods of play. Be encouraging and specific. Write in second person ("you have improved", "your scoring"). Keep language plain and jargon-free. Return valid JSON only — no other text before or after the object. Use exactly these two keys:
@@ -198,19 +203,40 @@ export default async function handler(req, res) {
     const systemPrompt = isPreLesson ? PRE_LESSON_SYSTEM_PROMPT
       : isProgressReport ? PROGRESS_REPORT_SYSTEM_PROMPT
       : SYSTEM_PROMPT;
-    const requestBody = isPreLesson
-      ? {
-          model: "claude-sonnet-4-6",
-          max_tokens: 600,
-          messages: [{ role: "user", content: buildPreLessonPrompt(req.body) }],
+    let requestBody;
+    if (isPreLesson) {
+      requestBody = {
+        model: "claude-sonnet-4-6",
+        max_tokens: 600,
+        messages: [{ role: "user", content: buildPreLessonPrompt(req.body) }],
+      };
+    } else if (isProgressReport) {
+      requestBody = {
+        model: "claude-sonnet-4-6",
+        max_tokens: 400,
+        messages: [{ role: "user", content: buildProgressReportPrompt(req.body) }],
+      };
+    } else {
+      // Per-round coach analysis. Strip our own focusComparison field (Anthropic
+      // rejects unknown top-level keys) and, when present, append it to the last
+      // user message as a plain block for the model to read.
+      const { focusComparison, ...rest } = req.body;
+      let messages = rest.messages || [];
+      if (Array.isArray(focusComparison) && focusComparison.length > 0) {
+        const block = "FOCUS AREA COMPARISON (prior average vs this round):\n"
+          + focusComparison
+              .map(c => `- ${c.label}: prior ${c.prior}, this round ${c.current} (${c.window})`)
+              .join("\n");
+        messages = messages.map(m => ({ ...m }));
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === "user" && typeof messages[i].content === "string") {
+            messages[i] = { ...messages[i], content: messages[i].content + "\n\n" + block };
+            break;
+          }
         }
-      : isProgressReport
-      ? {
-          model: "claude-sonnet-4-6",
-          max_tokens: 400,
-          messages: [{ role: "user", content: buildProgressReportPrompt(req.body) }],
-        }
-      : { ...req.body };
+      }
+      requestBody = { ...rest, messages };
+    }
 
     let lastData;
     for (let attempt = 0; attempt < 3; attempt++) {

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { GoalsSection } from "./goals";
 import { ShotsVsBenchmark } from "./shotsVsBenchmark";
+import { computeFocusComparisons, headlineComparison } from "./focusMetrics";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
@@ -533,6 +534,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
   const [roundHoleStats, setRoundHoleStats]   = useState({});
   const [roundHolesData, setRoundHolesData]   = useState({});
   const [analyticsHolesMap, setAnalyticsHolesMap] = useState({});
+  const [focusSnapshots, setFocusSnapshots]   = useState([]);
   const [statTab, setStatTab]                 = useState(null);
   const [mainView, setMainView]               = useState("trends");
   const [activeRound, setActiveRound]         = useState(null);
@@ -607,15 +609,17 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
 
   useEffect(() => {
     async function load() {
-      const [{ data: prof }, { data: rds }, { data: coachLinks }, { data: lessonData }] = await Promise.all([
+      const [{ data: prof }, { data: rds }, { data: coachLinks }, { data: lessonData }, { data: snapData }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
         supabase.from("lessons").select("id, lesson_date, lesson_time, session_notes, drills, status, coach_id, ai_brief").eq("student_id", user.id).order("lesson_date", { ascending: false }),
+        supabase.from("focus_snapshots").select("metric, value, round_id, created_at").eq("student_id", user.id),
       ]);
       setProfile(prof);
       setRounds(rds || []);
       setLessons(lessonData || []);
+      setFocusSnapshots(snapData || []);
       // Resolve coach profiles immediately — before the slow round-holes fetch below.
       // This ensures unlinkCoach()'s setCoaches(filter) is never overwritten by stale data.
       const linkedCoachIds = (coachLinks || []).map(l => l.coach_id);
@@ -1292,6 +1296,25 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                             {c}
                           </span>
                         ))}
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    // Compact focus follow-up — single most improved metric, or the
+                    // largest decline if nothing improved. One line, no AI.
+                    const holes = roundHolesData[r.id];
+                    if (!r.sent_to_coach || !holes || !holes.length) return null;
+                    const comps = computeFocusComparisons({ round: r, currentHoles: holes, snapshots: focusSnapshots, lessons });
+                    const h = headlineComparison(comps);
+                    if (!h) return null;
+                    return (
+                      <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:10,fontSize:12}}>
+                        <span style={{fontSize:15,fontWeight:700,lineHeight:1,color: h.improved ? "var(--green-mid)" : "var(--red)"}}>
+                          {h.rawChange < 0 ? "↓" : "↑"}
+                        </span>
+                        <span style={{color:"var(--text-mid)"}}>
+                          <strong style={{color:"var(--text)"}}>{h.label}:</strong> {h.movement} {h.windowLabel}
+                        </span>
                       </div>
                     );
                   })()}

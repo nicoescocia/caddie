@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import QuickLog from "./QuickLog";
+import { writeFocusSnapshots } from "./focusMetrics";
 
 const HANDICAP_BENCHMARKS = {
   0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 52, gir: 62, fairways: 58, putts_per_round: 29, penaltiesPerRound: 0.6 },
@@ -2099,6 +2100,10 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       wind, conditions, temperature,
       student_note: studentNote || null,
     }).eq("id", roundId);
+
+    // Persist a focus snapshot per eligible metric for this round. Fire-and-forget
+    // with error logging — a snapshot failure must never block the send.
+    writeFocusSnapshots(user.id, roundId).catch(e => console.error("[focus] snapshot write failed:", e));
 
     if (coachIds.length > 0) {
       const diff = totalScore - totalPar;
