@@ -181,6 +181,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
   const [aiSg, setAiSg]           = useState(null);
   const [coachNote, setCoachNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
+  const [defaultLogMode, setDefaultLogMode] = useState("full");
 
   const runAI = useCallback(async (holeRows) => {
     const summary = holeRows.map(h => {
@@ -300,6 +301,24 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
     await supabase.from("rounds").update({ coach_note: coachNote }).eq("id", round.id);
     setNoteSaved(true);
     setTimeout(() => setNoteSaved(false), 2000);
+  }
+
+  // Load the student's coach-set default logging mode.
+  useEffect(() => {
+    if (!student?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("default_log_mode").eq("id", student.id).single();
+      if (!cancelled && (data?.default_log_mode === "quick" || data?.default_log_mode === "full")) {
+        setDefaultLogMode(data.default_log_mode);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [student?.id]);
+
+  async function saveDefaultLogMode(mode) {
+    setDefaultLogMode(mode);
+    if (student?.id) await supabase.from("profiles").update({ default_log_mode: mode }).eq("id", student.id);
   }
 
   if (loading) {
@@ -576,6 +595,28 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 onChange={e => { setCoachNote(e.target.value); setNoteSaved(false); }}
               />
             </div>
+            <div className="note-box" style={{marginTop:12}}>
+              <div className="note-lbl">⚙️ Default logging mode</div>
+              <div style={{fontSize:12,color:"var(--text-dim)",margin:"2px 0 8px",lineHeight:1.4}}>
+                Sets which mode {studentName} starts new rounds in. They can still switch per round.
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {[{v:"full",label:"Full detail"},{v:"quick",label:"Quick log"}].map(m => (
+                  <button
+                    key={m.v}
+                    onClick={() => saveDefaultLogMode(m.v)}
+                    style={{
+                      flex:1, cursor:"pointer",
+                      background: defaultLogMode === m.v ? "var(--green)" : "white",
+                      color: defaultLogMode === m.v ? "white" : "var(--text-mid)",
+                      border: `1.5px solid ${defaultLogMode === m.v ? "var(--green)" : "var(--border)"}`,
+                      borderRadius:8, padding:"8px 10px", fontFamily:"'Outfit',sans-serif",
+                      fontSize:13, fontWeight:700,
+                    }}
+                  >{m.label}</button>
+                ))}
+              </div>
+            </div>
             {student && <GoalsSection coachId={user.id} studentId={student.id} editable={true} />}
           </div>
         </div>
@@ -584,6 +625,8 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           {/* Approach & putting */}
           <div className="ccard">
             <div className="cc-title">Approach &amp; putting breakdown</div>
+            {holes.some(h => h.approach || h.putt1 || h.putt2) ? (
+            <>
             <table className="pt">
               <thead><tr><th>Hole</th><th>Approach</th><th>1st putt</th><th>2nd putt</th><th>Result</th></tr></thead>
               <tbody>
@@ -675,6 +718,13 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                 </div>
               );
             })()}
+            </>
+            ) : (
+              <div style={{padding:"18px 4px",fontSize:13,color:"var(--text-dim)",lineHeight:1.5}}>
+                Not enough detail logged — this round was quick-logged, so approach
+                distances and putt distances weren't recorded.
+              </div>
+            )}
             <div className="ai-box">
               <div className="ai-label">✦ AI Coach Analysis</div>
               {aiPutting

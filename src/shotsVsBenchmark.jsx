@@ -74,6 +74,7 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   const penStrokesPer18 = [], puttsPer18 = [];
   // Pooled tallies for rate/distance metrics.
   let u25Dists = [], u25HolesPer18 = [];
+  let anyPutt1 = false; // any first-putt distance logged at all (absent in quick-log rounds)
   let girPcts = [];
   let scrSucc = 0, scrOpp = 0;
   let fwHit = 0, fwTotal = 0;
@@ -88,6 +89,7 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
     for (const h of holes) {
       const pr = Array.isArray(h.pickup_reason) ? h.pickup_reason.filter(x => PENALTY_TYPES.has(x)) : [];
       penStrokes += penaltyEntries(h.penalty).length + pr.length;
+      if (h.putt1) anyPutt1 = true;
       if (h.approach === "Under 25") {
         u25Count++;
         const ft = parseFt(h.putt1);
@@ -165,6 +167,18 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
       shotsLost: lost, shotsDelta: delta,
       explanation: `Averaging ${proxAvg.toFixed(1)}ft from under 25 yards vs benchmark of ${bm.proximity_u25}ft costs approximately ${lost.toFixed(1)} shots.`,
     });
+  } else {
+    // Proximity needs first-putt distances, which quick-logged rounds don't
+    // capture. Surface an explicit empty state rather than a zero or a
+    // misleading benchmark comparison.
+    areas.push({
+      key: "proximity", name: AREA_NAMES.proximity,
+      noData: true, shotsLost: 0, shotsDelta: 0,
+      actualLabel: null, benchmarkLabel: null,
+      explanation: anyPutt1
+        ? "No approach shots from under 25 yards were logged in these rounds."
+        : "Not enough detail logged — quick-logged rounds don't capture putt distances.",
+    });
   }
 
   // 4. GIR
@@ -207,9 +221,10 @@ export function computeShotsVsBenchmark({ rounds, holesByRound, whsIndex }) {
   }
 
   // At/above benchmark (0 shots lost) sink to the bottom, biggest gap on top.
-  areas.sort((a, b) => b.shotsLost - a.shotsLost);
-  // Only flag a biggest priority when an area is genuinely losing shots.
-  const top = areas.length && areas[0].shotsLost > 0.1 ? areas[0] : null;
+  // Areas with no data at all sort below everything else.
+  areas.sort((a, b) => (a.noData ? 1 : 0) - (b.noData ? 1 : 0) || b.shotsLost - a.shotsLost);
+  // Only flag a biggest priority when an area is genuinely losing shots (and has data).
+  const top = areas.length && !areas[0].noData && areas[0].shotsLost > 0.1 ? areas[0] : null;
   return {
     whs: whsIndex,
     areas,
@@ -272,7 +287,7 @@ export function ShotsVsBenchmark({ rounds, whsIndex, prominent = false }) {
   const prevResult = prev5.length ? computeShotsVsBenchmark({ rounds: prev5, holesByRound, whsIndex }) : null;
   const prevByKey = {};
   if (prevResult) prevResult.areas.forEach(a => { prevByKey[a.key] = a.shotsLost; });
-  result.areas.forEach(a => { a.trend = computeTrend(a, prevResult ? prevByKey : null); });
+  result.areas.forEach(a => { a.trend = a.noData ? null : computeTrend(a, prevResult ? prevByKey : null); });
 
   const maxLost = Math.max(...result.areas.map(a => a.shotsLost), 0.0001);
   const whsLabel = Number(whsIndex).toFixed(1);
@@ -328,6 +343,9 @@ export function ShotsVsBenchmark({ rounds, whsIndex, prominent = false }) {
             <div key={a.key} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{a.name}</span>
+                {a.noData ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)" }}>Not enough detail logged</span>
+                ) : (
                 <span style={{ display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
                   {(() => {
                     const d = a.shotsDelta ?? 0;
@@ -344,13 +362,22 @@ export function ShotsVsBenchmark({ rounds, whsIndex, prominent = false }) {
                     </span>
                   )}
                 </span>
+                )}
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 5 }}>
-                Your {a.actualLabel} vs benchmark {a.benchmarkLabel}
-              </div>
-              <div style={{ height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${Math.max(0, a.shotsLost / maxLost * 100)}%`, background: a.shotsLost > 0.05 ? "var(--red)" : "var(--green-mid)", borderRadius: 3, transition: "width .3s" }} />
-              </div>
+              {a.noData ? (
+                <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 5, lineHeight: 1.4 }}>
+                  {a.explanation}
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 5 }}>
+                    Your {a.actualLabel} vs benchmark {a.benchmarkLabel}
+                  </div>
+                  <div style={{ height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.max(0, a.shotsLost / maxLost * 100)}%`, background: a.shotsLost > 0.05 ? "var(--red)" : "var(--green-mid)", borderRadius: 3, transition: "width .3s" }} />
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>

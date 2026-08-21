@@ -1,6 +1,7 @@
 // -- ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_complete boolean DEFAULT false;
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import QuickLog from "./QuickLog";
 
 const HANDICAP_BENCHMARKS = {
   0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 52, gir: 62, fairways: 58, putts_per_round: 29, penaltiesPerRound: 0.6 },
@@ -1212,9 +1213,12 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   const [puttMode, setPuttMode]         = useState("standard");
   const [approachLogging, setApproachLogging] = useState("enabled");
   const [isPremium, setIsPremium] = useState(false);
-  // view: "course_picker" | "course_confirm" | "overview" | "logging" | "summary" | "sent" | "complete"
+  // view: "course_picker" | "course_confirm" | "overview" | "logging" | "quicklog" | "summary" | "sent" | "complete"
   const [view, setView]             = useState(isEditMode ? "overview" : "course_picker");
   const [pendingCourse, setPendingCourse] = useState(null);
+  // Chosen logging mode for this round: "full" (hole-by-hole) or "quick" (scorecard grid).
+  // Defaults to the coach-set profiles.default_log_mode, overridable per round.
+  const [logMode, setLogMode]       = useState("full");
   const [saving, setSaving]         = useState(false);
   const [saveError, setSaveError]   = useState(null);
   const [wind, setWind]               = useState(null);
@@ -1333,12 +1337,13 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   useEffect(() => {
     async function fetchSettings() {
       const [{ data }, { data: coachLinks }] = await Promise.all([
-        supabase.from("profiles").select("settings, is_premium, official_handicap, first_name, last_name").eq("id", user.id).single(),
+        supabase.from("profiles").select("settings, is_premium, official_handicap, first_name, last_name, default_log_mode").eq("id", user.id).single(),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
       ]);
       setIsPremium(!!data?.is_premium);
       setPuttMode(data?.settings?.putt_tracking || "standard");
       setApproachLogging(data?.settings?.approach_logging || "enabled");
+      if (data?.default_log_mode === "quick" || data?.default_log_mode === "full") setLogMode(data.default_log_mode);
       if (data?.official_handicap != null) setOfficialHandicap(data.official_handicap);
       const linkedCoachRows = coachLinks || [];
       setHasCoach(linkedCoachRows.length > 0);
@@ -1611,12 +1616,38 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             </div>
           </div>
 
+          <div style={{marginBottom:28}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--text-dim)",marginBottom:7}}>
+              Logging mode
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              {[
+                { v:"full",  title:"Full detail", sub:"Hole-by-hole with approach, putt distances & short game" },
+                { v:"quick", title:"Quick log",   sub:"Fast scorecard grid — score, putts, fairway" },
+              ].map(m => (
+                <button
+                  key={m.v}
+                  onClick={() => setLogMode(m.v)}
+                  style={{
+                    flex:1, textAlign:"left", cursor:"pointer",
+                    background: logMode === m.v ? "var(--green)" : "var(--bg)",
+                    border: `1.5px solid ${logMode === m.v ? "var(--green)" : "var(--border)"}`,
+                    borderRadius:12, padding:"12px 14px", fontFamily:"'Outfit',sans-serif",
+                  }}
+                >
+                  <div style={{fontSize:14,fontWeight:700,color: logMode === m.v ? "white" : "var(--text)",marginBottom:3}}>{m.title}</div>
+                  <div style={{fontSize:11,lineHeight:1.4,color: logMode === m.v ? "rgba(255,255,255,0.75)" : "var(--text-dim)"}}>{m.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             className="next-btn"
             style={{width:"100%",marginBottom:10}}
             onClick={async () => {
               await loadCourse(pendingCourse.id);
-              setView("logging");
+              setView(logMode === "quick" ? "quicklog" : "logging");
             }}
           >
             Start round →
@@ -1632,6 +1663,28 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             ← Change course
           </button>
         </div>
+      </>
+    );
+  }
+
+  // ── Quick-log scorecard grid ──
+  if (view === "quicklog") {
+    return (
+      <>
+        <style>{css}</style>
+        <TopBar onSignOut={onSignOut} rightBtn={
+          <button className="bar-btn" onClick={onBackToDashboard}>← My rounds</button>
+        } />
+        <QuickLog
+          holes={holes}
+          courseName={courseName}
+          handicap={handicap}
+          netDoubleBogey={netDoubleBogey}
+          saving={saving}
+          saveError={saveError}
+          onSave={saveQuickRound}
+          onCancel={() => setView("course_confirm")}
+        />
       </>
     );
   }
@@ -1856,7 +1909,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
             : null);
       if (handicap === "" && hcpToUse != null) setHandicap(String(hcpToUse));
       const { data: row, error } = await supabase
-        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse, whs_index: officialHandicap != null ? officialHandicap : null }])
+        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse, whs_index: officialHandicap != null ? officialHandicap : null, log_mode: logMode }])
         .select().single();
       if (error) { console.error(error.message); setSaving(false); return; }
       rid = row.id;
@@ -1901,6 +1954,90 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
       await supabase.from("rounds").update({ total_score: totalScore, total_par: totalPar, total_putts: totalPutts, holes_played: savedHoles.size }).eq("id", rid);
       setView("overview");
     }
+  }
+
+  // Quick-log: save the whole round in one action. Writes round_holes using the
+  // same column set as the hole-by-hole flow, leaving unused columns null, and
+  // derives GIR rather than asking for it. Then hands off to the overview screen
+  // so the student can add conditions / notes and send to their coach.
+  async function saveQuickRound(rows) {
+    setSaving(true);
+    setSaveError(null);
+    const hcp = parseInt(handicap, 10) || 0;
+
+    // Create the round if it doesn't exist yet, tagging it as quick-logged.
+    let rid = roundId;
+    if (!rid) {
+      const is9Hole = holes.length <= 9;
+      const hcpToUse = handicap !== "" ? parseInt(handicap, 10)
+        : (officialHandicap != null
+            ? (is9Hole ? Math.ceil(officialHandicap / 2) : Math.ceil(officialHandicap))
+            : null);
+      if (handicap === "" && hcpToUse != null) setHandicap(String(hcpToUse));
+      const { data: roundRow, error } = await supabase
+        .from("rounds").insert([{ student_id: user.id, course_id: courseId, holes_played: holes.length, handicap: hcpToUse, whs_index: officialHandicap != null ? officialHandicap : null, log_mode: "quick" }])
+        .select().single();
+      if (error) { setSaveError("Failed to save round — please check your connection and try again."); setSaving(false); return; }
+      rid = roundRow.id;
+      setRoundId(rid);
+    }
+
+    const payloads = holes.map((hi, i) => {
+      const r = rows[i];
+      const locked = r.dna || r.pickedUp;
+      return {
+        round_id: rid, hole_number: hi.n, par: hi.par, stroke_index: hi.idx || null,
+        score: r.dna ? null : r.pickedUp ? netDoubleBogey(hi.par, hi.idx, hcp, holes.length) : r.score,
+        putts: locked ? null : r.putts,
+        // Derive GIR (score - putts) <= (par - 2); false for picked-up / did-not-play holes.
+        gir: locked ? false : calcGIR(r.score, r.putts, hi.par),
+        fairway: locked ? null : (hi.par >= 4 ? r.fairway : null),
+        // Columns not captured in quick-log are left null.
+        approach: null, shots_inside_50: null, putt1: null, putt2: null, putt3: null,
+        penalty: locked ? null : (r.penalty > 0 ? Array(r.penalty).fill("Penalty") : null),
+        sg_reason: null,
+        picked_up: r.pickedUp || false, pickup_reason: null, pickup_note: null,
+        dna: r.dna || false,
+      };
+    });
+
+    const { error: insErr } = await supabase.from("round_holes").insert(payloads);
+    if (insErr) { setSaveError("Failed to save round — please check your connection and try again."); setSaving(false); return; }
+
+    // Populate in-memory hole state so the overview + send-to-coach flow works.
+    const filled = holes.map((hi, i) => {
+      const r = rows[i];
+      return {
+        ...emptyHole(hi.par),
+        score: r.dna ? hi.par : r.score,
+        putts: (r.dna || r.pickedUp) ? null : r.putts,
+        fairway: (r.dna || r.pickedUp) ? null : (hi.par >= 4 ? r.fairway : null),
+        penalty: (r.dna || r.pickedUp || r.penalty <= 0) ? [] : Array(r.penalty).fill("Penalty"),
+        pickedUp: r.pickedUp || false,
+        dna: r.dna || false,
+      };
+    });
+    setHoleData(filled);
+    const saved = new Set(holes.map(h => h.n));
+    setSavedHoles(saved);
+
+    // Round totals (picked-up holes count net double bogey; did-not-play excluded).
+    const totalScore = holes.reduce((s, h, i) => {
+      const r = rows[i];
+      if (r.dna) return s;
+      return s + (r.pickedUp ? netDoubleBogey(h.par, h.idx, hcp, holes.length) : r.score);
+    }, 0);
+    const totalPar = holes.reduce((s, h, i) => (rows[i].dna ? s : s + h.par), 0);
+    const totalPutts = holes.reduce((s, h, i) => {
+      const r = rows[i];
+      return (r.dna || r.pickedUp) ? s : s + r.putts;
+    }, 0);
+    const attemptedCount = rows.filter(r => !r.dna).length;
+    await supabase.from("rounds").update({ total_score: totalScore, total_par: totalPar, total_putts: totalPutts, holes_played: attemptedCount }).eq("id", rid);
+
+    setSaving(false);
+    setView("overview");
+    window.scrollTo(0, 0);
   }
 
   function editHole(idx) {
