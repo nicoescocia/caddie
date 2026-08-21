@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import StudentProgress from "./StudentProgress";
 import renderMarkdown from "./renderMarkdown";
 import { ShotsVsBenchmark } from "./shotsVsBenchmark";
+import { GoalsSection } from "./goals";
 
 const HANDICAP_BENCHMARKS = {
   0:  { proximity_u25: 8,  proximity_25_50: 14, proximity_50_75: 18, proximity_75_100: 24, proximity_100_125: 28, proximity_125_150: 35, proximity_150plus: 44, scrambling: 52, gir: 62, fairways: 58, putts_per_round: 29, penaltiesPerRound: 0.6 },
@@ -1608,6 +1609,25 @@ function RoundHistory({ student, rounds, lessons, setLessons, coachId, coachProf
   const [editingUpcomingLesson, setEditingUpcomingLesson] = useState(null);
   const [upcomingEditForm, setUpcomingEditForm] = useState({ date: "", time: "", prepNotes: "" });
   const [savingUpcomingEdit, setSavingUpcomingEdit] = useState(false);
+  const [defaultLogMode, setDefaultLogMode] = useState("full");
+
+  // Load the student's coach-set default logging mode.
+  useEffect(() => {
+    if (!student?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("default_log_mode").eq("id", student.id).single();
+      if (!cancelled && (data?.default_log_mode === "quick" || data?.default_log_mode === "full")) {
+        setDefaultLogMode(data.default_log_mode);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [student?.id]);
+
+  async function saveDefaultLogMode(mode) {
+    setDefaultLogMode(mode);
+    if (student?.id) await supabase.from("profiles").update({ default_log_mode: mode }).eq("id", student.id);
+  }
 
   async function saveComplete(lessonId) {
     await supabase.from("lessons").update({
@@ -1881,6 +1901,32 @@ OUTPUT FORMAT
           </div>
         </div>
 
+        {/* Student settings — student-level preferences, not per-round */}
+        <div style={{background:"white",border:"1.5px solid var(--border)",borderRadius:14,padding:"14px 16px",marginBottom:16,display:"flex",flexWrap:"wrap",gap:"10px 20px",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--text-dim)",marginBottom:2}}>⚙️ Default logging mode</div>
+            <div style={{fontSize:12,color:"var(--text-dim)",lineHeight:1.4}}>
+              Which mode {student.first_name} starts new rounds in. They can still switch per round.
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            {[{v:"full",label:"Full detail"},{v:"quick",label:"Quick log"}].map(m => (
+              <button
+                key={m.v}
+                onClick={() => saveDefaultLogMode(m.v)}
+                style={{
+                  cursor:"pointer",
+                  background: defaultLogMode === m.v ? "var(--green)" : "white",
+                  color: defaultLogMode === m.v ? "white" : "var(--text-mid)",
+                  border: `1.5px solid ${defaultLogMode === m.v ? "var(--green)" : "var(--border)"}`,
+                  borderRadius:8, padding:"8px 14px", fontFamily:"'Outfit',sans-serif",
+                  fontSize:13, fontWeight:700,
+                }}
+              >{m.label}</button>
+            ))}
+          </div>
+        </div>
+
         {sentRounds.length === 0 ? (
           <div className="empty-state">
             <div className="es-icon">📭</div>
@@ -1916,6 +1962,10 @@ OUTPUT FORMAT
                 <ShotsVsBenchmark rounds={sentRounds} whsIndex={headerWhs} prominent />
               </>
             )}
+
+            {/* Shared goals — substantive content the coach acts on */}
+            <div className="section-label">Shared goals</div>
+            <GoalsSection coachId={coachId} studentId={student.id} editable={true} />
 
             {scored.length >= 3 && (
               <div className="ai-box">
