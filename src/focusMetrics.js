@@ -183,7 +183,8 @@ export async function writeFocusSnapshots(studentId, roundId) {
 
 // Pure comparison core. Given the round, its holes, all of the student's
 // snapshots, and their lessons, return one comparison per metric that has a
-// current value and at least 2 prior snapshots in the relevant window.
+// current value and enough prior snapshots in the relevant window (3 for a
+// lesson-anchored window, 2 for the last-5-rounds fallback).
 // voice: "second" (student-facing, "your") or "third" (coach-facing — the student
 // is not the reader, so drop "your"; the student's name is already in context).
 export function computeFocusComparisons({ round, currentHoles, snapshots, lessons, voice = "second" }) {
@@ -205,29 +206,46 @@ export function computeFocusComparisons({ round, currentHoles, snapshots, lesson
     .sort((a, b) => (a.lesson_date < b.lesson_date ? 1 : -1))[0] || null;
   const lessonTs = lesson ? new Date(lesson.lesson_date + "T00:00:00").getTime() : null;
 
-  // Prior snapshots for this student — never the current round, always before it,
-  // and (when a lesson anchors the window) not before that lesson. Newest first.
+  // All prior snapshots for this student — never the current round, always before
+  // it. Newest first. The lesson boundary is applied per metric below so the
+  // last-5 fallback can still reach snapshots from before the lesson.
   const priorSnaps = (snapshots || [])
     .filter(s => s.round_id !== round.id)
     .filter(s => new Date(s.created_at).getTime() < boundaryTs)
-    .filter(s => lessonTs == null || new Date(s.created_at).getTime() >= lessonTs)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const byMetric = {};
   for (const s of priorSnaps) (byMetric[s.metric] = byMetric[s.metric] || []).push(s);
 
-  const windowLabel = lesson
+  const lessonLabel = lesson
     ? (voice === "third" ? `since lesson on ${fmtLessonDate(lesson.lesson_date)}` : `since your lesson on ${fmtLessonDate(lesson.lesson_date)}`)
-    : (voice === "third" ? "vs last 5 rounds" : "vs your last 5 rounds");
+    : null;
+  const lastNLabel = n => (voice === "third" ? `vs last ${n} rounds` : `vs your last ${n} rounds`);
+
+  // Resolve the comparison window for one metric's prior snapshots (newest first,
+  // one per round). Lesson-anchored windows need 3+ rounds since the lesson and are
+  // capped at 10 — past 10 the lesson no longer bounds the window, so the label
+  // drops to the last-10 form rather than claiming lesson attribution. Too few
+  // rounds since the lesson, or no lesson at all, falls back to the last 5 (min 2).
+  function resolveWindow(all) {
+    if (lesson) {
+      const sinceLesson = all.filter(s => new Date(s.created_at).getTime() >= lessonTs);
+      if (sinceLesson.length >= 3) {
+        return sinceLesson.length > 10
+          ? { list: sinceLesson.slice(0, 10), label: lastNLabel(10) }
+          : { list: sinceLesson, label: lessonLabel };
+      }
+    }
+    const last5 = all.slice(0, 5);
+    return last5.length >= 2 ? { list: last5, label: lastNLabel(5) } : null;
+  }
 
   const out = [];
   for (const m of FOCUS_METRICS) {
     if (!(m.key in currentVals)) continue;
-    let list = byMetric[m.key] || [];
-    // No lesson boundary: fall back to the previous 5 rounds with this metric.
-    if (!lesson) list = list.slice(0, 5);
-    // Never show a trend off a single prior data point.
-    if (list.length < 2) continue;
+    const win = resolveWindow(byMetric[m.key] || []);
+    if (!win) continue;
+    const list = win.list;
     const priorAvg = list.reduce((s, x) => s + Number(x.value), 0) / list.length;
     const current = currentVals[m.key];
     const rawChange = current - priorAvg;
@@ -244,7 +262,7 @@ export function computeFocusComparisons({ round, currentHoles, snapshots, lesson
       change: Math.abs(rawChange),
       rawChange,
       improved,
-      windowLabel,
+      windowLabel: win.label,
       priorRounds: list.length,
       currentLabel: m.format(current),
       priorLabel: m.format(priorAvg),
