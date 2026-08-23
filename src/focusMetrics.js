@@ -34,6 +34,7 @@ export const FOCUS_METRICS = [
     label: "Right miss off tee",
     betterWhen: "lower",
     minSample: 4,
+    minChange: 5,
     format: pct,
     compute(holes) {
       const att = holes.filter(h => !h.dna && h.par >= 4 && ["yes", "left", "right", "miss"].includes(h.fairway));
@@ -47,6 +48,7 @@ export const FOCUS_METRICS = [
     label: "Left miss off tee",
     betterWhen: "lower",
     minSample: 4,
+    minChange: 5,
     format: pct,
     compute(holes) {
       const att = holes.filter(h => !h.dna && h.par >= 4 && ["yes", "left", "right", "miss"].includes(h.fairway));
@@ -60,6 +62,7 @@ export const FOCUS_METRICS = [
     label: "Three-putt rate",
     betterWhen: "lower",
     minSample: 9,
+    minChange: 5,
     format: pct,
     compute(holes) {
       const putted = holes.filter(h => !h.dna && !h.picked_up && h.putts != null);
@@ -73,6 +76,7 @@ export const FOCUS_METRICS = [
     label: "Greens in regulation",
     betterWhen: "higher",
     minSample: 9,
+    minChange: 5,
     format: pct,
     compute(holes) {
       const att = holes.filter(h => !h.dna);
@@ -86,6 +90,7 @@ export const FOCUS_METRICS = [
     label: "Penalty strokes / 18",
     betterWhen: "lower",
     minSample: 9,
+    minChange: 0.5,
     format: v => v.toFixed(1),
     compute(holes) {
       const played = holes.filter(h => !h.dna);
@@ -99,6 +104,7 @@ export const FOCUS_METRICS = [
     label: "Up-and-down conversion",
     betterWhen: "higher",
     minSample: 5,
+    minChange: 5,
     format: pct,
     compute(holes) {
       const missed = holes.filter(h => !h.dna && !h.picked_up && !h.gir);
@@ -112,6 +118,7 @@ export const FOCUS_METRICS = [
     label: "Par 3 greens hit",
     betterWhen: "higher",
     minSample: 3,
+    minChange: 5,
     format: pct,
     compute(holes) {
       const par3 = holes.filter(h => !h.dna && h.par === 3);
@@ -125,6 +132,7 @@ export const FOCUS_METRICS = [
     label: "Multi-shot short game",
     betterWhen: "lower",
     minSample: 5,
+    minChange: 5,
     format: pct,
     compute(holes) {
       // Only eligible when the round actually recorded shots-inside-50 data.
@@ -176,7 +184,9 @@ export async function writeFocusSnapshots(studentId, roundId) {
 // Pure comparison core. Given the round, its holes, all of the student's
 // snapshots, and their lessons, return one comparison per metric that has a
 // current value and at least 2 prior snapshots in the relevant window.
-export function computeFocusComparisons({ round, currentHoles, snapshots, lessons }) {
+// voice: "second" (student-facing, "your") or "third" (coach-facing — the student
+// is not the reader, so drop "your"; the student's name is already in context).
+export function computeFocusComparisons({ round, currentHoles, snapshots, lessons, voice = "second" }) {
   if (!round || !currentHoles) return [];
 
   // Current-round value for each eligible metric.
@@ -207,8 +217,8 @@ export function computeFocusComparisons({ round, currentHoles, snapshots, lesson
   for (const s of priorSnaps) (byMetric[s.metric] = byMetric[s.metric] || []).push(s);
 
   const windowLabel = lesson
-    ? `since your lesson on ${fmtLessonDate(lesson.lesson_date)}`
-    : "vs your last 5 rounds";
+    ? (voice === "third" ? `since lesson on ${fmtLessonDate(lesson.lesson_date)}` : `since your lesson on ${fmtLessonDate(lesson.lesson_date)}`)
+    : (voice === "third" ? "vs last 5 rounds" : "vs your last 5 rounds");
 
   const out = [];
   for (const m of FOCUS_METRICS) {
@@ -221,6 +231,9 @@ export function computeFocusComparisons({ round, currentHoles, snapshots, lesson
     const priorAvg = list.reduce((s, x) => s + Number(x.value), 0) / list.length;
     const current = currentVals[m.key];
     const rawChange = current - priorAvg;
+    // Suppress no-change rows: below a per-metric threshold the movement isn't
+    // meaningful and shouldn't render as a trend at all (e.g. 0% to 0%).
+    if (Math.abs(rawChange) < m.minChange) continue;
     const improved = m.betterWhen === "lower" ? rawChange < 0 : rawChange > 0;
     out.push({
       key: m.key,
@@ -244,7 +257,7 @@ export function computeFocusComparisons({ round, currentHoles, snapshots, lesson
 // Async convenience wrapper for callers that hold a single round (the coach round
 // detail). Fetches the round's holes (unless provided), the student's snapshots,
 // and their lessons, then delegates to computeFocusComparisons.
-export async function getFocusComparison(studentId, round, holesOverride = null) {
+export async function getFocusComparison(studentId, round, holesOverride = null, voice = "second") {
   try {
     let currentHoles = holesOverride;
     if (!currentHoles) {
@@ -255,7 +268,7 @@ export async function getFocusComparison(studentId, round, holesOverride = null)
       supabase.from("focus_snapshots").select("metric, value, round_id, created_at").eq("student_id", studentId),
       supabase.from("lessons").select("lesson_date, status").eq("student_id", studentId),
     ]);
-    return computeFocusComparisons({ round, currentHoles, snapshots: snaps || [], lessons: lessons || [] });
+    return computeFocusComparisons({ round, currentHoles, snapshots: snaps || [], lessons: lessons || [], voice });
   } catch (e) {
     console.error("[focus] comparison failed:", e);
     return [];

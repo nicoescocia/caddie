@@ -609,7 +609,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
 
   useEffect(() => {
     async function load() {
-      const [{ data: prof }, { data: rds }, { data: coachLinks }, { data: lessonData }, { data: snapData }] = await Promise.all([
+      const [{ data: prof }, { data: rds }, { data: coachLinks }, { data: lessonData }, { data: snapData, error: snapErr }] = await Promise.all([
         supabase.from("profiles").select("first_name, last_name, official_handicap, is_premium").eq("id", user.id).single(),
         supabase.from("rounds").select("id, student_id, course_id, holes_played, total_score, total_par, total_putts, handicap, whs_index, sent_to_coach, sent_at, wind, conditions, temperature, student_note, coach_note, historical, created_at, courses(name)").eq("student_id", user.id).order("created_at", { ascending: false }),
         supabase.from("coach_students").select("coach_id").eq("student_id", user.id),
@@ -620,6 +620,10 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
       setRounds(rds || []);
       setLessons(lessonData || []);
       setFocusSnapshots(snapData || []);
+      // Focus follow-up diagnostics: surface whether the snapshot read is running,
+      // returning rows, or being blocked by RLS / a missing table.
+      if (snapErr) console.warn("[focus] snapshot query error (RLS or missing table?):", snapErr);
+      console.log("[focus] snapshots loaded for student", user.id, "count:", (snapData || []).length);
       // Resolve coach profiles immediately — before the slow round-holes fetch below.
       // This ensures unlinkCoach()'s setCoaches(filter) is never overwritten by stale data.
       const linkedCoachIds = (coachLinks || []).map(l => l.coach_id);
@@ -637,7 +641,7 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
       if (roundIds.length > 0) {
         const { data: holeRows } = await supabase
           .from("round_holes")
-          .select("round_id, hole_number, gir, dna, fairway, par, score, putts, penalty, picked_up, stroke_index, putt1, putt2, approach")
+          .select("round_id, hole_number, gir, dna, fairway, par, score, putts, penalty, pickup_reason, shots_inside_50, picked_up, stroke_index, putt1, putt2, approach")
           .in("round_id", roundIds)
           .order("hole_number", { ascending: true });
         const roundsById = Object.fromEntries((rds || []).map(r => [r.id, r]));
@@ -1306,11 +1310,12 @@ export default function StudentDashboard({ user, onNewRound, onEditRound, onBack
                     if (!r.sent_to_coach || !holes || !holes.length) return null;
                     const comps = computeFocusComparisons({ round: r, currentHoles: holes, snapshots: focusSnapshots, lessons });
                     const h = headlineComparison(comps);
+                    console.log("[focus] round", r.id, "comparison:", h ? `${h.label} ${h.movement} (${comps.length} metric(s))` : `none (${comps.length} metric(s), ${focusSnapshots.length} snapshots total)`);
                     if (!h) return null;
                     return (
                       <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:10,fontSize:12}}>
                         <span style={{fontSize:15,fontWeight:700,lineHeight:1,color: h.improved ? "var(--green-mid)" : "var(--red)"}}>
-                          {h.rawChange < 0 ? "↓" : "↑"}
+                          {h.improved ? "↑" : "↓"}
                         </span>
                         <span style={{color:"var(--text-mid)"}}>
                           <strong style={{color:"var(--text)"}}>{h.label}:</strong> {h.movement} {h.windowLabel}

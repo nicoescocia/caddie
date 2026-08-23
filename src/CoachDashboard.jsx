@@ -298,7 +298,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
           supabase.from("focus_snapshots").select("metric, value, round_id, created_at").eq("student_id", student.id),
           supabase.from("lessons").select("lesson_date, status").eq("student_id", student.id),
         ]);
-        comparisons = computeFocusComparisons({ round, currentHoles: data || [], snapshots: snaps || [], lessons: lessons || [] });
+        comparisons = computeFocusComparisons({ round, currentHoles: data || [], snapshots: snaps || [], lessons: lessons || [], voice: "third" });
       }
       setFocusComparisons(comparisons);
 
@@ -590,7 +590,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
                           </div>
                           <div style={{fontSize:17,fontWeight:700,lineHeight:1,marginTop:4,
                             color: c.improved ? "var(--green-mid)" : "var(--red)"}}>
-                            {c.rawChange < 0 ? "↓" : "↑"}
+                            {c.improved ? "↑" : "↓"}
                           </div>
                         </div>
                       ))}
