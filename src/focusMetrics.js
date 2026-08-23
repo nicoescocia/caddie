@@ -200,10 +200,16 @@ export function computeFocusComparisons({ round, currentHoles, snapshots, lesson
   const boundaryTs = new Date(round.sent_at || round.created_at).getTime();
   const roundDay = (round.sent_at || round.created_at || "").slice(0, 10);
 
-  // Comparison boundary: the student's most recent completed lesson before the round.
-  const lesson = (lessons || [])
+  // Comparison boundary: a completed lesson before the round. Lessons auto-complete
+  // on date alone, so a scheduled-but-skipped lesson looks identical to a taught one.
+  // Prefer the most recent lesson showing evidence it happened (session_notes or
+  // drills populated, since the completion flow exists to capture them). Fall back to
+  // the most recent completed lesson regardless — a preference, not a filter, so a
+  // notes-less lesson can still anchor when it is the only candidate.
+  const completedBefore = (lessons || [])
     .filter(l => l.status === "completed" && l.lesson_date && l.lesson_date < roundDay)
-    .sort((a, b) => (a.lesson_date < b.lesson_date ? 1 : -1))[0] || null;
+    .sort((a, b) => (a.lesson_date < b.lesson_date ? 1 : -1));
+  const lesson = completedBefore.find(l => l.session_notes || l.drills) || completedBefore[0] || null;
   const lessonTs = lesson ? new Date(lesson.lesson_date + "T00:00:00").getTime() : null;
 
   // All prior snapshots for this student — never the current round, always before
@@ -284,7 +290,7 @@ export async function getFocusComparison(studentId, round, holesOverride = null,
     }
     const [{ data: snaps }, { data: lessons }] = await Promise.all([
       supabase.from("focus_snapshots").select("metric, value, round_id, created_at").eq("student_id", studentId),
-      supabase.from("lessons").select("lesson_date, status").eq("student_id", studentId),
+      supabase.from("lessons").select("lesson_date, status, session_notes, drills").eq("student_id", studentId),
     ]);
     return computeFocusComparisons({ round, currentHoles, snapshots: snaps || [], lessons: lessons || [], voice });
   } catch (e) {

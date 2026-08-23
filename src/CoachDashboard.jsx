@@ -296,7 +296,7 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
       if (student?.id) {
         const [{ data: snaps }, { data: lessons }] = await Promise.all([
           supabase.from("focus_snapshots").select("metric, value, round_id, created_at").eq("student_id", student.id),
-          supabase.from("lessons").select("lesson_date, status").eq("student_id", student.id),
+          supabase.from("lessons").select("lesson_date, status, session_notes, drills").eq("student_id", student.id),
         ]);
         comparisons = computeFocusComparisons({ round, currentHoles: data || [], snapshots: snaps || [], lessons: lessons || [], voice: "third" });
       }
