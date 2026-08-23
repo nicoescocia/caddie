@@ -87,7 +87,7 @@ const css = `
 `;
 
 function emptyQuickHole(par) {
-  return { score: par, putts: 2, fairway: null, penalty: 0, pickedUp: false, dna: false };
+  return { score: par, putts: 2, fairway: "yes", penalty: 0, pickedUp: false, dna: false };
 }
 
 export default function QuickLog({ holes, courseName, handicap, netDoubleBogey, saving, saveError, onSave, onCancel }) {
@@ -186,8 +186,8 @@ export default function QuickLog({ holes, courseName, handicap, netDoubleBogey, 
                   <div className="ql-field">
                     <span className="ql-field-lbl">Fairway</span>
                     <div className="ql-seg">
-                      <button className={r.fairway === "yes" ? "on hit" : ""} onClick={() => setFairway(i, "yes")}>Hit</button>
                       <button className={r.fairway === "left" ? "on miss" : ""} onClick={() => setFairway(i, "left")}>Left</button>
+                      <button className={r.fairway === "yes" ? "on hit" : ""} onClick={() => setFairway(i, "yes")}>Hit</button>
                       <button className={r.fairway === "right" ? "on miss" : ""} onClick={() => setFairway(i, "right")}>Right</button>
                     </div>
                   </div>
