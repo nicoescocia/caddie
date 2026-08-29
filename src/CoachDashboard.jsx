@@ -230,10 +230,15 @@ export default function CoachDashboard({ user, student, round, onBack, onSignOut
         puReasons.filter(r => PENALTY_TYPES.has(r)).forEach(t => { penTotals[t] = (penTotals[t] || 0) + 1; });
       }
     });
+    // Shot cost per penalty type (scoring impact, not just the penalty stroke):
+    // lost ball / OOB replay from the original spot = 2, lateral hazard / unplayable = 1.
+    const PENALTY_COST = { "Lost ball (tee)": 2, "Lost ball (fairway)": 2, "OOB": 2, "Hazard": 1, "Unplayable": 1 };
     const penEntries = Object.entries(penTotals).filter(([, n]) => n > 0);
     const totalPenStrokes = penEntries.reduce((s, [, n]) => s + n, 0);
+    const penShotCost = penEntries.reduce((s, [k, n]) => s + n * (PENALTY_COST[k] ?? 1), 0);
     const penSummaryLine = penEntries.length > 0
-      ? `Total penalties: ${penEntries.map(([k, n]) => `${k} ×${n}`).join(", ")} (${totalPenStrokes} penalty stroke${totalPenStrokes !== 1 ? "s" : ""})\n`
+      ? `Penalties: ${penEntries.map(([k, n]) => `${n} ${k}`).join(", ")} (${totalPenStrokes} penalty ${totalPenStrokes !== 1 ? "entries" : "entry"} total). Total shot cost: ${penShotCost} shots.\n`
+        + `The total shot cost of penalties has been calculated for you. State it as given. Do not recalculate it, do not derive an alternative figure, and do not present the raw penalty count and the shot cost as if they were competing totals.\n`
       : "";
 
     const tp    = holeRows.filter(h => h.putts >= 3).length;

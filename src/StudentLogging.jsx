@@ -723,13 +723,18 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
             penByHole.push(`hole ${h.n} (${types.join(", ")})`);
           }
         });
+        // Shot cost per penalty type (scoring impact, not just the penalty stroke):
+        // lost ball / OOB replay from the original spot = 2, lateral hazard / unplayable = 1.
+        const PENALTY_COST = { "Lost ball (tee)": 2, "Lost ball (fairway)": 2, "OOB": 2, "Hazard": 1, "Unplayable": 1 };
         const penTypeEntries = Object.entries(penTypeCounts).filter(([, n]) => n > 0);
         if (penTypeEntries.length === 0) {
           prompt += `Penalties: 0\n`;
         } else {
-          const summary = penTypeEntries.map(([k, n]) => `${k} ×${n}`).join(", ");
-          prompt += `Penalties: ${penalties} total — ${summary}\n`;
+          const summary = penTypeEntries.map(([k, n]) => `${n} ${k}`).join(", ");
+          const penShotCost = penTypeEntries.reduce((s, [k, n]) => s + n * (PENALTY_COST[k] ?? 1), 0);
+          prompt += `Penalties: ${summary} (${penalties} penalty ${penalties !== 1 ? "entries" : "entry"} total). Total shot cost: ${penShotCost} shots.\n`;
           prompt += `Penalty detail: ${penByHole.join(", ")}\n`;
+          prompt += `The total shot cost of penalties has been calculated for you. State it as given. Do not recalculate it, do not derive an alternative figure, and do not present the raw penalty count and the shot cost as if they were competing totals.\n`;
         }
       }
       const pickedUpHoles = attempted.filter(h => holeData[holes.indexOf(h)]?.pickedUp);
