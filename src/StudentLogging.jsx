@@ -493,7 +493,7 @@ function TopBar({ onSignOut, rightBtn, onHome }) {
 }
 
 // ── OVERVIEW SCREEN ──
-function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach, officialHandicap }) {
+function OverviewScreen({ roundId, holeData, savedHoles, holes, courseName, courseId, handicap, onHandicapUpdate, onEditHole, onOpenSummary, onSignOut, sent, saving, onBackToDashboard, wind, conditions, temperature, isPremium, roundComplete, onFinishRound, hasCoach, officialHandicap }) {
   const [showHoles, setShowHoles] = useState(false);
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -676,6 +676,20 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
     setAiLoading(true);
 
     async function run() {
+      // Cache: if this round already has a stored analysis, render it and skip the
+      // API call entirely. The round data does not change once complete, so the
+      // cache is never invalidated. Matches the coach-side pattern.
+      if (roundId) {
+        const { data: cachedRow, error: cacheErr } = await supabase
+          .from("rounds").select("student_ai_analysis").eq("id", roundId).single();
+        if (cacheErr) console.error("[student-ai] cache read failed:", cacheErr);
+        if (cachedRow?.student_ai_analysis) {
+          setAiText(cachedRow.student_ai_analysis);
+          setAiLoading(false);
+          return;
+        }
+      }
+
       const ctx = await fetchHistoricalContext();
       setHistoricalContext(ctx);
       console.log("HISTORICAL CONTEXT:", JSON.stringify(ctx, null, 2));
@@ -811,7 +825,16 @@ function OverviewScreen({ holeData, savedHoles, holes, courseName, courseId, han
       try {
         const t = await callAI(prompt);
         setAiText(t);
+        // Persist so subsequent overview views reuse it instead of regenerating.
+        // Await the write and log any failure so a silent RLS/column problem is
+        // visible rather than causing permanent regeneration.
+        if (roundId) {
+          const { error: writeErr } = await supabase
+            .from("rounds").update({ student_ai_analysis: t }).eq("id", roundId);
+          if (writeErr) console.error("[student-ai] cache write failed:", writeErr);
+        }
       } catch {
+        // On failure write nothing — leave the column null so a later view retries.
         setAiText("Analysis unavailable.");
       }
       setAiLoading(false);
@@ -2195,6 +2218,7 @@ export default function StudentLogging({ user, onSignOut, onBackToDashboard, exi
   if (view === "overview") {
     return (
       <OverviewScreen
+        roundId={roundId}
         holeData={holeData}
         savedHoles={savedHoles}
         holes={holes}
